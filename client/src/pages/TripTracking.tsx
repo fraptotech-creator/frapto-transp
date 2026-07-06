@@ -1,11 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, MapPin, Truck } from "lucide-react";
 import { useRoute, useLocation } from "wouter";
 

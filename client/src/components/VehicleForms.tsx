@@ -23,16 +23,35 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { Trash2, Edit } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const vehicleSchema = z.object({
   placa: z.string().min(1, "A placa é obrigatória."),
   marca: z.string().min(1, "A marca é obrigatória."),
   modelo: z.string().min(1, "O modelo é obrigatório."),
-  ano: z.number().min(1900, "Ano inválido.").max(new Date().getFullYear(), "Ano inválido."),
+  ano: z
+    .number()
+    .min(1900, "Ano inválido.")
+    .max(new Date().getFullYear(), "Ano inválido."),
   tipo: z.enum(["caminhao", "van", "onibus", "carro"]),
   capacidadeCarga: z.string().optional(),
   crlvVencimento: z.string().optional(),
@@ -60,8 +79,12 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
       ano: vehicle?.ano || new Date().getFullYear(),
       tipo: vehicle?.tipo || "caminhao",
       capacidadeCarga: vehicle?.capacidadeCarga?.toString() || "",
-      crlvVencimento: vehicle?.crlvVencimento ? new Date(vehicle.crlvVencimento).toISOString().split('T')[0] : "",
-      seguroVencimento: vehicle?.seguroVencimento ? new Date(vehicle.seguroVencimento).toISOString().split('T')[0] : "",
+      crlvVencimento: vehicle?.crlvVencimento
+        ? new Date(vehicle.crlvVencimento).toISOString().split("T")[0]
+        : "",
+      seguroVencimento: vehicle?.seguroVencimento
+        ? new Date(vehicle.seguroVencimento).toISOString().split("T")[0]
+        : "",
       observacoes: vehicle?.observacoes || "",
     },
   });
@@ -91,8 +114,12 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
   const onSubmit = (values: VehicleFormValues) => {
     const dataToSubmit = {
       ...values,
-      crlvVencimento: values.crlvVencimento ? new Date(values.crlvVencimento) : undefined,
-      seguroVencimento: values.seguroVencimento ? new Date(values.seguroVencimento) : undefined,
+      crlvVencimento: values.crlvVencimento
+        ? new Date(values.crlvVencimento)
+        : undefined,
+      seguroVencimento: values.seguroVencimento
+        ? new Date(values.seguroVencimento)
+        : undefined,
     };
 
     if (isEdit) {
@@ -158,7 +185,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
                     type="number"
                     placeholder="2020"
                     {...field}
-                    onChange={(e) => field.onChange(parseInt(e.target.value))}
+                    onChange={e => field.onChange(parseInt(e.target.value))}
                   />
                 </FormControl>
                 <FormMessage />
@@ -171,7 +198,10 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Tipo</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o tipo" />
@@ -237,13 +267,19 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
             <FormItem>
               <FormLabel>Observações</FormLabel>
               <FormControl>
-                <Textarea placeholder="Informações adicionais sobre o veículo" {...field} />
+                <Textarea
+                  placeholder="Informações adicionais sobre o veículo"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+        <Button
+          type="submit"
+          disabled={createMutation.isPending || updateMutation.isPending}
+        >
           {isEdit ? "Salvar Alterações" : "Cadastrar Veículo"}
         </Button>
       </form>
@@ -251,7 +287,9 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
   );
 };
 
-const DeleteVehicleDialog: React.FC<{ vehicleId: number }> = ({ vehicleId }) => {
+const DeleteVehicleDialog: React.FC<{ vehicleId: number }> = ({
+  vehicleId,
+}) => {
   const queryClient = useQueryClient();
   const deleteMutation = trpc.vehicles.delete.useMutation({
     onSuccess: () => {
@@ -278,12 +316,16 @@ const DeleteVehicleDialog: React.FC<{ vehicleId: number }> = ({ vehicleId }) => 
         <AlertDialogHeader>
           <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta ação não pode ser desfeita. Isso excluirá permanentemente o veículo e todos os dados relacionados.
+            Esta ação não pode ser desfeita. Isso excluirá permanentemente o
+            veículo e todos os dados relacionados.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} disabled={deleteMutation.isPending}>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+          >
             {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -309,9 +351,13 @@ export const VehicleDialog: React.FC<{ vehicle?: any }> = ({ vehicle }) => {
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Veículo" : "Cadastrar Novo Veículo"}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Editar Veículo" : "Cadastrar Novo Veículo"}
+          </DialogTitle>
           <DialogDescription>
-            {isEdit ? "Faça as alterações necessárias no cadastro do veículo." : "Preencha os campos para cadastrar um novo veículo na frota."}
+            {isEdit
+              ? "Faça as alterações necessárias no cadastro do veículo."
+              : "Preencha os campos para cadastrar um novo veículo na frota."}
           </DialogDescription>
         </DialogHeader>
         <VehicleForm vehicle={vehicle} onSuccess={() => setOpen(false)} />

@@ -25,7 +25,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Trash2, Edit } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const driverSchema = z.object({
   nome: z.string().min(1, "O nome é obrigatório."),
@@ -59,7 +69,9 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
       telefone: driver?.telefone || "",
       cnh: driver?.cnh || "",
       cnhCategoria: driver?.cnhCategoria || "",
-      cnhVencimento: driver?.cnhVencimento ? new Date(driver.cnhVencimento).toISOString().split('T')[0] : "",
+      cnhVencimento: driver?.cnhVencimento
+        ? new Date(driver.cnhVencimento).toISOString().split("T")[0]
+        : "",
       endereco: driver?.endereco || "",
       observacoes: driver?.observacoes || "",
     },
@@ -219,13 +231,19 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
             <FormItem>
               <FormLabel>Observações</FormLabel>
               <FormControl>
-                <Textarea placeholder="Informações adicionais sobre o motorista" {...field} />
+                <Textarea
+                  placeholder="Informações adicionais sobre o motorista"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+        <Button
+          type="submit"
+          disabled={createMutation.isPending || updateMutation.isPending}
+        >
           {isEdit ? "Salvar Alterações" : "Cadastrar Motorista"}
         </Button>
       </form>
@@ -260,12 +278,16 @@ const DeleteDriverDialog: React.FC<{ driverId: number }> = ({ driverId }) => {
         <AlertDialogHeader>
           <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta ação não pode ser desfeita. Isso excluirá permanentemente o motorista e todos os dados relacionados.
+            Esta ação não pode ser desfeita. Isso excluirá permanentemente o
+            motorista e todos os dados relacionados.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} disabled={deleteMutation.isPending}>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+          >
             {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -291,9 +313,13 @@ export const DriverDialog: React.FC<{ driver?: any }> = ({ driver }) => {
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Motorista" : "Cadastrar Novo Motorista"}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Editar Motorista" : "Cadastrar Novo Motorista"}
+          </DialogTitle>
           <DialogDescription>
-            {isEdit ? "Faça as alterações necessárias no cadastro do motorista." : "Preencha os campos para cadastrar um novo motorista."}
+            {isEdit
+              ? "Faça as alterações necessárias no cadastro do motorista."
+              : "Preencha os campos para cadastrar um novo motorista."}
           </DialogDescription>
         </DialogHeader>
         <DriverForm driver={driver} onSuccess={() => setOpen(false)} />

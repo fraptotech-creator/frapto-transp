@@ -1,8 +1,23 @@
 import { eq, desc } from "drizzle-orm";
 import { Trip } from "../drizzle/schema";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, vehicles, drivers, trips, notifications, maintenance, InsertVehicle, InsertDriver, InsertTrip, InsertNotification, InsertMaintenance, InsertExpense, InsertRevenue } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import {
+  InsertUser,
+  users,
+  vehicles,
+  drivers,
+  trips,
+  notifications,
+  maintenance,
+  InsertVehicle,
+  InsertDriver,
+  InsertTrip,
+  InsertNotification,
+  InsertMaintenance,
+  InsertExpense,
+  InsertRevenue,
+} from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -61,8 +76,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       ENV.ownerEmail &&
       user.email.toLowerCase() === ENV.ownerEmail.toLowerCase()
     ) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
@@ -89,7 +104,11 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }
@@ -99,7 +118,11 @@ export async function updateVehicle(id: number, data: Partial<InsertVehicle>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(vehicles).set(data).where(eq(vehicles.id, id));
-  const result = await db.select().from(vehicles).where(eq(vehicles.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(vehicles)
+    .where(eq(vehicles.id, id))
+    .limit(1);
   return result[0];
 }
 
@@ -110,7 +133,6 @@ export async function deleteVehicle(id: number) {
   return { success: true };
 }
 
-
 export async function getVehicles() {
   const db = await getDb();
   if (!db) return [];
@@ -120,7 +142,11 @@ export async function getVehicles() {
 export async function getVehicleById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(vehicles).where(eq(vehicles.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(vehicles)
+    .where(eq(vehicles.id, id))
+    .limit(1);
   return result[0];
 }
 
@@ -129,7 +155,11 @@ export async function createVehicle(data: InsertVehicle) {
   if (!db) throw new Error("Database not available");
   await db.insert(vehicles).values(data);
   // Retornar o veículo criado
-  const result = await db.select().from(vehicles).where(eq(vehicles.placa, data.placa)).limit(1);
+  const result = await db
+    .select()
+    .from(vehicles)
+    .where(eq(vehicles.placa, data.placa))
+    .limit(1);
   return result[0];
 }
 
@@ -138,7 +168,11 @@ export async function updateDriver(id: number, data: Partial<InsertDriver>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(drivers).set(data).where(eq(drivers.id, id));
-  const result = await db.select().from(drivers).where(eq(drivers.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(drivers)
+    .where(eq(drivers.id, id))
+    .limit(1);
   return result[0];
 }
 
@@ -149,7 +183,6 @@ export async function deleteDriver(id: number) {
   return { success: true };
 }
 
-
 export async function getDrivers() {
   const db = await getDb();
   if (!db) return [];
@@ -159,7 +192,11 @@ export async function getDrivers() {
 export async function getDriverById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(drivers).where(eq(drivers.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(drivers)
+    .where(eq(drivers.id, id))
+    .limit(1);
   return result[0];
 }
 
@@ -168,7 +205,11 @@ export async function createDriver(data: InsertDriver) {
   if (!db) throw new Error("Database not available");
   await db.insert(drivers).values(data);
   // Retornar o motorista criado
-  const result = await db.select().from(drivers).where(eq(drivers.cpf, data.cpf)).limit(1);
+  const result = await db
+    .select()
+    .from(drivers)
+    .where(eq(drivers.cpf, data.cpf))
+    .limit(1);
   return result[0];
 }
 
@@ -188,7 +229,6 @@ export async function deleteTrip(id: number) {
   return { success: true };
 }
 
-
 export async function getTrips() {
   const db = await getDb();
   if (!db) return [];
@@ -207,7 +247,11 @@ export async function createTrip(data: InsertTrip) {
   if (!db) throw new Error("Database not available");
   await db.insert(trips).values(data);
   // Retornar a viagem criada
-  const result = await db.select().from(trips).where(eq(trips.numeroViagem, data.numeroViagem)).limit(1);
+  const result = await db
+    .select()
+    .from(trips)
+    .where(eq(trips.numeroViagem, data.numeroViagem))
+    .limit(1);
   return result[0];
 }
 
@@ -215,7 +259,10 @@ export async function createTrip(data: InsertTrip) {
 export async function getNotifications(usuarioId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(notifications).where(eq(notifications.usuarioId, usuarioId));
+  return db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.usuarioId, usuarioId));
 }
 
 export async function createNotification(data: InsertNotification) {
@@ -223,7 +270,12 @@ export async function createNotification(data: InsertNotification) {
   if (!db) throw new Error("Database not available");
   await db.insert(notifications).values(data);
   // Retornar a notificação criada
-  const result = await db.select().from(notifications).where(eq(notifications.usuarioId, data.usuarioId)).orderBy((n) => n.id).limit(1);
+  const result = await db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.usuarioId, data.usuarioId))
+    .orderBy(n => n.id)
+    .limit(1);
   return result[0];
 }
 
@@ -237,14 +289,22 @@ export async function getMaintenances() {
 export async function getMaintenanceById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(maintenance).where(eq(maintenance.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(maintenance)
+    .where(eq(maintenance.id, id))
+    .limit(1);
   return result[0];
 }
 
 export async function getMaintenancesByVehicle(veiculoId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(maintenance).where(eq(maintenance.veiculoId, veiculoId)).orderBy(desc(maintenance.dataPrevista));
+  return db
+    .select()
+    .from(maintenance)
+    .where(eq(maintenance.veiculoId, veiculoId))
+    .orderBy(desc(maintenance.dataPrevista));
 }
 
 export async function createMaintenance(data: InsertMaintenance) {
@@ -252,15 +312,27 @@ export async function createMaintenance(data: InsertMaintenance) {
   if (!db) throw new Error("Database not available");
   const result = await db.insert(maintenance).values(data);
   // Retornar a manutenção criada
-  const inserted = await db.select().from(maintenance).where(eq(maintenance.veiculoId, data.veiculoId)).orderBy(desc(maintenance.id)).limit(1);
+  const inserted = await db
+    .select()
+    .from(maintenance)
+    .where(eq(maintenance.veiculoId, data.veiculoId))
+    .orderBy(desc(maintenance.id))
+    .limit(1);
   return inserted[0];
 }
 
-export async function updateMaintenance(id: number, data: Partial<InsertMaintenance>) {
+export async function updateMaintenance(
+  id: number,
+  data: Partial<InsertMaintenance>
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(maintenance).set(data).where(eq(maintenance.id, id));
-  const result = await db.select().from(maintenance).where(eq(maintenance.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(maintenance)
+    .where(eq(maintenance.id, id))
+    .limit(1);
   return result[0];
 }
 
@@ -276,7 +348,11 @@ export async function getExpenseById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
   const { expenses } = await import("../drizzle/schema");
-  const result = await db.select().from(expenses).where(eq(expenses.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(expenses)
+    .where(eq(expenses.id, id))
+    .limit(1);
   return result[0];
 }
 
@@ -285,7 +361,11 @@ export async function createExpense(data: InsertExpense) {
   if (!db) throw new Error("Database not available");
   const { expenses } = await import("../drizzle/schema");
   await db.insert(expenses).values(data);
-  const result = await db.select().from(expenses).orderBy(desc(expenses.id)).limit(1);
+  const result = await db
+    .select()
+    .from(expenses)
+    .orderBy(desc(expenses.id))
+    .limit(1);
   return result[0];
 }
 
@@ -294,7 +374,11 @@ export async function updateExpense(id: number, data: Partial<InsertExpense>) {
   if (!db) throw new Error("Database not available");
   const { expenses } = await import("../drizzle/schema");
   await db.update(expenses).set(data).where(eq(expenses.id, id));
-  const result = await db.select().from(expenses).where(eq(expenses.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(expenses)
+    .where(eq(expenses.id, id))
+    .limit(1);
   return result[0];
 }
 
@@ -318,7 +402,11 @@ export async function getRevenueById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
   const { revenues } = await import("../drizzle/schema");
-  const result = await db.select().from(revenues).where(eq(revenues.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(revenues)
+    .where(eq(revenues.id, id))
+    .limit(1);
   return result[0];
 }
 
@@ -327,7 +415,11 @@ export async function createRevenue(data: InsertRevenue) {
   if (!db) throw new Error("Database not available");
   const { revenues } = await import("../drizzle/schema");
   await db.insert(revenues).values(data);
-  const result = await db.select().from(revenues).orderBy(desc(revenues.id)).limit(1);
+  const result = await db
+    .select()
+    .from(revenues)
+    .orderBy(desc(revenues.id))
+    .limit(1);
   return result[0];
 }
 
@@ -336,7 +428,11 @@ export async function updateRevenue(id: number, data: Partial<InsertRevenue>) {
   if (!db) throw new Error("Database not available");
   const { revenues } = await import("../drizzle/schema");
   await db.update(revenues).set(data).where(eq(revenues.id, id));
-  const result = await db.select().from(revenues).where(eq(revenues.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(revenues)
+    .where(eq(revenues.id, id))
+    .limit(1);
   return result[0];
 }
 

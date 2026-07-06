@@ -23,10 +23,26 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { Trash2, Edit, MapPin, Navigation } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const tripSchema = z.object({
   numeroViagem: z.string().min(1, "O número da viagem é obrigatório."),
@@ -77,7 +93,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
       motoristaId: trip?.motoristaId?.toString() || "",
       origem: trip?.origem || "",
       destino: trip?.destino || "",
-      dataPartida: trip?.dataPartida ? new Date(trip.dataPartida).toISOString().split("T")[0] : "",
+      dataPartida: trip?.dataPartida
+        ? new Date(trip.dataPartida).toISOString().split("T")[0]
+        : "",
       status: trip?.status || "planejada",
       distancia: trip?.distancia?.toString() || "",
       carga: trip?.carga || "",
@@ -99,7 +117,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
     };
 
     if (originInputRef.current) {
-      const autocompleteOrigin = new g.maps.places.Autocomplete(originInputRef.current, options);
+      const autocompleteOrigin = new g.maps.places.Autocomplete(
+        originInputRef.current,
+        options
+      );
       autocompleteOrigin.addListener("place_changed", () => {
         const place = autocompleteOrigin.getPlace();
         if (place?.formatted_address) {
@@ -110,7 +131,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
     }
 
     if (destinationInputRef.current) {
-      const autocompleteDest = new g.maps.places.Autocomplete(destinationInputRef.current, options);
+      const autocompleteDest = new g.maps.places.Autocomplete(
+        destinationInputRef.current,
+        options
+      );
       autocompleteDest.addListener("place_changed", () => {
         const place = autocompleteDest.getPlace();
         if (place?.formatted_address) {
@@ -136,8 +160,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
           travelMode: g.maps.TravelMode.DRIVING,
         },
         (response: any, status: any) => {
-          if (status === "OK" && response && response.rows[0].elements[0].status === "OK") {
-            const distanceKm = response.rows[0].elements[0].distance.value / 1000;
+          if (
+            status === "OK" &&
+            response &&
+            response.rows[0].elements[0].status === "OK"
+          ) {
+            const distanceKm =
+              response.rows[0].elements[0].distance.value / 1000;
             form.setValue("distancia", distanceKm.toFixed(2));
             toast.info(`Distância calculada: ${distanceKm.toFixed(2)} km`);
           }
@@ -289,7 +318,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
                     <Input
                       placeholder="Cidade de origem"
                       {...field}
-                      ref={(el) => {
+                      ref={el => {
                         field.ref(el);
                         originInputRef.current = el;
                       }}
@@ -311,7 +340,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
                     <Input
                       placeholder="Cidade de destino"
                       {...field}
-                      ref={(el) => {
+                      ref={el => {
                         field.ref(el);
                         destinationInputRef.current = el;
                       }}
@@ -370,7 +399,12 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
               <FormItem>
                 <FormLabel>Distância (km)</FormLabel>
                 <FormControl>
-                  <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -383,7 +417,12 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
               <FormItem>
                 <FormLabel>Valor do Frete (R$)</FormLabel>
                 <FormControl>
-                  <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -425,13 +464,20 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
             <FormItem>
               <FormLabel>Observações</FormLabel>
               <FormControl>
-                <Textarea placeholder="Informações adicionais sobre a viagem" {...field} />
+                <Textarea
+                  placeholder="Informações adicionais sobre a viagem"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full h-12 text-lg font-bold" disabled={createMutation.isPending || updateMutation.isPending}>
+        <Button
+          type="submit"
+          className="w-full h-12 text-lg font-bold"
+          disabled={createMutation.isPending || updateMutation.isPending}
+        >
           {isEdit ? "Salvar Alterações" : "Confirmar e Cadastrar Viagem"}
         </Button>
       </form>
@@ -466,12 +512,16 @@ const DeleteTripDialog: React.FC<{ tripId: number }> = ({ tripId }) => {
         <AlertDialogHeader>
           <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta ação não pode ser desfeita. Isso excluirá permanentemente a viagem.
+            Esta ação não pode ser desfeita. Isso excluirá permanentemente a
+            viagem.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} disabled={deleteMutation.isPending}>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+          >
             {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -492,14 +542,20 @@ export const TripDialog: React.FC<{ trip?: any }> = ({ trip }) => {
             <Edit className="h-4 w-4" />
           </Button>
         ) : (
-          <Button className="bg-purple-600 hover:bg-purple-700">Cadastrar Nova Viagem</Button>
+          <Button className="bg-purple-600 hover:bg-purple-700">
+            Cadastrar Nova Viagem
+          </Button>
         )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Viagem" : "Cadastrar Nova Viagem"}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Editar Viagem" : "Cadastrar Nova Viagem"}
+          </DialogTitle>
           <DialogDescription>
-            {isEdit ? "Faça as alterações necessárias na viagem." : "Preencha os campos para cadastrar uma nova viagem."}
+            {isEdit
+              ? "Faça as alterações necessárias na viagem."
+              : "Preencha os campos para cadastrar uma nova viagem."}
           </DialogDescription>
         </DialogHeader>
         <TripForm trip={trip} onSuccess={() => setOpen(false)} />

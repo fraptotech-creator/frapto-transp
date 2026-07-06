@@ -3,7 +3,15 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
-import { LayoutDashboard, Truck, Users, MapPin, Bell, Menu, X } from "lucide-react";
+import {
+  LayoutDashboard,
+  Truck,
+  Users,
+  MapPin,
+  Bell,
+  Menu,
+  X,
+} from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navItems = [
@@ -37,7 +45,11 @@ export default function MobileLayout({
         <div className="flex flex-col items-center gap-8 w-full max-w-sm">
           <div className="flex flex-col items-center gap-4">
             <div className="w-24 h-24 flex items-center justify-center">
-              <img src="/logo.png" alt="Frapto Transp Logo" className="w-full h-auto" />
+              <img
+                src="/logo.png"
+                alt="Frapto Transp Logo"
+                className="w-full h-auto"
+              />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-center">
               Frapto Transp
@@ -65,7 +77,11 @@ export default function MobileLayout({
       {/* Header */}
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Frapto Transp Logo" className="h-8 w-auto" />
+          <img
+            src="/logo.png"
+            alt="Frapto Transp Logo"
+            className="h-8 w-auto"
+          />
           <h1 className="font-bold text-lg">Frapto Transp</h1>
         </div>
 
@@ -98,15 +114,13 @@ export default function MobileLayout({
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-24">
-        <div className="w-full">
-          {children}
-        </div>
+        <div className="w-full">{children}</div>
       </main>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-around h-20 px-2">
-          {navItems.map((item) => {
+          {navItems.map(item => {
             const Icon = item.icon;
             const isActive = location === item.path;
             return (

@@ -40,7 +40,9 @@ function Router() {
       <Route path={"/financial"} component={Financial} />
       <Route path={"/assistant"}>
         <Suspense
-          fallback={<div className="p-6 text-muted-foreground">Carregando…</div>}
+          fallback={
+            <div className="p-6 text-muted-foreground">Carregando…</div>
+          }
         >
           <Assistant />
         </Suspense>

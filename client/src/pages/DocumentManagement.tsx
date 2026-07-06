@@ -108,9 +108,9 @@ export default function DocumentManagement() {
     d.vencimento ? new Date(d.vencimento).getTime() : Number.MAX_SAFE_INTEGER;
   docs.sort((a, b) => sortKey(a) - sortKey(b));
 
-  const vencidos = docs.filter((d) => getStatus(d.vencimento) === "vencido");
-  const proximos = docs.filter((d) => getStatus(d.vencimento) === "proximo");
-  const emDia = docs.filter((d) => getStatus(d.vencimento) === "ok");
+  const vencidos = docs.filter(d => getStatus(d.vencimento) === "vencido");
+  const proximos = docs.filter(d => getStatus(d.vencimento) === "proximo");
+  const emDia = docs.filter(d => getStatus(d.vencimento) === "ok");
 
   if (isLoading) {
     return (
@@ -151,7 +151,9 @@ export default function DocumentManagement() {
                   Vencimento: {formatDate(doc.vencimento)}
                 </p>
               </div>
-              <Badge className={`${badge.cls} flex items-center gap-1 whitespace-nowrap`}>
+              <Badge
+                className={`${badge.cls} flex items-center gap-1 whitespace-nowrap`}
+              >
                 <Icon className="w-3 h-3" />
                 {badge.label}
               </Badge>

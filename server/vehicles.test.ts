@@ -3,17 +3,31 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 // Mock do banco de dados para evitar conexão real em testes
-vi.mock("./db", async (importOriginal) => {
+vi.mock("./db", async importOriginal => {
   const actual = await importOriginal<typeof import("./db")>();
   return {
     ...actual,
     getDb: vi.fn().mockResolvedValue(null),
     getVehicles: vi.fn().mockResolvedValue([
-      { id: 1, placa: "ABC-1234", modelo: "Volvo FH", marca: "Volvo", ano: 2022, status: "ativo", createdAt: new Date() },
+      {
+        id: 1,
+        placa: "ABC-1234",
+        modelo: "Volvo FH",
+        marca: "Volvo",
+        ano: 2022,
+        status: "ativo",
+        createdAt: new Date(),
+      },
     ]),
-    getVehicleById: vi.fn().mockResolvedValue(
-      { id: 1, placa: "ABC-1234", modelo: "Volvo FH", marca: "Volvo", ano: 2022, status: "ativo", createdAt: new Date() }
-    ),
+    getVehicleById: vi.fn().mockResolvedValue({
+      id: 1,
+      placa: "ABC-1234",
+      modelo: "Volvo FH",
+      marca: "Volvo",
+      ano: 2022,
+      status: "ativo",
+      createdAt: new Date(),
+    }),
   };
 });
 

@@ -1,5 +1,11 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { AlertCircle, CheckCircle2, Bell, Clock, Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -16,8 +22,14 @@ export default function Notifications() {
     );
   }
 
-  const criticalAlerts = stats?.alerts?.filter((a: any) => a.urgency === 'alta' || a.type === 'cnh') || [];
-  const warningAlerts = stats?.alerts?.filter((a: any) => a.urgency === 'media' && a.type !== 'cnh') || [];
+  const criticalAlerts =
+    stats?.alerts?.filter(
+      (a: any) => a.urgency === "alta" || a.type === "cnh"
+    ) || [];
+  const warningAlerts =
+    stats?.alerts?.filter(
+      (a: any) => a.urgency === "media" && a.type !== "cnh"
+    ) || [];
 
   return (
     <div className="p-6 space-y-8 max-w-[1200px] mx-auto">
@@ -50,18 +62,25 @@ export default function Notifications() {
           <CardContent className="space-y-4">
             {criticalAlerts.length > 0 ? (
               criticalAlerts.map((alert: any, i: number) => (
-                <div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-red-900/20 border border-red-500/30 backdrop-blur-xl transition-all hover:bg-red-900/30">
+                <div
+                  key={i}
+                  className="flex items-start gap-4 p-4 rounded-2xl bg-red-900/20 border border-red-500/30 backdrop-blur-xl transition-all hover:bg-red-900/30"
+                >
                   <div className="p-2 rounded-xl bg-red-500/20">
                     <AlertCircle className="w-5 h-5 text-red-400" />
                   </div>
                   <div>
                     <p className="font-bold text-red-100">{alert.title}</p>
-                    <p className="text-sm text-red-200/70 mt-1">{alert.message}</p>
+                    <p className="text-sm text-red-200/70 mt-1">
+                      {alert.message}
+                    </p>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-gray-500 text-center py-4 italic">Nenhum alerta crítico no momento.</p>
+              <p className="text-sm text-gray-500 text-center py-4 italic">
+                Nenhum alerta crítico no momento.
+              </p>
             )}
           </CardContent>
         </Card>
@@ -80,18 +99,25 @@ export default function Notifications() {
           <CardContent className="space-y-4">
             {warningAlerts.length > 0 ? (
               warningAlerts.map((alert: any, i: number) => (
-                <div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-amber-900/20 border border-amber-500/30 backdrop-blur-xl transition-all hover:bg-amber-900/30">
+                <div
+                  key={i}
+                  className="flex items-start gap-4 p-4 rounded-2xl bg-amber-900/20 border border-amber-500/30 backdrop-blur-xl transition-all hover:bg-amber-900/30"
+                >
                   <div className="p-2 rounded-xl bg-amber-500/20">
                     <Clock className="w-5 h-5 text-amber-400" />
                   </div>
                   <div>
                     <p className="font-bold text-amber-100">{alert.title}</p>
-                    <p className="text-sm text-amber-200/70 mt-1">{alert.message}</p>
+                    <p className="text-sm text-amber-200/70 mt-1">
+                      {alert.message}
+                    </p>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-gray-500 text-center py-4 italic">Nenhum alerta de atenção no momento.</p>
+              <p className="text-sm text-gray-500 text-center py-4 italic">
+                Nenhum alerta de atenção no momento.
+              </p>
             )}
           </CardContent>
         </Card>
@@ -114,7 +140,10 @@ export default function Notifications() {
               </div>
               <div>
                 <p className="font-bold text-blue-100">Sistema Atualizado</p>
-                <p className="text-sm text-blue-200/70 mt-1">O design Dark Premium foi aplicado com sucesso em todo o sistema.</p>
+                <p className="text-sm text-blue-200/70 mt-1">
+                  O design Dark Premium foi aplicado com sucesso em todo o
+                  sistema.
+                </p>
               </div>
             </div>
           </CardContent>

@@ -11,30 +11,33 @@ export default function Drivers() {
   const { data: drivers, isLoading } = trpc.drivers.list.useQuery();
 
   const getStatusBadge = (status: string) => {
-    const badges: Record<string, { bg: string; text: string; gradient: string; glowClass: string }> = {
-      disponivel: { 
-        bg: "bg-emerald-500/20", 
+    const badges: Record<
+      string,
+      { bg: string; text: string; gradient: string; glowClass: string }
+    > = {
+      disponivel: {
+        bg: "bg-emerald-500/20",
         text: "text-emerald-300",
         gradient: "from-emerald-500 to-teal-600",
-        glowClass: "glow-effect-emerald"
+        glowClass: "glow-effect-emerald",
       },
-      viagem: { 
-        bg: "bg-blue-500/20", 
+      viagem: {
+        bg: "bg-blue-500/20",
         text: "text-blue-300",
         gradient: "from-blue-500 to-indigo-600",
-        glowClass: "glow-effect"
+        glowClass: "glow-effect",
       },
-      descansando: { 
-        bg: "bg-amber-500/20", 
+      descansando: {
+        bg: "bg-amber-500/20",
         text: "text-amber-300",
         gradient: "from-amber-500 to-orange-600",
-        glowClass: "glow-effect"
+        glowClass: "glow-effect",
       },
-      inativo: { 
-        bg: "bg-rose-500/20", 
+      inativo: {
+        bg: "bg-rose-500/20",
         text: "text-rose-300",
         gradient: "from-rose-500 to-pink-600",
-        glowClass: "glow-effect"
+        glowClass: "glow-effect",
       },
     };
     return badges[status] || badges.disponivel;
@@ -51,7 +54,9 @@ export default function Drivers() {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
               Motoristas
             </h1>
-            <p className="text-sm text-gray-400 mt-1">Gerenciar equipe de motoristas</p>
+            <p className="text-sm text-gray-400 mt-1">
+              Gerenciar equipe de motoristas
+            </p>
           </div>
         </div>
         <DriverDialog />
@@ -73,22 +78,31 @@ export default function Drivers() {
                 className={`relative overflow-hidden border-white/10 shadow-2xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer group gradient-card ${statusInfo.glowClass}`}
                 onClick={() => setLocation(`/drivers/${driver.id}`)}
               >
-                <div className={`absolute top-0 right-0 w-40 h-40 bg-gradient-to-br ${statusInfo.gradient} opacity-15 rounded-full -mr-20 -mt-20 group-hover:opacity-25 transition-opacity blur-3xl`} />
+                <div
+                  className={`absolute top-0 right-0 w-40 h-40 bg-gradient-to-br ${statusInfo.gradient} opacity-15 rounded-full -mr-20 -mt-20 group-hover:opacity-25 transition-opacity blur-3xl`}
+                />
                 <CardContent className="p-6 relative z-10">
                   <div className="flex items-start justify-between mb-4">
-                    <div className={`p-3 rounded-xl ${statusInfo.bg} shadow-md backdrop-blur-xl border border-white/10`}>
+                    <div
+                      className={`p-3 rounded-xl ${statusInfo.bg} shadow-md backdrop-blur-xl border border-white/10`}
+                    >
                       <User className={`w-6 h-6 ${statusInfo.text}`} />
                     </div>
-                    <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl ${statusInfo.bg} ${statusInfo.text} shadow-sm`}>
-                      {driver.status.charAt(0).toUpperCase() + driver.status.slice(1)}
+                    <span
+                      className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl ${statusInfo.bg} ${statusInfo.text} shadow-sm`}
+                    >
+                      {driver.status.charAt(0).toUpperCase() +
+                        driver.status.slice(1)}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <div>
-                      <p className="text-2xl font-bold tracking-tight truncate text-white">{driver.nome}</p>
+                      <p className="text-2xl font-bold tracking-tight truncate text-white">
+                        {driver.nome}
+                      </p>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl">
                         <CreditCard className="w-4 h-4 text-gray-500 shrink-0" />
@@ -96,7 +110,7 @@ export default function Drivers() {
                           {driver.cpf}
                         </span>
                       </div>
-                      
+
                       {driver.telefone && (
                         <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl">
                           <Phone className="w-4 h-4 text-gray-500 shrink-0" />
@@ -107,8 +121,11 @@ export default function Drivers() {
                       )}
                     </div>
                   </div>
-                  
-                  <div className="flex justify-end mt-4 pt-4 border-t border-white/10" onClick={(e) => e.stopPropagation()}>
+
+                  <div
+                    className="flex justify-end mt-4 pt-4 border-t border-white/10"
+                    onClick={e => e.stopPropagation()}
+                  >
                     <DriverActions driver={driver} />
                   </div>
                 </CardContent>
@@ -124,8 +141,12 @@ export default function Drivers() {
                 <Users className="w-12 h-12 text-gray-500" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-white">Nenhum motorista cadastrado</p>
-                <p className="text-sm text-gray-400 mt-1">Comece adicionando seu primeiro motorista</p>
+                <p className="text-lg font-semibold text-white">
+                  Nenhum motorista cadastrado
+                </p>
+                <p className="text-sm text-gray-400 mt-1">
+                  Comece adicionando seu primeiro motorista
+                </p>
               </div>
             </div>
           </CardContent>

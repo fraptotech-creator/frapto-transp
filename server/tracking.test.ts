@@ -52,7 +52,7 @@ function calculateDistanceCovered(
   totalDistanceMeters: number,
   progressPercent: number
 ): number {
-  return Math.floor((progressPercent / 100) * totalDistanceMeters / 1000);
+  return Math.floor(((progressPercent / 100) * totalDistanceMeters) / 1000);
 }
 
 function calculateDistanceRemaining(

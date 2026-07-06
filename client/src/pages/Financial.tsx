@@ -1,10 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Plus,
@@ -15,12 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -265,7 +255,8 @@ export default function Financial() {
                   {card.title}
                 </p>
                 <p className={`text-2xl font-bold mt-1 ${card.color}`}>
-                  R$ {card.value.toLocaleString("pt-BR", {
+                  R${" "}
+                  {card.value.toLocaleString("pt-BR", {
                     minimumFractionDigits: 2,
                   })}
                 </p>
@@ -287,7 +278,7 @@ export default function Financial() {
             <h2 className="text-lg font-semibold">Lista de Despesas</h2>
             <Dialog
               open={expenseDialogOpen}
-              onOpenChange={(o) => {
+              onOpenChange={o => {
                 setExpenseDialogOpen(o);
                 if (o) setExpenseForm(emptyExpense);
               }}
@@ -328,7 +319,7 @@ export default function Financial() {
                     <Input
                       placeholder="Ex: Abastecimento posto X"
                       value={expenseForm.descricao}
-                      onChange={(e) =>
+                      onChange={e =>
                         setExpenseForm({
                           ...expenseForm,
                           descricao: e.target.value,
@@ -344,7 +335,7 @@ export default function Financial() {
                         step="0.01"
                         placeholder="0.00"
                         value={expenseForm.valor}
-                        onChange={(e) =>
+                        onChange={e =>
                           setExpenseForm({
                             ...expenseForm,
                             valor: e.target.value,
@@ -357,7 +348,7 @@ export default function Financial() {
                       <Input
                         type="date"
                         value={expenseForm.data}
-                        onChange={(e) =>
+                        onChange={e =>
                           setExpenseForm({
                             ...expenseForm,
                             data: e.target.value,
@@ -372,7 +363,7 @@ export default function Financial() {
                       <Input
                         placeholder="Opcional"
                         value={expenseForm.categoria}
-                        onChange={(e) =>
+                        onChange={e =>
                           setExpenseForm({
                             ...expenseForm,
                             categoria: e.target.value,
@@ -385,7 +376,7 @@ export default function Financial() {
                       <Input
                         placeholder="Ex: Cartão, PIX, Dinheiro"
                         value={expenseForm.formaPagamento}
-                        onChange={(e) =>
+                        onChange={e =>
                           setExpenseForm({
                             ...expenseForm,
                             formaPagamento: e.target.value,
@@ -400,7 +391,7 @@ export default function Financial() {
                       rows={2}
                       placeholder="Informações adicionais"
                       value={expenseForm.observacoes}
-                      onChange={(e) =>
+                      onChange={e =>
                         setExpenseForm({
                           ...expenseForm,
                           observacoes: e.target.value,
@@ -478,7 +469,7 @@ export default function Financial() {
             <h2 className="text-lg font-semibold">Lista de Receitas</h2>
             <Dialog
               open={revenueDialogOpen}
-              onOpenChange={(o) => {
+              onOpenChange={o => {
                 setRevenueDialogOpen(o);
                 if (o) setRevenueForm(emptyRevenue);
               }}
@@ -537,7 +528,7 @@ export default function Financial() {
                     <Input
                       placeholder="Ex: Frete São Paulo - Rio"
                       value={revenueForm.descricao}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRevenueForm({
                           ...revenueForm,
                           descricao: e.target.value,
@@ -553,7 +544,7 @@ export default function Financial() {
                         step="0.01"
                         placeholder="0.00"
                         value={revenueForm.valor}
-                        onChange={(e) =>
+                        onChange={e =>
                           setRevenueForm({
                             ...revenueForm,
                             valor: e.target.value,
@@ -566,7 +557,7 @@ export default function Financial() {
                       <Input
                         type="date"
                         value={revenueForm.data}
-                        onChange={(e) =>
+                        onChange={e =>
                           setRevenueForm({
                             ...revenueForm,
                             data: e.target.value,
@@ -581,7 +572,7 @@ export default function Financial() {
                       <Input
                         placeholder="Nome"
                         value={revenueForm.clienteNome}
-                        onChange={(e) =>
+                        onChange={e =>
                           setRevenueForm({
                             ...revenueForm,
                             clienteNome: e.target.value,
@@ -594,7 +585,7 @@ export default function Financial() {
                       <Input
                         placeholder="Opcional"
                         value={revenueForm.clienteCpfCnpj}
-                        onChange={(e) =>
+                        onChange={e =>
                           setRevenueForm({
                             ...revenueForm,
                             clienteCpfCnpj: e.target.value,
@@ -608,7 +599,7 @@ export default function Financial() {
                     <Input
                       placeholder="Ex: Boleto, PIX, Transferência"
                       value={revenueForm.formaPagamento}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRevenueForm({
                           ...revenueForm,
                           formaPagamento: e.target.value,
@@ -622,7 +613,7 @@ export default function Financial() {
                       rows={2}
                       placeholder="Informações adicionais"
                       value={revenueForm.observacoes}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRevenueForm({
                           ...revenueForm,
                           observacoes: e.target.value,
@@ -676,8 +667,8 @@ export default function Financial() {
                           rev.status === "recebido"
                             ? "bg-emerald-100 text-emerald-700"
                             : rev.status === "cancelado"
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-amber-100 text-amber-700"
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-amber-100 text-amber-700"
                         }`}
                       >
                         {statusLabel(rev.status)}

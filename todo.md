@@ -1,6 +1,7 @@
 # LogiMind - Gestão de Frota - TODO
 
 ## Design System & Tema Dark Premium
+
 - [x] Configurar CSS variables para tema dark premium
 - [x] Definir paleta de cores (primária, secundária, acentos, neutros)
 - [x] Configurar tipografia e tamanhos de fonte
@@ -9,6 +10,7 @@
 - [x] Configurar ícones e iconografia consistente
 
 ## Schema de Banco de Dados
+
 - [x] Tabela de veículos (id, placa, modelo, marca, ano, status, data_criacao)
 - [x] Tabela de motoristas (id, nome, cpf, cnh, data_vencimento_cnh, status)
 - [x] Tabela de viagens (id, veiculo_id, motorista_id, origem, destino, status, data_inicio, data_fim)
@@ -18,6 +20,7 @@
 - [x] Tabela de alertas/notificações (id, tipo, usuario_id, lido, data_criacao)
 
 ## Dashboard Principal
+
 - [x] KPI: Total de veículos ativos
 - [x] KPI: Viagens em andamento
 - [x] KPI: Motoristas disponíveis
@@ -28,6 +31,7 @@
 - [x] Procedimento tRPC para carregar dados do dashboard
 
 ## Gestão de Veículos
+
 - [x] Listagem de veículos com filtros (status, modelo)
 - [x] Cadastro de novo veículo
 - [x] Edição de dados do veículo
@@ -37,6 +41,7 @@
 - [x] Procedures tRPC: list, create, update, delete, getById
 
 ## Gestão de Motoristas
+
 - [x] Listagem de motoristas com filtros (status, disponibilidade)
 - [x] Cadastro de novo motorista
 - [x] Edição de dados do motorista
@@ -46,6 +51,7 @@
 - [x] Procedures tRPC: list, create, update, delete, getById
 
 ## Gestão de Viagens
+
 - [x] Listagem de viagens com filtros (status, período)
 - [x] Criação de nova viagem
 - [x] Acompanhamento em tempo real (simulado)
@@ -55,6 +61,7 @@
 - [x] Procedures tRPC: list, create, update, getById, finish
 
 ## Módulo Financeiro
+
 - [x] Listagem de receitas com filtros
 - [x] Listagem de despesas com filtros
 - [x] Cadastro de receita
@@ -64,6 +71,7 @@
 - [x] Procedures tRPC: listTransactions, createTransaction, getFinancialSummary
 
 ## Gestão de Manutenção
+
 - [x] Listagem de manutenções agendadas
 - [x] Listagem de histórico de manutenções
 - [x] Agendamento de nova manutenção
@@ -73,6 +81,7 @@
 - [x] Procedures tRPC: list, create, update, complete, getAlerts
 
 ## Gerenciamento de Documentos
+
 - [x] Upload de documentos (veículos e motoristas)
 - [x] Listagem de documentos por entidade
 - [x] Controle de vencimento de documentos
@@ -81,6 +90,7 @@
 - [x] Procedures tRPC: upload, list, delete, getExpiringDocuments
 
 ## Relatórios Exportáveis
+
 - [x] Relatório de frota em PDF
 - [x] Relatório de viagens em PDF
 - [x] Relatório financeiro em PDF
@@ -91,6 +101,7 @@
 - [x] Procedures tRPC: generateReport
 
 ## Central de Notificações
+
 - [x] Sistema de notificações em tempo real
 - [x] Alertas de vencimento de documentos
 - [x] Alertas de manutenções pendentes
@@ -100,16 +111,19 @@
 - [x] Procedures tRPC: list, markAsRead, getUnread
 
 ## Testes
+
 - [x] Testes unitários para procedures críticas
 - [x] Testes de autenticação
 - [x] Testes de validação de dados
 
 ## Deployment & Checkpoint
+
 - [x] Salvar checkpoint final
 - [x] Verificar todas as funcionalidades
 - [x] Testar fluxos principais
 
 ## Rastreamento em Tempo Real (Estilo Uber)
+
 - [x] Componente de mapa com Google Maps integrado
 - [x] Rota traçada entre origem e destino ao iniciar viagem
 - [x] Marcador do veículo (ícone de caminhão) se movendo pela rota em tempo real
@@ -124,6 +138,7 @@
 - [x] Integração com a página de viagens existente
 
 ## Rastreamento - Fluxo Completo 4 Etapas (Estilo Uber)
+
 - [x] Etapa 1: GPS do navegador detecta localização atual do motorista → rota até ponto de coleta
 - [x] Etapa 2: Ponto de coleta → rota até ponto de entrega (destino da carga)
 - [x] Etapa 3: Ponto de entrega → rota de retorno ao ponto de coleta/base
@@ -137,9 +152,11 @@
 - [x] Linha de progresso mostrando as 4 etapas como steps
 
 ## Bugs
+
 - [x] Modais de cadastro estão com fundo transparente (mostrando conteúdo de baixo)
 
 ## Rastreamento GPS Real
+
 - [x] Substituir simulação por watchPosition da API de Geolocalização do navegador
 - [x] Marcador do veículo atualiza posição real do motorista no mapa
 - [x] Velocidade calculada com base na distância entre posições GPS reais

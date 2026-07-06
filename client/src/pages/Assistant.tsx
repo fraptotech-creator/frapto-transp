@@ -26,7 +26,10 @@ export default function Assistant() {
     chatMutation.mutate({
       messages: next
         .filter(m => m.role === "user" || m.role === "assistant")
-        .map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+        .map(m => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
     });
   };
 

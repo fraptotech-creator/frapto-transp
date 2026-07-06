@@ -1,4 +1,14 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, json } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  decimal,
+  boolean,
+  json,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -33,7 +43,9 @@ export const vehicles = mysqlTable("vehicles", {
   modelo: varchar("modelo", { length: 50 }).notNull(),
   ano: int("ano").notNull(),
   tipo: mysqlEnum("tipo", ["caminhao", "van", "onibus", "carro"]).notNull(),
-  status: mysqlEnum("status", ["ativo", "manutencao", "inativo"]).default("ativo").notNull(),
+  status: mysqlEnum("status", ["ativo", "manutencao", "inativo"])
+    .default("ativo")
+    .notNull(),
   capacidadeCarga: decimal("capacidadeCarga", { precision: 10, scale: 2 }),
   quilometragem: int("quilometragem").default(0),
   proximaManutencao: timestamp("proximaManutencao"),
@@ -58,7 +70,14 @@ export const drivers = mysqlTable("drivers", {
   cnh: varchar("cnh", { length: 20 }).notNull().unique(),
   cnhCategoria: varchar("cnhCategoria", { length: 5 }).notNull(),
   cnhVencimento: timestamp("cnhVencimento").notNull(),
-  status: mysqlEnum("status", ["disponivel", "viagem", "descansando", "inativo"]).default("disponivel").notNull(),
+  status: mysqlEnum("status", [
+    "disponivel",
+    "viagem",
+    "descansando",
+    "inativo",
+  ])
+    .default("disponivel")
+    .notNull(),
   disponibilidade: boolean("disponibilidade").default(true).notNull(),
   endereco: text("endereco"),
   dataAdmissao: timestamp("dataAdmissao").defaultNow().notNull(),
@@ -80,7 +99,14 @@ export const trips = mysqlTable("trips", {
   destino: varchar("destino", { length: 150 }).notNull(),
   dataPartida: timestamp("dataPartida").notNull(),
   dataChegada: timestamp("dataChegada"),
-  status: mysqlEnum("status", ["planejada", "em_andamento", "concluida", "cancelada"]).default("planejada").notNull(),
+  status: mysqlEnum("status", [
+    "planejada",
+    "em_andamento",
+    "concluida",
+    "cancelada",
+  ])
+    .default("planejada")
+    .notNull(),
   distancia: decimal("distancia", { precision: 10, scale: 2 }),
   carga: text("carga"),
   pesoTotal: decimal("pesoTotal", { precision: 10, scale: 2 }),
@@ -102,7 +128,9 @@ export const maintenance = mysqlTable("maintenance", {
   dataPrevista: timestamp("dataPrevista").notNull(),
   dataRealizada: timestamp("dataRealizada"),
   custo: decimal("custo", { precision: 12, scale: 2 }),
-  status: mysqlEnum("status", ["pendente", "em_andamento", "concluida"]).default("pendente").notNull(),
+  status: mysqlEnum("status", ["pendente", "em_andamento", "concluida"])
+    .default("pendente")
+    .notNull(),
   observacoes: text("observacoes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -115,13 +143,20 @@ export type InsertMaintenance = typeof maintenance.$inferInsert;
 export const notifications = mysqlTable("notifications", {
   id: int("id").autoincrement().primaryKey(),
   usuarioId: int("usuarioId").notNull(),
-  tipo: mysqlEnum("tipo", ["manutencao", "documento", "viagem", "alerta"]).notNull(),
+  tipo: mysqlEnum("tipo", [
+    "manutencao",
+    "documento",
+    "viagem",
+    "alerta",
+  ]).notNull(),
   titulo: varchar("titulo", { length: 150 }).notNull(),
   mensagem: text("mensagem").notNull(),
   referenceId: int("referenceId"),
   referenceType: varchar("referenceType", { length: 50 }),
   lida: boolean("lida").default(false).notNull(),
-  urgencia: mysqlEnum("urgencia", ["baixa", "media", "alta", "critica"]).default("media").notNull(),
+  urgencia: mysqlEnum("urgencia", ["baixa", "media", "alta", "critica"])
+    .default("media")
+    .notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -131,7 +166,14 @@ export type InsertNotification = typeof notifications.$inferInsert;
 // Tabela de despesas operacionais
 export const expenses = mysqlTable("expenses", {
   id: int("id").autoincrement().primaryKey(),
-  tipo: mysqlEnum("tipo", ["combustivel", "manutencao", "pedagio", "seguro", "salario", "outros"]).notNull(),
+  tipo: mysqlEnum("tipo", [
+    "combustivel",
+    "manutencao",
+    "pedagio",
+    "seguro",
+    "salario",
+    "outros",
+  ]).notNull(),
   descricao: text("descricao").notNull(),
   valor: decimal("valor", { precision: 12, scale: 2 }).notNull(),
   data: timestamp("data").notNull(),
@@ -159,7 +201,9 @@ export const revenues = mysqlTable("revenues", {
   clienteNome: varchar("clienteNome", { length: 150 }),
   clienteCpfCnpj: varchar("clienteCpfCnpj", { length: 20 }),
   formaPagamento: varchar("formaPagamento", { length: 50 }),
-  status: mysqlEnum("status", ["pendente", "recebido", "cancelado"]).default("pendente").notNull(),
+  status: mysqlEnum("status", ["pendente", "recebido", "cancelado"])
+    .default("pendente")
+    .notNull(),
   observacoes: text("observacoes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -171,14 +215,23 @@ export type InsertRevenue = typeof revenues.$inferInsert;
 // Tabela de documentos (veículos e motoristas)
 export const documents = mysqlTable("documents", {
   id: int("id").autoincrement().primaryKey(),
-  tipo: mysqlEnum("tipo", ["crlv", "seguro", "cnh", "rg", "cpf", "outro"]).notNull(),
+  tipo: mysqlEnum("tipo", [
+    "crlv",
+    "seguro",
+    "cnh",
+    "rg",
+    "cpf",
+    "outro",
+  ]).notNull(),
   descricao: varchar("descricao", { length: 150 }),
   veiculoId: int("veiculoId"),
   motoristId: int("motoristId"),
   dataVencimento: timestamp("dataVencimento"),
   arquivoUrl: text("arquivoUrl"),
   arquivoKey: varchar("arquivoKey", { length: 255 }),
-  status: mysqlEnum("status", ["ativo", "vencido", "proximo_vencer"]).default("ativo").notNull(),
+  status: mysqlEnum("status", ["ativo", "vencido", "proximo_vencer"])
+    .default("ativo")
+    .notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

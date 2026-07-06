@@ -50,7 +50,7 @@ function downloadCSV(filename: string, rows: Record<string, any>[]) {
   const csvBody =
     headers.join(",") +
     "\n" +
-    rows.map((r) => headers.map((h) => escape(r[h])).join(",")).join("\n");
+    rows.map(r => headers.map(h => escape(r[h])).join(",")).join("\n");
   const blob = new Blob(["\uFEFF" + csvBody], {
     type: "text/csv;charset=utf-8;",
   });
@@ -120,44 +120,40 @@ export default function Reports() {
 
   // Dados financeiros por mês usando tripsByMonth do dashboard
   const financialData =
-    stats?.tripsByMonth?.map(
-      (month: { month: string; count: number }) => {
-        const monthTrips = tripsInPeriod.filter((t: any) => {
-          const tripDate = new Date(t.dataPartida);
-          return (
-            tripDate
-              .toLocaleString("pt-BR", { month: "short" })
-              .toLowerCase() === month.month.toLowerCase()
-          );
-        });
+    stats?.tripsByMonth?.map((month: { month: string; count: number }) => {
+      const monthTrips = tripsInPeriod.filter((t: any) => {
+        const tripDate = new Date(t.dataPartida);
+        return (
+          tripDate.toLocaleString("pt-BR", { month: "short" }).toLowerCase() ===
+          month.month.toLowerCase()
+        );
+      });
 
-        const revenue = monthTrips.reduce((sum: number, trip: any) => {
-          const valor = trip.valor ? parseFloat(trip.valor.toString()) : 0;
-          return sum + valor;
+      const revenue = monthTrips.reduce((sum: number, trip: any) => {
+        const valor = trip.valor ? parseFloat(trip.valor.toString()) : 0;
+        return sum + valor;
+      }, 0);
+
+      const costs = maintenancesInPeriod
+        .filter((m: any) => {
+          const mDate = new Date(m.dataRealizada || m.dataPrevista);
+          return (
+            mDate.toLocaleString("pt-BR", { month: "short" }).toLowerCase() ===
+            month.month.toLowerCase()
+          );
+        })
+        .reduce((sum: number, m: any) => {
+          const custo = m.custo ? parseFloat(m.custo.toString()) : 0;
+          return sum + custo;
         }, 0);
 
-        const costs = maintenancesInPeriod
-          .filter((m: any) => {
-            const mDate = new Date(m.dataRealizada || m.dataPrevista);
-            return (
-              mDate
-                .toLocaleString("pt-BR", { month: "short" })
-                .toLowerCase() === month.month.toLowerCase()
-            );
-          })
-          .reduce((sum: number, m: any) => {
-            const custo = m.custo ? parseFloat(m.custo.toString()) : 0;
-            return sum + custo;
-          }, 0);
-
-        return {
-          month: month.month,
-          receita: revenue,
-          custos: costs,
-          lucro: revenue - costs,
-        };
-      }
-    ) || [];
+      return {
+        month: month.month,
+        receita: revenue,
+        custos: costs,
+        lucro: revenue - costs,
+      };
+    }) || [];
 
   // Status de viagens
   const tripStatusData = [
@@ -168,8 +164,7 @@ export default function Reports() {
     },
     {
       name: "Em Andamento",
-      value:
-        trips?.filter((t: any) => t.status === "em_andamento").length || 0,
+      value: trips?.filter((t: any) => t.status === "em_andamento").length || 0,
       color: "#8b5cf6",
     },
     {
@@ -307,7 +302,8 @@ export default function Reports() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Exportar Dados (CSV)</CardTitle>
           <CardDescription className="text-xs">
-            Os arquivos CSV podem ser abertos no Excel, Google Sheets e similares
+            Os arquivos CSV podem ser abertos no Excel, Google Sheets e
+            similares
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
@@ -356,7 +352,8 @@ export default function Reports() {
                   Receita (período)
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  R$ {totalRevenue.toLocaleString("pt-BR", {
+                  R${" "}
+                  {totalRevenue.toLocaleString("pt-BR", {
                     minimumFractionDigits: 2,
                   })}
                 </p>
@@ -376,7 +373,8 @@ export default function Reports() {
                   Custos de Manutenção
                 </p>
                 <p className="text-2xl font-bold text-red-600">
-                  R$ {totalMaintenanceCost.toLocaleString("pt-BR", {
+                  R${" "}
+                  {totalMaintenanceCost.toLocaleString("pt-BR", {
                     minimumFractionDigits: 2,
                   })}
                 </p>
@@ -400,7 +398,8 @@ export default function Reports() {
                     profit >= 0 ? "text-blue-600" : "text-red-600"
                   }`}
                 >
-                  R$ {profit.toLocaleString("pt-BR", {
+                  R${" "}
+                  {profit.toLocaleString("pt-BR", {
                     minimumFractionDigits: 2,
                   })}
                 </p>
@@ -481,7 +480,7 @@ export default function Reports() {
           </CardDescription>
         </CardHeader>
         <CardContent className="h-[300px]">
-          {tripStatusData.every((d) => d.value === 0) ? (
+          {tripStatusData.every(d => d.value === 0) ? (
             <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
               Nenhuma viagem cadastrada.
             </div>

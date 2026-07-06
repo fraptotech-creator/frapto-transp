@@ -8,8 +8,14 @@ vi.mock("./db", async importOriginal => {
   return {
     ...actual,
     getDb: vi.fn().mockResolvedValue(null),
-    createExpense: vi.fn(async (data: unknown) => ({ id: 1, ...(data as object) })),
-    createRevenue: vi.fn(async (data: unknown) => ({ id: 1, ...(data as object) })),
+    createExpense: vi.fn(async (data: unknown) => ({
+      id: 1,
+      ...(data as object),
+    })),
+    createRevenue: vi.fn(async (data: unknown) => ({
+      id: 1,
+      ...(data as object),
+    })),
   };
 });
 

@@ -124,23 +124,17 @@
       "compositePrimaryKeys": {
         "drivers_id": {
           "name": "drivers_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "drivers_cpf_unique": {
           "name": "drivers_cpf_unique",
-          "columns": [
-            "cpf"
-          ]
+          "columns": ["cpf"]
         },
         "drivers_cnh_unique": {
           "name": "drivers_cnh_unique",
-          "columns": [
-            "cnh"
-          ]
+          "columns": ["cnh"]
         }
       },
       "checkConstraint": {}
@@ -248,9 +242,7 @@
       "compositePrimaryKeys": {
         "expenses_id": {
           "name": "expenses_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -346,9 +338,7 @@
       "compositePrimaryKeys": {
         "maintenance_id": {
           "name": "maintenance_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -445,9 +435,7 @@
       "compositePrimaryKeys": {
         "notifications_id": {
           "name": "notifications_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -557,9 +545,7 @@
       "compositePrimaryKeys": {
         "revenues_id": {
           "name": "revenues_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -690,17 +676,13 @@
       "compositePrimaryKeys": {
         "trips_id": {
           "name": "trips_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "trips_numeroViagem_unique": {
           "name": "trips_numeroViagem_unique",
-          "columns": [
-            "numeroViagem"
-          ]
+          "columns": ["numeroViagem"]
         }
       },
       "checkConstraint": {}
@@ -782,17 +764,13 @@
       "compositePrimaryKeys": {
         "users_id": {
           "name": "users_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "users_openId_unique": {
           "name": "users_openId_unique",
-          "columns": [
-            "openId"
-          ]
+          "columns": ["openId"]
         }
       },
       "checkConstraint": {}
@@ -923,17 +901,13 @@
       "compositePrimaryKeys": {
         "vehicles_id": {
           "name": "vehicles_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "vehicles_placa_unique": {
           "name": "vehicles_placa_unique",
-          "columns": [
-            "placa"
-          ]
+          "columns": ["placa"]
         }
       },
       "checkConstraint": {}

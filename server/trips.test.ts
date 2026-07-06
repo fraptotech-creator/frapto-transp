@@ -3,7 +3,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 // Mock do banco de dados para evitar conexão real em testes
-vi.mock("./db", async (importOriginal) => {
+vi.mock("./db", async importOriginal => {
   const actual = await importOriginal<typeof import("./db")>();
   return {
     ...actual,

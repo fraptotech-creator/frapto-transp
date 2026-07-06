@@ -21,10 +21,23 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Truck, MapPin, Bell, Users, Wrench, FileText, BarChart3, DollarSign, Sparkles } from "lucide-react";
+import {
+  LayoutDashboard,
+  LogOut,
+  PanelLeft,
+  Truck,
+  MapPin,
+  Bell,
+  Users,
+  Wrench,
+  FileText,
+  BarChart3,
+  DollarSign,
+  Sparkles,
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
 const menuItems = [
@@ -39,8 +52,6 @@ const menuItems = [
   { icon: Bell, label: "Notificações", path: "/notifications" },
   { icon: Sparkles, label: "Assistente IA", path: "/assistant" },
 ];
-
-
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
@@ -63,7 +74,7 @@ export default function DashboardLayout({
   }, [sidebarWidth]);
 
   if (loading) {
-    return <DashboardLayoutSkeleton />
+    return <DashboardLayoutSkeleton />;
   }
 
   // Gate de login: sem sessão válida, mostra a tela de entrada (Google OAuth).
@@ -209,7 +220,7 @@ function DashboardLayoutContent({
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-11 transition-all font-medium rounded-xl ${isActive ? 'shadow-lg' : ''}`}
+                      className={`h-11 transition-all font-medium rounded-xl ${isActive ? "shadow-lg" : ""}`}
                     >
                       <item.icon
                         className={`h-5 w-5 ${isActive ? "text-primary" : ""}`}
@@ -278,7 +289,9 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-6 md:p-8 bg-background/30 backdrop-blur-sm overflow-auto">{children}</main>
+        <main className="flex-1 p-6 md:p-8 bg-background/30 backdrop-blur-sm overflow-auto">
+          {children}
+        </main>
       </SidebarInset>
     </>
   );

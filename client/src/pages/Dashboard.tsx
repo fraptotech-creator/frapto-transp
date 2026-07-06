@@ -6,13 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Truck,
-  Users,
-  MapPin,
-  AlertCircle,
-  Activity,
-} from "lucide-react";
+import { Truck, Users, MapPin, AlertCircle, Activity } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   BarChart,
@@ -49,13 +43,13 @@ export default function Dashboard() {
   }
 
   // Métricas reais (sem números fictícios)
-  const tripsAtivas = trips?.filter(
-    (t: any) => t.status === "em_andamento" || t.status === "planejada"
-  ).length || 0;
+  const tripsAtivas =
+    trips?.filter(
+      (t: any) => t.status === "em_andamento" || t.status === "planejada"
+    ).length || 0;
 
-  const motoristasDisponiveis = drivers?.filter(
-    (d: any) => d.status === "disponivel"
-  ).length || 0;
+  const motoristasDisponiveis =
+    drivers?.filter((d: any) => d.status === "disponivel").length || 0;
 
   const statCards = [
     {
@@ -128,7 +122,7 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat) => {
+        {statCards.map(stat => {
           const Icon = stat.icon;
           return (
             <Card
@@ -359,9 +353,7 @@ export default function Dashboard() {
               const borderColor = isCritical
                 ? "border-red-500/30"
                 : "border-yellow-500/30";
-              const textColor = isCritical
-                ? "text-red-300"
-                : "text-yellow-300";
+              const textColor = isCritical ? "text-red-300" : "text-yellow-300";
               const messageColor = isCritical
                 ? "text-red-200"
                 : "text-yellow-200";

@@ -62,7 +62,11 @@ export default function Maintenance() {
     custo: "",
   });
 
-  const { data: maintenances, isLoading, refetch } = trpc.maintenance.list.useQuery();
+  const {
+    data: maintenances,
+    isLoading,
+    refetch,
+  } = trpc.maintenance.list.useQuery();
   const { data: vehicles } = trpc.vehicles.list.useQuery();
 
   const createMutation = trpc.maintenance.create.useMutation({
@@ -70,7 +74,8 @@ export default function Maintenance() {
       // Se o usuário escolheu um status diferente de "pendente" no cadastro,
       // ou definiu uma data de realização, atualiza imediatamente após criar.
       const needsStatusUpdate =
-        (formData.status && formData.status !== "pendente") || formData.dataRealizada;
+        (formData.status && formData.status !== "pendente") ||
+        formData.dataRealizada;
 
       if (needsStatusUpdate && created?.id) {
         try {
@@ -122,7 +127,7 @@ export default function Maintenance() {
 
     // Se status for "concluida" exige data de realização
     if (formData.status === "concluida" && !formData.dataRealizada) {
-      toast.error('Informe a data de realização para concluir a manutenção.');
+      toast.error("Informe a data de realização para concluir a manutenção.");
       return;
     }
 
@@ -138,8 +143,11 @@ export default function Maintenance() {
 
   const handleStatusUpdate = () => {
     if (!selectedMaintenance) return;
-    if (statusFormData.status === "concluida" && !statusFormData.dataRealizada) {
-      toast.error('Informe a data de realização para concluir a manutenção.');
+    if (
+      statusFormData.status === "concluida" &&
+      !statusFormData.dataRealizada
+    ) {
+      toast.error("Informe a data de realização para concluir a manutenção.");
       return;
     }
 
@@ -239,7 +247,7 @@ export default function Maintenance() {
                 <Label htmlFor="veiculoId">Veículo *</Label>
                 <Select
                   value={formData.veiculoId}
-                  onValueChange={(value) =>
+                  onValueChange={value =>
                     setFormData({ ...formData, veiculoId: value })
                   }
                 >
@@ -248,10 +256,7 @@ export default function Maintenance() {
                   </SelectTrigger>
                   <SelectContent>
                     {vehicles?.map((vehicle: any) => (
-                      <SelectItem
-                        key={vehicle.id}
-                        value={String(vehicle.id)}
-                      >
+                      <SelectItem key={vehicle.id} value={String(vehicle.id)}>
                         {vehicle.placa} - {vehicle.marca} {vehicle.modelo}
                       </SelectItem>
                     ))}
@@ -264,7 +269,7 @@ export default function Maintenance() {
                   id="tipo"
                   placeholder="Ex: Troca de óleo, Revisão, Reparo"
                   value={formData.tipo}
-                  onChange={(e) =>
+                  onChange={e =>
                     setFormData({ ...formData, tipo: e.target.value })
                   }
                 />
@@ -275,7 +280,7 @@ export default function Maintenance() {
                   id="descricao"
                   placeholder="Descreva os detalhes da manutenção"
                   value={formData.descricao}
-                  onChange={(e) =>
+                  onChange={e =>
                     setFormData({ ...formData, descricao: e.target.value })
                   }
                   rows={3}
@@ -289,7 +294,7 @@ export default function Maintenance() {
                     id="dataPrevista"
                     type="date"
                     value={formData.dataPrevista}
-                    onChange={(e) =>
+                    onChange={e =>
                       setFormData({ ...formData, dataPrevista: e.target.value })
                     }
                   />
@@ -325,7 +330,7 @@ export default function Maintenance() {
                     id="dataRealizada"
                     type="date"
                     value={formData.dataRealizada}
-                    onChange={(e) =>
+                    onChange={e =>
                       setFormData({
                         ...formData,
                         dataRealizada: e.target.value,
@@ -347,7 +352,7 @@ export default function Maintenance() {
                   step="0.01"
                   placeholder="0.00"
                   value={formData.custo}
-                  onChange={(e) =>
+                  onChange={e =>
                     setFormData({ ...formData, custo: e.target.value })
                   }
                 />
@@ -358,7 +363,7 @@ export default function Maintenance() {
                   id="observacoes"
                   placeholder="Informações adicionais"
                   value={formData.observacoes}
-                  onChange={(e) =>
+                  onChange={e =>
                     setFormData({ ...formData, observacoes: e.target.value })
                   }
                   rows={2}
@@ -497,7 +502,7 @@ export default function Maintenance() {
                 id="dataRealizada"
                 type="date"
                 value={statusFormData.dataRealizada}
-                onChange={(e) =>
+                onChange={e =>
                   setStatusFormData({
                     ...statusFormData,
                     dataRealizada: e.target.value,
@@ -513,7 +518,7 @@ export default function Maintenance() {
                 step="0.01"
                 placeholder="0.00"
                 value={statusFormData.custo}
-                onChange={(e) =>
+                onChange={e =>
                   setStatusFormData({
                     ...statusFormData,
                     custo: e.target.value,

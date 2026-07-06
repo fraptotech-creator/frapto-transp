@@ -3,17 +3,29 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 // Mock do banco de dados para evitar conexão real em testes
-vi.mock("./db", async (importOriginal) => {
+vi.mock("./db", async importOriginal => {
   const actual = await importOriginal<typeof import("./db")>();
   return {
     ...actual,
     getDb: vi.fn().mockResolvedValue(null),
     getDrivers: vi.fn().mockResolvedValue([
-      { id: 1, nome: "João Silva", cpf: "123.456.789-00", cnh: "12345678901", status: "disponivel", createdAt: new Date() },
+      {
+        id: 1,
+        nome: "João Silva",
+        cpf: "123.456.789-00",
+        cnh: "12345678901",
+        status: "disponivel",
+        createdAt: new Date(),
+      },
     ]),
-    getDriverById: vi.fn().mockResolvedValue(
-      { id: 1, nome: "João Silva", cpf: "123.456.789-00", cnh: "12345678901", status: "disponivel", createdAt: new Date() }
-    ),
+    getDriverById: vi.fn().mockResolvedValue({
+      id: 1,
+      nome: "João Silva",
+      cpf: "123.456.789-00",
+      cnh: "12345678901",
+      status: "disponivel",
+      createdAt: new Date(),
+    }),
   };
 });
 
