@@ -14,11 +14,32 @@ import {
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { invokeLLM, type ChatMessage } from "./_core/llm";
+import type {
+  InsertVehicle,
+  InsertTrip,
+  InsertMaintenance,
+  InsertExpense,
+  InsertRevenue,
+} from "../drizzle/schema";
 
 const parseNumericString = (value: string | null | undefined): string | null => {
   if (!value) return null;
   const parsed = parseFloat(value);
   return isNaN(parsed) ? null : String(parsed);
+};
+
+// Para campos numéricos OBRIGATÓRIOS (ex.: valor de despesa/receita, notNull no
+// schema). Falha fechado: entrada não-numérica vira erro de validação visível,
+// em vez de null que estouraria no banco.
+const parseRequiredNumericString = (value: string): string => {
+  const parsed = parseNumericString(value);
+  if (parsed === null) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Valor numérico inválido.",
+    });
+  }
+  return parsed;
 };
 
 // Monta um resumo textual do estado real da frota para dar contexto ao assistente.
@@ -194,7 +215,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, capacidadeCarga, ...rest } = input;
-        const updateData: any = {
+        const updateData: Partial<InsertVehicle> = {
           ...rest,
         };
         if (capacidadeCarga !== undefined) {
@@ -340,7 +361,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, distancia, pesoTotal, valor, ...rest } = input;
-        const updateData: any = {
+        const updateData: Partial<InsertTrip> = {
           ...rest,
         };
         if (distancia !== undefined) {
@@ -368,7 +389,7 @@ export const appRouter = router({
         dataChegada: z.date().optional(),
       }))
       .mutation(async ({ input }) => {
-        const updateData: any = {
+        const updateData: Partial<InsertTrip> = {
           status: input.status,
         };
         if (input.dataChegada) {
@@ -430,7 +451,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, custo, ...rest } = input;
-        const updateData: any = {
+        const updateData: Partial<InsertMaintenance> = {
           ...rest,
         };
         if (custo !== undefined) {
@@ -448,7 +469,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, custo, ...rest } = input;
-        const updateData: any = {
+        const updateData: Partial<InsertMaintenance> = {
           ...rest,
         };
         if (custo !== undefined) {
@@ -555,7 +576,7 @@ export const appRouter = router({
         return createExpense({
           tipo: input.tipo,
           descricao: input.descricao,
-          valor: parseNumericString(input.valor),
+          valor: parseRequiredNumericString(input.valor),
           data: input.data,
           veiculoId: input.veiculoId || null,
           motoristId: input.motoristId || null,
@@ -582,9 +603,9 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, valor, ...rest } = input;
-        const updateData: any = { ...rest };
+        const updateData: Partial<InsertExpense> = { ...rest };
         if (valor !== undefined) {
-          updateData.valor = parseNumericString(valor);
+          updateData.valor = parseRequiredNumericString(valor);
         }
         return updateExpense(id, updateData);
       }),
@@ -625,7 +646,7 @@ export const appRouter = router({
         return createRevenue({
           tipo: input.tipo,
           descricao: input.descricao,
-          valor: parseNumericString(input.valor),
+          valor: parseRequiredNumericString(input.valor),
           data: input.data,
           viagemId: input.viagemId || null,
           clienteNome: input.clienteNome || null,
@@ -652,9 +673,9 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, valor, ...rest } = input;
-        const updateData: any = { ...rest };
+        const updateData: Partial<InsertRevenue> = { ...rest };
         if (valor !== undefined) {
-          updateData.valor = parseNumericString(valor);
+          updateData.valor = parseRequiredNumericString(valor);
         }
         return updateRevenue(id, updateData);
       }),

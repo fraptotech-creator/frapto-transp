@@ -1,7 +1,7 @@
 import { eq, desc } from "drizzle-orm";
 import { Trip } from "../drizzle/schema";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, vehicles, drivers, trips, notifications, maintenance, InsertVehicle, InsertDriver, InsertTrip, InsertNotification, InsertMaintenance } from "../drizzle/schema";
+import { InsertUser, users, vehicles, drivers, trips, notifications, maintenance, InsertVehicle, InsertDriver, InsertTrip, InsertNotification, InsertMaintenance, InsertExpense, InsertRevenue } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -280,7 +280,7 @@ export async function getExpenseById(id: number) {
   return result[0];
 }
 
-export async function createExpense(data: any) {
+export async function createExpense(data: InsertExpense) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const { expenses } = await import("../drizzle/schema");
@@ -289,7 +289,7 @@ export async function createExpense(data: any) {
   return result[0];
 }
 
-export async function updateExpense(id: number, data: any) {
+export async function updateExpense(id: number, data: Partial<InsertExpense>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const { expenses } = await import("../drizzle/schema");
@@ -322,7 +322,7 @@ export async function getRevenueById(id: number) {
   return result[0];
 }
 
-export async function createRevenue(data: any) {
+export async function createRevenue(data: InsertRevenue) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const { revenues } = await import("../drizzle/schema");
@@ -331,7 +331,7 @@ export async function createRevenue(data: any) {
   return result[0];
 }
 
-export async function updateRevenue(id: number, data: any) {
+export async function updateRevenue(id: number, data: Partial<InsertRevenue>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const { revenues } = await import("../drizzle/schema");
