@@ -59,6 +59,10 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Healthcheck do Railway — precisa ficar ACIMA de tudo e sempre 200.
+  app.get("/api/ping", (_req, res) => {
+    res.status(200).json({ ok: true });
+  });
   // Login próprio via Google OAuth (rotas /api/auth/google[/callback])
   registerGoogleLoginRoutes(app);
   // tRPC API
@@ -77,7 +81,11 @@ async function startServer() {
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  // Em produção o Railway injeta PORT e o healthcheck bate NELA — não podemos
+  // pular para outra porta. Só varremos portas livres em desenvolvimento.
+  const port = ENV.isProduction
+    ? preferredPort
+    : await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
