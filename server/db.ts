@@ -1,6 +1,7 @@
 import { eq, desc } from "drizzle-orm";
 import { Trip } from "../drizzle/schema";
 import { drizzle } from "drizzle-orm/mysql2";
+import { createPool } from "mysql2";
 import {
   InsertUser,
   users,
@@ -20,12 +21,26 @@ import {
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pool: ReturnType<typeof createPool> | null = null;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const poolConfig = {
+        // Pool de produção (TiDB aguenta centenas de conexões concorrentes).
+        connectionLimit: 100,
+        waitForConnections: true,
+        queueLimit: 200,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 10000,
+        connectTimeout: 10000,
+        // TiDB Serverless exige TLS. rejectUnauthorized (default true) valida
+        // contra a CA pública embutida no Node (cert do gateway TiDB é público).
+        ssl: { minVersion: "TLSv1.2" as const },
+      };
+      _pool = createPool({ ...poolConfig, uri: process.env.DATABASE_URL });
+      _db = drizzle(_pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
