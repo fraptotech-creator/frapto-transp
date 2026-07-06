@@ -120,7 +120,7 @@ export default function Dashboard() {
               Painel de Controle
             </h1>
             <p className="text-sm text-gray-400 mt-1">
-              Bem-vindo ao sistema de gestão de frotas LogiMind
+              Bem-vindo ao sistema de gestão de frotas Frapto Transp
             </p>
           </div>
         </div>

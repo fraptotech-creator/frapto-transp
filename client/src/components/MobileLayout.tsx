@@ -37,10 +37,10 @@ export default function MobileLayout({
         <div className="flex flex-col items-center gap-8 w-full max-w-sm">
           <div className="flex flex-col items-center gap-4">
             <div className="w-24 h-24 flex items-center justify-center">
-              <img src="/logo.png" alt="LogiMind Logo" className="w-full h-auto" />
+              <img src="/logo.png" alt="Frapto Transp Logo" className="w-full h-auto" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-center">
-              LogiMind
+              Frapto Transp
             </h1>
             <p className="text-sm text-muted-foreground text-center">
               Sistema de Gestão de Frotas
@@ -65,8 +65,8 @@ export default function MobileLayout({
       {/* Header */}
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="LogiMind Logo" className="h-8 w-auto" />
-          <h1 className="font-bold text-lg">LogiMind</h1>
+          <img src="/logo.png" alt="Frapto Transp Logo" className="h-8 w-auto" />
+          <h1 className="font-bold text-lg">Frapto Transp</h1>
         </div>
 
         <Sheet open={isOpen} onOpenChange={setIsOpen}>

@@ -164,7 +164,7 @@ function DashboardLayoutContent({
                     <Truck className="h-5 w-5 text-white" />
                   </div>
                   <span className="font-bold tracking-tight truncate text-xl bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-                    LogiMind
+                    Frapto Transp
                   </span>
                 </div>
               ) : (
