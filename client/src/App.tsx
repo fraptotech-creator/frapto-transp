@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
+import { lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
@@ -17,6 +18,9 @@ import DocumentManagement from "./pages/DocumentManagement";
 import Reports from "./pages/Reports";
 import Financial from "./pages/Financial";
 import TripTracking from "./pages/TripTracking";
+// Lazy: o Assistente puxa o Streamdown (shiki) — carrega só ao abrir /assistant,
+// mantendo o bundle principal enxuto.
+const Assistant = lazy(() => import("./pages/Assistant"));
 
 function Router() {
   return (
@@ -34,6 +38,13 @@ function Router() {
       <Route path={"/documents"} component={DocumentManagement} />
       <Route path={"/reports"} component={Reports} />
       <Route path={"/financial"} component={Financial} />
+      <Route path={"/assistant"}>
+        <Suspense
+          fallback={<div className="p-6 text-muted-foreground">Carregando…</div>}
+        >
+          <Assistant />
+        </Suspense>
+      </Route>
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

@@ -13,12 +13,88 @@ import {
   getRevenues, getRevenueById, createRevenue, updateRevenue, deleteRevenue
 } from "./db";
 import { TRPCError } from "@trpc/server";
+import { invokeLLM, type ChatMessage } from "./_core/llm";
 
 const parseNumericString = (value: string | null | undefined): string | null => {
   if (!value) return null;
   const parsed = parseFloat(value);
   return isNaN(parsed) ? null : String(parsed);
 };
+
+// Monta um resumo textual do estado real da frota para dar contexto ao assistente.
+// Função de leitura: o assistente informa; nunca muta dados.
+async function buildFleetContext(): Promise<string> {
+  const now = Date.now();
+  const in30Days = now + 30 * 24 * 60 * 60 * 1000;
+  const [vehicles, drivers, trips, maintenances] = await Promise.all([
+    getVehicles(),
+    getDrivers(),
+    getTrips(),
+    getMaintenances(),
+  ]);
+
+  const fmt = (d: Date | null | undefined) =>
+    d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+
+  const fleetByStatus = {
+    ativo: vehicles.filter(v => v.status === "ativo").length,
+    manutencao: vehicles.filter(v => v.status === "manutencao").length,
+    inativo: vehicles.filter(v => v.status === "inativo").length,
+  };
+
+  const cnhVencendo = drivers.filter(
+    d => d.cnhVencimento && new Date(d.cnhVencimento).getTime() < in30Days
+  );
+  const crlvVencendo = vehicles.filter(
+    v => v.crlvVencimento && new Date(v.crlvVencimento).getTime() < in30Days
+  );
+  const viagensAtivas = trips.filter(
+    t => t.status === "em_andamento" || t.status === "planejada"
+  );
+  const manutencoesPendentes = maintenances.filter(
+    m => m.status === "pendente" || m.status === "em_andamento"
+  );
+
+  const lines: string[] = [];
+  lines.push(`Data de hoje: ${new Date(now).toLocaleDateString("pt-BR")}.`);
+  lines.push(
+    `Frota: ${vehicles.length} veículos (ativos: ${fleetByStatus.ativo}, em manutenção: ${fleetByStatus.manutencao}, inativos: ${fleetByStatus.inativo}).`
+  );
+  lines.push(`Motoristas: ${drivers.length}.`);
+  lines.push(
+    `Viagens: ${trips.length} no total, ${viagensAtivas.length} ativas (planejada/em andamento).`
+  );
+  lines.push(
+    `CNHs vencendo em até 30 dias (${cnhVencendo.length}): ` +
+      (cnhVencendo.map(d => `${d.nome} (${fmt(d.cnhVencimento)})`).join("; ") ||
+        "nenhuma")
+  );
+  lines.push(
+    `CRLVs vencendo em até 30 dias (${crlvVencendo.length}): ` +
+      (crlvVencendo
+        .map(v => `${v.placa} (${fmt(v.crlvVencimento)})`)
+        .join("; ") || "nenhum")
+  );
+  lines.push(
+    `Manutenções pendentes (${manutencoesPendentes.length}): ` +
+      (manutencoesPendentes
+        .map(m => {
+          const veic = vehicles.find(v => v.id === m.veiculoId);
+          return `${veic?.placa ?? "?"} - ${m.tipo} (prevista ${fmt(m.dataPrevista)})`;
+        })
+        .join("; ") || "nenhuma")
+  );
+  return lines.join("\n");
+}
+
+const FLEET_ASSISTANT_SYSTEM = `Você é o assistente de frota do sistema Frapto Transp.
+Responda em português do Brasil, de forma objetiva e útil, sobre gestão de frota:
+veículos, motoristas, viagens, manutenções, documentos (CNH/CRLV) e finanças.
+Baseie-se SOMENTE nos dados de contexto fornecidos abaixo. Se a informação não
+estiver no contexto, diga que não tem esse dado — nunca invente números.
+
+DADOS ATUAIS DA FROTA:
+`;
 
 export const appRouter = router({
   system: systemRouter,
@@ -31,6 +107,35 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+  }),
+
+  // Assistente de IA de frota (Claude). Somente leitura — informa, não muta.
+  ai: router({
+    chat: protectedProcedure
+      .input(
+        z.object({
+          messages: z
+            .array(
+              z.object({
+                role: z.enum(["user", "assistant"]),
+                content: z.string().min(1),
+              })
+            )
+            .min(1),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const context = await buildFleetContext();
+        const messages: ChatMessage[] = input.messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        }));
+        const response = await invokeLLM({
+          system: FLEET_ASSISTANT_SYSTEM + context,
+          messages,
+        });
+        return { response };
+      }),
   }),
 
   // Procedures para Veículos
