@@ -16,7 +16,4 @@ export const ENV = {
   ownerEmail: process.env.OWNER_EMAIL ?? "",
   // Assistente de IA (Anthropic Claude)
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-  // [LEGADO Manus] ainda lidos por llm.ts/storage.ts — removidos na Fase 4 (IA) / limpeza.
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
 };
