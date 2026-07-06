@@ -65,12 +65,35 @@ export default function DashboardLayout({
     return <DashboardLayoutSkeleton />
   }
 
-  // Bypass de autenticação para pré-visualização
-  /*
+  // Gate de login: sem sessão válida, mostra a tela de entrada (Google OAuth).
   if (!user) {
-    ...
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4">
+        <div className="flex flex-col items-center gap-8 w-full max-w-sm">
+          <div className="flex flex-col items-center gap-4">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-primary to-purple-600 shadow-lg">
+              <Truck className="h-10 w-10 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-center text-white">
+              Frapto Transp
+            </h1>
+            <p className="text-sm text-slate-400 text-center">
+              Sistema de Gestão de Frotas
+            </p>
+          </div>
+          <Button
+            onClick={() => {
+              window.location.href = getLoginUrl();
+            }}
+            size="lg"
+            className="w-full shadow-lg hover:shadow-xl transition-all"
+          >
+            Entrar com Google
+          </Button>
+        </div>
+      </div>
+    );
   }
-  */
 
   return (
     <SidebarProvider

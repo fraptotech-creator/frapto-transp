@@ -1,27 +1,37 @@
-import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { TRPCClientError } from "@trpc/client";
-import { useCallback, useEffect, useMemo } from "react";
 
-type UseAuthOptions = {
-  redirectOnUnauthenticated?: boolean;
-  redirectPath?: string;
-};
+/**
+ * Autenticação real via sessão (cookie JWT). auth.me é publicProcedure e
+ * devolve o usuário logado ou null — não lança 401, então não há loop de
+ * redirecionamento. O gate de login fica no DashboardLayout.
+ */
+export function useAuth() {
+  const utils = trpc.useUtils();
 
-export function useAuth(options?: UseAuthOptions) {
-  const demoUser = {
-    id: "demo-user-001",
-    name: "Administrador LogiMind",
-    email: "admin@logimind.com",
-    role: "admin"
-  };
+  const {
+    data: user,
+    isLoading,
+    error,
+  } = trpc.auth.me.useQuery(undefined, {
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const logoutMutation = trpc.auth.logout.useMutation({
+    onSuccess: async () => {
+      await utils.auth.me.invalidate();
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
+    },
+  });
 
   return {
-    user: demoUser,
-    loading: false,
-    error: null,
-    isAuthenticated: true,
-    refresh: () => Promise.resolve(),
-    logout: () => Promise.resolve(),
+    user: user ?? null,
+    loading: isLoading,
+    error: error ?? null,
+    isAuthenticated: !!user,
+    refresh: () => utils.auth.me.invalidate(),
+    logout: () => logoutMutation.mutateAsync(),
   };
 }
