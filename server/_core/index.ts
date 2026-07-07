@@ -7,6 +7,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
+import { handleWebhookEvent } from "./stripe";
 
 // Fail-closed: em produção, o app NÃO sobe sem os segredos essenciais.
 // Erro visível no boot > sessão insegura silenciosa (JWT fraco / login quebrado).
@@ -52,6 +53,31 @@ async function startServer() {
   assertProductionSecrets();
   const app = express();
   const server = createServer(app);
+
+  // Webhook do Stripe ANTES do parser JSON: precisa do corpo CRU pra validar a
+  // assinatura HMAC (fail-closed).
+  app.post(
+    "/api/stripe/webhook",
+    express.raw({ type: "application/json" }),
+    async (req, res) => {
+      const sig = req.headers["stripe-signature"];
+      if (typeof sig !== "string") {
+        res.status(400).send("missing signature");
+        return;
+      }
+      try {
+        await handleWebhookEvent(req.body as Buffer, sig);
+        res.json({ received: true });
+      } catch (err) {
+        console.error(
+          "[Stripe] webhook error",
+          err instanceof Error ? err.message : err
+        );
+        res.status(400).send("webhook error");
+      }
+    }
+  );
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

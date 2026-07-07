@@ -6,6 +6,7 @@ import {
   publicProcedure,
   router,
   orgProcedure,
+  activeOrgProcedure,
   orgOwnerProcedure,
 } from "./_core/trpc";
 import { ENV } from "./_core/env";
@@ -14,8 +15,14 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import {
+  createCheckoutSession,
+  createPortalSession,
+  isStripeConfigured,
+} from "./_core/stripe";
+import {
   getUserByEmail,
   createOrgAndOwner,
+  getOrganization,
   getVehicles,
   getVehicleById,
   createVehicle,
@@ -272,9 +279,38 @@ export const appRouter = router({
     }),
   }),
 
+  // Cobrança/assinatura (Stripe). Acessível mesmo sem assinatura ativa,
+  // pra que o usuário logado consiga pagar e liberar o sistema.
+  billing: router({
+    getStatus: orgProcedure.query(async ({ ctx }) => {
+      const org = await getOrganization(ctx.orgId);
+      const status = org?.subscriptionStatus ?? "none";
+      return {
+        status,
+        active: status === "active" || status === "trialing",
+        currentPeriodEnd: org?.currentPeriodEnd ?? null,
+        configured: isStripeConfigured(),
+        priceLabel: "R$ 57,00/mês",
+      };
+    }),
+
+    createCheckout: orgProcedure.mutation(async ({ ctx }) => {
+      const url = await createCheckoutSession({
+        orgId: ctx.orgId,
+        email: ctx.user.email ?? "",
+      });
+      return { url };
+    }),
+
+    createPortal: orgProcedure.mutation(async ({ ctx }) => {
+      const url = await createPortalSession(ctx.orgId);
+      return { url };
+    }),
+  }),
+
   // Assistente de IA de frota. Somente leitura — informa, não muta.
   ai: router({
-    chat: orgProcedure
+    chat: activeOrgProcedure
       .input(
         z.object({
           messages: z
@@ -356,13 +392,13 @@ export const appRouter = router({
 
   // ─── Veículos ──────────────────────────────────────────────────────────────
   vehicles: router({
-    list: orgProcedure.query(({ ctx }) => getVehicles(ctx.orgId)),
+    list: activeOrgProcedure.query(({ ctx }) => getVehicles(ctx.orgId)),
 
-    getById: orgProcedure
+    getById: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .query(({ ctx, input }) => getVehicleById(ctx.orgId, input.id)),
 
-    create: orgProcedure
+    create: activeOrgProcedure
       .input(
         z.object({
           placa: z.string().min(1),
@@ -392,7 +428,7 @@ export const appRouter = router({
         })
       ),
 
-    update: orgProcedure
+    update: activeOrgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -417,20 +453,20 @@ export const appRouter = router({
         return updateVehicle(ctx.orgId, id, updateData);
       }),
 
-    delete: orgProcedure
+    delete: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .mutation(({ ctx, input }) => deleteVehicle(ctx.orgId, input.id)),
   }),
 
   // ─── Motoristas ──────────────────────────────────────────────────────────────
   drivers: router({
-    list: orgProcedure.query(({ ctx }) => getDrivers(ctx.orgId)),
+    list: activeOrgProcedure.query(({ ctx }) => getDrivers(ctx.orgId)),
 
-    getById: orgProcedure
+    getById: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .query(({ ctx, input }) => getDriverById(ctx.orgId, input.id)),
 
-    create: orgProcedure
+    create: activeOrgProcedure
       .input(
         z.object({
           nome: z.string().min(1),
@@ -461,7 +497,7 @@ export const appRouter = router({
         })
       ),
 
-    update: orgProcedure
+    update: activeOrgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -485,20 +521,20 @@ export const appRouter = router({
         return updateDriver(ctx.orgId, id, rest);
       }),
 
-    delete: orgProcedure
+    delete: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .mutation(({ ctx, input }) => deleteDriver(ctx.orgId, input.id)),
   }),
 
   // ─── Viagens ─────────────────────────────────────────────────────────────────
   trips: router({
-    list: orgProcedure.query(({ ctx }) => getTrips(ctx.orgId)),
+    list: activeOrgProcedure.query(({ ctx }) => getTrips(ctx.orgId)),
 
-    getById: orgProcedure
+    getById: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .query(({ ctx, input }) => getTripById(ctx.orgId, input.id)),
 
-    create: orgProcedure
+    create: activeOrgProcedure
       .input(
         z.object({
           numeroViagem: z.string().min(1),
@@ -531,7 +567,7 @@ export const appRouter = router({
         })
       ),
 
-    update: orgProcedure
+    update: activeOrgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -563,11 +599,11 @@ export const appRouter = router({
         return updateTrip(ctx.orgId, id, updateData);
       }),
 
-    delete: orgProcedure
+    delete: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .mutation(({ ctx, input }) => deleteTrip(ctx.orgId, input.id)),
 
-    updateStatus: orgProcedure
+    updateStatus: activeOrgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -589,19 +625,19 @@ export const appRouter = router({
 
   // ─── Manutenção ──────────────────────────────────────────────────────────────
   maintenance: router({
-    list: orgProcedure.query(({ ctx }) => getMaintenances(ctx.orgId)),
+    list: activeOrgProcedure.query(({ ctx }) => getMaintenances(ctx.orgId)),
 
-    getById: orgProcedure
+    getById: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .query(({ ctx, input }) => getMaintenanceById(ctx.orgId, input.id)),
 
-    getByVehicle: orgProcedure
+    getByVehicle: activeOrgProcedure
       .input(z.object({ veiculoId: z.number() }))
       .query(({ ctx, input }) =>
         getMaintenancesByVehicle(ctx.orgId, input.veiculoId)
       ),
 
-    create: orgProcedure
+    create: activeOrgProcedure
       .input(
         z.object({
           veiculoId: z.number(),
@@ -624,7 +660,7 @@ export const appRouter = router({
         })
       ),
 
-    update: orgProcedure
+    update: activeOrgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -644,7 +680,7 @@ export const appRouter = router({
         return updateMaintenance(ctx.orgId, id, updateData);
       }),
 
-    updateStatus: orgProcedure
+    updateStatus: activeOrgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -663,7 +699,7 @@ export const appRouter = router({
 
   // ─── Dashboard ───────────────────────────────────────────────────────────────
   dashboard: router({
-    stats: orgProcedure.query(async ({ ctx }) => {
+    stats: activeOrgProcedure.query(async ({ ctx }) => {
       const [vehiclesList, driversList, tripsList, maintenanceList] =
         await Promise.all([
           getVehicles(ctx.orgId),
@@ -749,13 +785,13 @@ export const appRouter = router({
 
   // ─── Despesas ────────────────────────────────────────────────────────────────
   expenses: router({
-    list: orgProcedure.query(({ ctx }) => getExpenses(ctx.orgId)),
+    list: activeOrgProcedure.query(({ ctx }) => getExpenses(ctx.orgId)),
 
-    getById: orgProcedure
+    getById: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .query(({ ctx, input }) => getExpenseById(ctx.orgId, input.id)),
 
-    create: orgProcedure
+    create: activeOrgProcedure
       .input(
         z.object({
           tipo: z.enum([
@@ -792,7 +828,7 @@ export const appRouter = router({
         })
       ),
 
-    update: orgProcedure
+    update: activeOrgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -825,20 +861,20 @@ export const appRouter = router({
         return updateExpense(ctx.orgId, id, updateData);
       }),
 
-    delete: orgProcedure
+    delete: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .mutation(({ ctx, input }) => deleteExpense(ctx.orgId, input.id)),
   }),
 
   // ─── Receitas ────────────────────────────────────────────────────────────────
   revenues: router({
-    list: orgProcedure.query(({ ctx }) => getRevenues(ctx.orgId)),
+    list: activeOrgProcedure.query(({ ctx }) => getRevenues(ctx.orgId)),
 
-    getById: orgProcedure
+    getById: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .query(({ ctx, input }) => getRevenueById(ctx.orgId, input.id)),
 
-    create: orgProcedure
+    create: activeOrgProcedure
       .input(
         z.object({
           tipo: z.enum(["viagem", "frete", "servico", "outros"]),
@@ -868,7 +904,7 @@ export const appRouter = router({
         })
       ),
 
-    update: orgProcedure
+    update: activeOrgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -892,7 +928,7 @@ export const appRouter = router({
         return updateRevenue(ctx.orgId, id, updateData);
       }),
 
-    delete: orgProcedure
+    delete: activeOrgProcedure
       .input(z.object({ id: z.number() }))
       .mutation(({ ctx, input }) => deleteRevenue(ctx.orgId, input.id)),
   }),

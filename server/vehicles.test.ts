@@ -9,6 +9,9 @@ vi.mock("./db", async importOriginal => {
   return {
     ...actual,
     getDb: vi.fn().mockResolvedValue(null),
+    getOrganization: vi
+      .fn()
+      .mockResolvedValue({ id: 1, subscriptionStatus: "active" }),
     getVehicles: vi.fn().mockResolvedValue([
       {
         id: 1,

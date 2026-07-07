@@ -19,7 +19,9 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import AuthScreen from "@/components/AuthScreen";
+import Landing from "@/components/Landing";
+import Paywall from "@/components/Paywall";
+import { trpc } from "@/lib/trpc";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard,
@@ -77,23 +79,40 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
-  });
   const { loading, user } = useAuth();
-
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
-  }, [sidebarWidth]);
 
   if (loading) {
     return <DashboardLayoutSkeleton />;
   }
 
-  // Gate de login: sem sessão válida, mostra a tela de cadastro/login.
+  // Deslogado: landing page (marketing + cadastro/login).
   if (!user) {
-    return <AuthScreen />;
+    return <Landing />;
+  }
+
+  // Logado: verifica a assinatura antes de liberar o sistema.
+  return <GatedApp>{children}</GatedApp>;
+}
+
+// Gate de PAGAMENTO no cliente: sem assinatura ativa, mostra o paywall.
+function GatedApp({ children }: { children: React.ReactNode }) {
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+  });
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
+  }, [sidebarWidth]);
+
+  const { data: billing, isLoading } = trpc.billing.getStatus.useQuery();
+
+  if (isLoading) {
+    return <DashboardLayoutSkeleton />;
+  }
+
+  if (!billing?.active) {
+    return <Paywall />;
   }
 
   return (

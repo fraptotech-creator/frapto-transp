@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Truck } from "lucide-react";
+import { Truck, ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -12,9 +12,15 @@ type Mode = "login" | "signup";
  * Tela de autenticação (email + senha). Cadastro cria a EMPRESA + usuário dono.
  * Ao entrar/cadastrar, invalida auth.me → o app recarrega já autenticado.
  */
-export default function AuthScreen() {
+export default function AuthScreen({
+  initialMode = "login",
+  onBack,
+}: {
+  initialMode?: Mode;
+  onBack?: () => void;
+}) {
   const utils = trpc.useUtils();
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(initialMode);
 
   const [orgName, setOrgName] = useState("");
   const [name, setName] = useState("");
@@ -53,6 +59,14 @@ export default function AuthScreen() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4">
       <div className="w-full max-w-sm space-y-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar
+          </button>
+        )}
         <div className="flex flex-col items-center gap-3">
           <div className="p-4 rounded-2xl bg-gradient-to-br from-primary to-purple-600 shadow-lg">
             <Truck className="h-9 w-9 text-white" />

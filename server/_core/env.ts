@@ -16,4 +16,8 @@ export const ENV = {
   ownerEmail: process.env.OWNER_EMAIL ?? "",
   // Assistente de IA (Anthropic Claude)
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  // Stripe (paywall / assinatura)
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  stripePriceId: process.env.STRIPE_PRICE_ID ?? "",
 };
