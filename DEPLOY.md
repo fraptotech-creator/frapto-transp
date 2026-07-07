@@ -24,16 +24,20 @@ Copie de `.env.example`. Críticas (o boot falha em produção sem elas):
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth Google                                                               |
 | `APP_BASE_URL`                              | URL pública, sem barra final (ex.: `https://frapto-transp.up.railway.app`) |
 | `OWNER_EMAIL`                               | Email que, no 1º login, vira admin                                         |
-| `ANTHROPIC_API_KEY`                         | Assistente de IA                                                           |
 
 `NODE_ENV=production` e `PORT` já vêm do `railway.json` / Railway.
+
+**Assistente de IA (opcional):** não precisa de env var. Depois de logar como admin,
+vá em **Configurações → Assistente de IA** e escolha o provedor (Claude / GPT /
+compatível-OpenAI), cole a chave e o modelo. (Se preferir via env, `ANTHROPIC_API_KEY`
+ainda funciona como fallback do provedor Anthropic.)
 
 ## Migração do banco (schema Drizzle)
 
 Com a `DATABASE_URL` de produção no ambiente local (ou via Railway CLI):
 
 ```bash
-pnpm db:push   # drizzle-kit generate && migrate
+pnpm db:push   # drizzle-kit push — aplica o schema.ts direto (banco novo)
 ```
 
 Cria as tabelas: users, vehicles, drivers, trips, maintenance, notifications, expenses, revenues, documents.

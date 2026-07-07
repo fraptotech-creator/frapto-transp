@@ -34,13 +34,21 @@ import {
   BarChart3,
   DollarSign,
   Sparkles,
+  Settings,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
-const menuItems = [
+type MenuItem = {
+  icon: typeof LayoutDashboard;
+  label: string;
+  path: string;
+  adminOnly?: boolean;
+};
+
+const menuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Painel", path: "/" },
   { icon: Truck, label: "Veículos", path: "/vehicles" },
   { icon: Users, label: "Motoristas", path: "/drivers" },
@@ -51,6 +59,12 @@ const menuItems = [
   { icon: FileText, label: "Documentos", path: "/documents" },
   { icon: Bell, label: "Notificações", path: "/notifications" },
   { icon: Sparkles, label: "Assistente IA", path: "/assistant" },
+  {
+    icon: Settings,
+    label: "Configurações",
+    path: "/settings",
+    adminOnly: true,
+  },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -137,7 +151,11 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  // Itens admin-only (ex.: Configurações) só aparecem para admin.
+  const visibleMenuItems = menuItems.filter(
+    item => !item.adminOnly || user?.role === "admin"
+  );
+  const activeMenuItem = visibleMenuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -212,7 +230,7 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
+              {visibleMenuItems.map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>

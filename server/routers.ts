@@ -1,7 +1,13 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
+import {
+  publicProcedure,
+  router,
+  protectedProcedure,
+  adminProcedure,
+} from "./_core/trpc";
+import { ENV } from "./_core/env";
 import { z } from "zod";
 import {
   getVehicles,
@@ -36,15 +42,18 @@ import {
   createRevenue,
   updateRevenue,
   deleteRevenue,
+  getAiConfig,
+  upsertAiConfig,
 } from "./db";
 import { TRPCError } from "@trpc/server";
-import { invokeLLM, type ChatMessage } from "./_core/llm";
+import { invokeLLM, type ChatMessage, type AiRuntimeConfig } from "./_core/llm";
 import type {
   InsertVehicle,
   InsertTrip,
   InsertMaintenance,
   InsertExpense,
   InsertRevenue,
+  InsertAiConfig,
 } from "../drizzle/schema";
 
 const parseNumericString = (
@@ -144,6 +153,29 @@ estiver no contexto, diga que não tem esse dado — nunca invente números.
 DADOS ATUAIS DA FROTA:
 `;
 
+// Resolve a configuração de IA: primeiro o que o admin salvou no banco; se não
+// houver, cai no ANTHROPIC_API_KEY do ambiente (compat). null = não configurado.
+async function resolveAiConfig(): Promise<AiRuntimeConfig | null> {
+  const cfg = await getAiConfig();
+  if (cfg && cfg.enabled && cfg.apiKey) {
+    return {
+      provider: cfg.provider,
+      apiKey: cfg.apiKey,
+      model: cfg.model ?? "",
+      baseUrl: cfg.baseUrl,
+    };
+  }
+  if (ENV.anthropicApiKey) {
+    return {
+      provider: "anthropic",
+      apiKey: ENV.anthropicApiKey,
+      model: "claude-haiku-4-5",
+      baseUrl: null,
+    };
+  }
+  return null;
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -173,16 +205,64 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
+        const cfg = await resolveAiConfig();
+        if (!cfg) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Assistente de IA não configurado. Um admin precisa configurar o provedor e a chave em Configurações.",
+          });
+        }
         const context = await buildFleetContext();
         const messages: ChatMessage[] = input.messages.map(m => ({
           role: m.role,
           content: m.content,
         }));
-        const response = await invokeLLM({
+        const response = await invokeLLM(cfg, {
           system: FLEET_ASSISTANT_SYSTEM + context,
           messages,
         });
         return { response };
+      }),
+  }),
+
+  // Configurações do sistema (admin). A chave da IA nunca volta ao browser.
+  settings: router({
+    getAiConfig: adminProcedure.query(async () => {
+      const cfg = await getAiConfig();
+      return {
+        provider: cfg?.provider ?? ("anthropic" as const),
+        model: cfg?.model ?? "",
+        baseUrl: cfg?.baseUrl ?? "",
+        enabled: cfg?.enabled ?? false,
+        hasKey: Boolean(cfg?.apiKey),
+        keyPreview: cfg?.apiKey ? `••••${cfg.apiKey.slice(-4)}` : "",
+      };
+    }),
+
+    updateAiConfig: adminProcedure
+      .input(
+        z.object({
+          provider: z.enum(["anthropic", "openai", "openai_compatible"]),
+          model: z.string().optional(),
+          baseUrl: z.string().optional(),
+          // Se vazio, mantém a chave já salva (não sobrescreve com vazio).
+          apiKey: z.string().optional(),
+          enabled: z.boolean(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const data: Partial<InsertAiConfig> = {
+          provider: input.provider,
+          model: input.model?.trim() || null,
+          baseUrl: input.baseUrl?.trim() || null,
+          enabled: input.enabled,
+        };
+        if (input.apiKey && input.apiKey.trim().length > 0) {
+          data.apiKey = input.apiKey.trim();
+        }
+        await upsertAiConfig(data);
+        return { success: true };
       }),
   }),
 

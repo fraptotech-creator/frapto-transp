@@ -18,6 +18,7 @@ import DocumentManagement from "./pages/DocumentManagement";
 import Reports from "./pages/Reports";
 import Financial from "./pages/Financial";
 import TripTracking from "./pages/TripTracking";
+import Settings from "./pages/Settings";
 // Lazy: o Assistente puxa o Streamdown (shiki) — carrega só ao abrir /assistant,
 // mantendo o bundle principal enxuto.
 const Assistant = lazy(() => import("./pages/Assistant"));
@@ -38,6 +39,7 @@ function Router() {
       <Route path={"/documents"} component={DocumentManagement} />
       <Route path={"/reports"} component={Reports} />
       <Route path={"/financial"} component={Financial} />
+      <Route path={"/settings"} component={Settings} />
       <Route path={"/assistant"}>
         <Suspense
           fallback={

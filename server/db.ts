@@ -17,6 +17,8 @@ import {
   InsertMaintenance,
   InsertExpense,
   InsertRevenue,
+  aiConfig,
+  InsertAiConfig,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -457,4 +459,26 @@ export async function deleteRevenue(id: number) {
   const { revenues } = await import("../drizzle/schema");
   await db.delete(revenues).where(eq(revenues.id, id));
   return { success: true };
+}
+
+// Configuração da IA (linha única, id=1).
+export async function getAiConfig() {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(aiConfig)
+    .where(eq(aiConfig.id, 1))
+    .limit(1);
+  return result[0];
+}
+
+export async function upsertAiConfig(data: Partial<InsertAiConfig>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .insert(aiConfig)
+    .values({ id: 1, ...data })
+    .onDuplicateKeyUpdate({ set: data });
+  return getAiConfig();
 }

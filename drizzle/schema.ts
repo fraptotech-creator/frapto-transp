@@ -238,3 +238,21 @@ export const documents = mysqlTable("documents", {
 
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = typeof documents.$inferInsert;
+
+// Configuração do assistente de IA — editável na tela de Configurações (admin).
+// Linha única (id=1). A apiKey é secreta: nunca é devolvida ao browser (mascarada).
+export const aiConfig = mysqlTable("ai_config", {
+  id: int("id").autoincrement().primaryKey(),
+  provider: mysqlEnum("provider", ["anthropic", "openai", "openai_compatible"])
+    .default("anthropic")
+    .notNull(),
+  apiKey: text("apiKey"),
+  model: varchar("model", { length: 100 }),
+  baseUrl: varchar("baseUrl", { length: 255 }),
+  enabled: boolean("enabled").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AiConfig = typeof aiConfig.$inferSelect;
+export type InsertAiConfig = typeof aiConfig.$inferInsert;
