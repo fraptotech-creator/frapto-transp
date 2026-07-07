@@ -1,15 +1,19 @@
-import { eq, desc } from "drizzle-orm";
-import { Trip } from "../drizzle/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2";
 import {
-  InsertUser,
+  organizations,
   users,
   vehicles,
   drivers,
   trips,
   notifications,
   maintenance,
+  expenses,
+  revenues,
+  aiConfig,
+  InsertUser,
+  InsertOrganization,
   InsertVehicle,
   InsertDriver,
   InsertTrip,
@@ -17,28 +21,24 @@ import {
   InsertMaintenance,
   InsertExpense,
   InsertRevenue,
-  aiConfig,
   InsertAiConfig,
 } from "../drizzle/schema";
-import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: ReturnType<typeof createPool> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
+// Cria o pool/drizzle sob demanda (local sem DB roda sem conectar).
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
       const poolConfig = {
-        // Pool de produção (TiDB aguenta centenas de conexões concorrentes).
         connectionLimit: 100,
         waitForConnections: true,
         queueLimit: 200,
         enableKeepAlive: true,
         keepAliveInitialDelay: 10000,
         connectTimeout: 10000,
-        // TiDB Serverless exige TLS. rejectUnauthorized (default true) valida
-        // contra a CA pública embutida no Node (cert do gateway TiDB é público).
+        // TiDB Serverless exige TLS.
         ssl: { minVersion: "TLSv1.2" as const },
       };
       _pool = createPool({ ...poolConfig, uri: process.env.DATABASE_URL });
@@ -51,434 +51,541 @@ export async function getDb() {
   return _db;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
-
-  try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (
-      user.email &&
-      ENV.ownerEmail &&
-      user.email.toLowerCase() === ENV.ownerEmail.toLowerCase()
-    ) {
-      values.role = "admin";
-      updateSet.role = "admin";
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
-}
+// ─── Organizações e usuários (auth) ─────────────────────────────────────────
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
+  if (!db) return undefined;
   const result = await db
     .select()
     .from(users)
     .where(eq(users.openId, openId))
     .limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+  return result[0];
 }
 
-// Queries para Veículos
-export async function updateVehicle(id: number, data: Partial<InsertVehicle>) {
+export async function getUserByEmail(email: string) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.update(vehicles).set(data).where(eq(vehicles.id, id));
+  if (!db) return undefined;
   const result = await db
     .select()
-    .from(vehicles)
-    .where(eq(vehicles.id, id))
+    .from(users)
+    .where(eq(users.email, email))
     .limit(1);
   return result[0];
 }
 
-export async function deleteVehicle(id: number) {
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0];
+}
+
+/**
+ * Cadastro: cria a organização e o usuário DONO dela, numa tacada.
+ * Retorna o usuário criado (com orgId).
+ */
+export async function createOrgAndOwner(params: {
+  orgName: string;
+  openId: string;
+  email: string;
+  passwordHash: string;
+  name: string | null;
+}) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(vehicles).where(eq(vehicles.id, id));
-  return { success: true };
+
+  await db.insert(organizations).values({ name: params.orgName });
+  const [org] = await db
+    .select()
+    .from(organizations)
+    .orderBy(desc(organizations.id))
+    .limit(1);
+
+  await db.insert(users).values({
+    openId: params.openId,
+    orgId: org.id,
+    email: params.email,
+    passwordHash: params.passwordHash,
+    name: params.name,
+    loginMethod: "password",
+    orgRole: "owner",
+    lastSignedIn: new Date(),
+  });
+
+  return getUserByOpenId(params.openId);
 }
 
-export async function getVehicles() {
+// Atualiza campos simples do usuário (ex.: lastSignedIn) por openId.
+export async function touchUserLastSignedIn(openId: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(users)
+    .set({ lastSignedIn: new Date() })
+    .where(eq(users.openId, openId));
+}
+
+export async function getOrganization(orgId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  return result[0];
+}
+
+export async function getOrgByStripeCustomerId(customerId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.stripeCustomerId, customerId))
+    .limit(1);
+  return result[0];
+}
+
+export async function updateOrganization(
+  orgId: number,
+  data: Partial<InsertOrganization>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(organizations).set(data).where(eq(organizations.id, orgId));
+  return getOrganization(orgId);
+}
+
+// ─── Veículos ────────────────────────────────────────────────────────────────
+
+export async function getVehicles(orgId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(vehicles);
+  return db.select().from(vehicles).where(eq(vehicles.orgId, orgId));
 }
 
-export async function getVehicleById(id: number) {
+export async function getVehicleById(orgId: number, id: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
     .from(vehicles)
-    .where(eq(vehicles.id, id))
+    .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, id)))
     .limit(1);
   return result[0];
 }
 
-export async function createVehicle(data: InsertVehicle) {
+export async function createVehicle(
+  orgId: number,
+  data: Omit<InsertVehicle, "orgId">
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(vehicles).values(data);
-  // Retornar o veículo criado
+  await db.insert(vehicles).values({ ...data, orgId });
   const result = await db
     .select()
     .from(vehicles)
-    .where(eq(vehicles.placa, data.placa))
+    .where(and(eq(vehicles.orgId, orgId), eq(vehicles.placa, data.placa)))
     .limit(1);
   return result[0];
 }
 
-// Queries para Motoristas
-export async function updateDriver(id: number, data: Partial<InsertDriver>) {
+export async function updateVehicle(
+  orgId: number,
+  id: number,
+  data: Partial<InsertVehicle>
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(drivers).set(data).where(eq(drivers.id, id));
-  const result = await db
-    .select()
-    .from(drivers)
-    .where(eq(drivers.id, id))
-    .limit(1);
-  return result[0];
+  await db
+    .update(vehicles)
+    .set(data)
+    .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, id)));
+  return getVehicleById(orgId, id);
 }
 
-export async function deleteDriver(id: number) {
+export async function deleteVehicle(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(drivers).where(eq(drivers.id, id));
+  await db
+    .delete(vehicles)
+    .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, id)));
   return { success: true };
 }
 
-export async function getDrivers() {
+// ─── Motoristas ──────────────────────────────────────────────────────────────
+
+export async function getDrivers(orgId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(drivers);
+  return db.select().from(drivers).where(eq(drivers.orgId, orgId));
 }
 
-export async function getDriverById(id: number) {
+export async function getDriverById(orgId: number, id: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
     .from(drivers)
-    .where(eq(drivers.id, id))
+    .where(and(eq(drivers.orgId, orgId), eq(drivers.id, id)))
     .limit(1);
   return result[0];
 }
 
-export async function createDriver(data: InsertDriver) {
+export async function createDriver(
+  orgId: number,
+  data: Omit<InsertDriver, "orgId">
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(drivers).values(data);
-  // Retornar o motorista criado
+  await db.insert(drivers).values({ ...data, orgId });
   const result = await db
     .select()
     .from(drivers)
-    .where(eq(drivers.cpf, data.cpf))
+    .where(and(eq(drivers.orgId, orgId), eq(drivers.cpf, data.cpf)))
     .limit(1);
   return result[0];
 }
 
-// Queries para Viagens
-export async function updateTrip(id: number, data: Partial<InsertTrip>) {
+export async function updateDriver(
+  orgId: number,
+  id: number,
+  data: Partial<InsertDriver>
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(trips).set(data).where(eq(trips.id, id));
-  const result = await db.select().from(trips).where(eq(trips.id, id)).limit(1);
-  return result[0];
+  await db
+    .update(drivers)
+    .set(data)
+    .where(and(eq(drivers.orgId, orgId), eq(drivers.id, id)));
+  return getDriverById(orgId, id);
 }
 
-export async function deleteTrip(id: number) {
+export async function deleteDriver(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(trips).where(eq(trips.id, id));
+  await db
+    .delete(drivers)
+    .where(and(eq(drivers.orgId, orgId), eq(drivers.id, id)));
   return { success: true };
 }
 
-export async function getTrips() {
+// ─── Viagens ─────────────────────────────────────────────────────────────────
+
+export async function getTrips(orgId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(trips);
+  return db.select().from(trips).where(eq(trips.orgId, orgId));
 }
 
-export async function getTripById(id: number) {
+export async function getTripById(orgId: number, id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(trips).where(eq(trips.id, id)).limit(1);
-  return result[0];
-}
-
-export async function createTrip(data: InsertTrip) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.insert(trips).values(data);
-  // Retornar a viagem criada
   const result = await db
     .select()
     .from(trips)
-    .where(eq(trips.numeroViagem, data.numeroViagem))
+    .where(and(eq(trips.orgId, orgId), eq(trips.id, id)))
     .limit(1);
   return result[0];
 }
 
-// Queries para Notificações
-export async function getNotifications(usuarioId: number) {
+export async function createTrip(
+  orgId: number,
+  data: Omit<InsertTrip, "orgId">
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(trips).values({ ...data, orgId });
+  const result = await db
+    .select()
+    .from(trips)
+    .where(
+      and(eq(trips.orgId, orgId), eq(trips.numeroViagem, data.numeroViagem))
+    )
+    .limit(1);
+  return result[0];
+}
+
+export async function updateTrip(
+  orgId: number,
+  id: number,
+  data: Partial<InsertTrip>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(trips)
+    .set(data)
+    .where(and(eq(trips.orgId, orgId), eq(trips.id, id)));
+  return getTripById(orgId, id);
+}
+
+export async function deleteTrip(orgId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(trips).where(and(eq(trips.orgId, orgId), eq(trips.id, id)));
+  return { success: true };
+}
+
+// ─── Manutenção ──────────────────────────────────────────────────────────────
+
+export async function getMaintenances(orgId: number) {
   const db = await getDb();
   if (!db) return [];
   return db
     .select()
-    .from(notifications)
-    .where(eq(notifications.usuarioId, usuarioId));
+    .from(maintenance)
+    .where(eq(maintenance.orgId, orgId))
+    .orderBy(desc(maintenance.dataPrevista));
 }
 
-export async function createNotification(data: InsertNotification) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.insert(notifications).values(data);
-  // Retornar a notificação criada
-  const result = await db
-    .select()
-    .from(notifications)
-    .where(eq(notifications.usuarioId, data.usuarioId))
-    .orderBy(n => n.id)
-    .limit(1);
-  return result[0];
-}
-
-// Queries para Manutenção
-export async function getMaintenances() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(maintenance).orderBy(desc(maintenance.dataPrevista));
-}
-
-export async function getMaintenanceById(id: number) {
+export async function getMaintenanceById(orgId: number, id: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
     .from(maintenance)
-    .where(eq(maintenance.id, id))
+    .where(and(eq(maintenance.orgId, orgId), eq(maintenance.id, id)))
     .limit(1);
   return result[0];
 }
 
-export async function getMaintenancesByVehicle(veiculoId: number) {
+export async function getMaintenancesByVehicle(
+  orgId: number,
+  veiculoId: number
+) {
   const db = await getDb();
   if (!db) return [];
   return db
     .select()
     .from(maintenance)
-    .where(eq(maintenance.veiculoId, veiculoId))
+    .where(
+      and(eq(maintenance.orgId, orgId), eq(maintenance.veiculoId, veiculoId))
+    )
     .orderBy(desc(maintenance.dataPrevista));
 }
 
-export async function createMaintenance(data: InsertMaintenance) {
+export async function createMaintenance(
+  orgId: number,
+  data: Omit<InsertMaintenance, "orgId">
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(maintenance).values(data);
-  // Retornar a manutenção criada
+  await db.insert(maintenance).values({ ...data, orgId });
   const inserted = await db
     .select()
     .from(maintenance)
-    .where(eq(maintenance.veiculoId, data.veiculoId))
+    .where(
+      and(
+        eq(maintenance.orgId, orgId),
+        eq(maintenance.veiculoId, data.veiculoId)
+      )
+    )
     .orderBy(desc(maintenance.id))
     .limit(1);
   return inserted[0];
 }
 
 export async function updateMaintenance(
+  orgId: number,
   id: number,
   data: Partial<InsertMaintenance>
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(maintenance).set(data).where(eq(maintenance.id, id));
-  const result = await db
-    .select()
-    .from(maintenance)
-    .where(eq(maintenance.id, id))
-    .limit(1);
-  return result[0];
+  await db
+    .update(maintenance)
+    .set(data)
+    .where(and(eq(maintenance.orgId, orgId), eq(maintenance.id, id)));
+  return getMaintenanceById(orgId, id);
 }
 
-// Queries para Despesas
-export async function getExpenses() {
+// ─── Notificações ────────────────────────────────────────────────────────────
+
+export async function getNotifications(orgId: number, usuarioId: number) {
   const db = await getDb();
   if (!db) return [];
-  const { expenses } = await import("../drizzle/schema");
-  return db.select().from(expenses).orderBy(desc(expenses.data));
+  return db
+    .select()
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.orgId, orgId),
+        eq(notifications.usuarioId, usuarioId)
+      )
+    );
 }
 
-export async function getExpenseById(id: number) {
+export async function createNotification(
+  orgId: number,
+  data: Omit<InsertNotification, "orgId">
+) {
   const db = await getDb();
-  if (!db) return undefined;
-  const { expenses } = await import("../drizzle/schema");
+  if (!db) throw new Error("Database not available");
+  await db.insert(notifications).values({ ...data, orgId });
   const result = await db
     .select()
-    .from(expenses)
-    .where(eq(expenses.id, id))
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.orgId, orgId),
+        eq(notifications.usuarioId, data.usuarioId)
+      )
+    )
+    .orderBy(desc(notifications.id))
     .limit(1);
   return result[0];
 }
 
-export async function createExpense(data: InsertExpense) {
+// ─── Despesas ────────────────────────────────────────────────────────────────
+
+export async function getExpenses(orgId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const { expenses } = await import("../drizzle/schema");
-  await db.insert(expenses).values(data);
+  if (!db) return [];
+  return db
+    .select()
+    .from(expenses)
+    .where(eq(expenses.orgId, orgId))
+    .orderBy(desc(expenses.data));
+}
+
+export async function getExpenseById(orgId: number, id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
   const result = await db
     .select()
     .from(expenses)
+    .where(and(eq(expenses.orgId, orgId), eq(expenses.id, id)))
+    .limit(1);
+  return result[0];
+}
+
+export async function createExpense(
+  orgId: number,
+  data: Omit<InsertExpense, "orgId">
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(expenses).values({ ...data, orgId });
+  const result = await db
+    .select()
+    .from(expenses)
+    .where(eq(expenses.orgId, orgId))
     .orderBy(desc(expenses.id))
     .limit(1);
   return result[0];
 }
 
-export async function updateExpense(id: number, data: Partial<InsertExpense>) {
+export async function updateExpense(
+  orgId: number,
+  id: number,
+  data: Partial<InsertExpense>
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { expenses } = await import("../drizzle/schema");
-  await db.update(expenses).set(data).where(eq(expenses.id, id));
-  const result = await db
-    .select()
-    .from(expenses)
-    .where(eq(expenses.id, id))
-    .limit(1);
-  return result[0];
+  await db
+    .update(expenses)
+    .set(data)
+    .where(and(eq(expenses.orgId, orgId), eq(expenses.id, id)));
+  return getExpenseById(orgId, id);
 }
 
-export async function deleteExpense(id: number) {
+export async function deleteExpense(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { expenses } = await import("../drizzle/schema");
-  await db.delete(expenses).where(eq(expenses.id, id));
+  await db
+    .delete(expenses)
+    .where(and(eq(expenses.orgId, orgId), eq(expenses.id, id)));
   return { success: true };
 }
 
-// Queries para Receitas
-export async function getRevenues() {
+// ─── Receitas ────────────────────────────────────────────────────────────────
+
+export async function getRevenues(orgId: number) {
   const db = await getDb();
   if (!db) return [];
-  const { revenues } = await import("../drizzle/schema");
-  return db.select().from(revenues).orderBy(desc(revenues.data));
+  return db
+    .select()
+    .from(revenues)
+    .where(eq(revenues.orgId, orgId))
+    .orderBy(desc(revenues.data));
 }
 
-export async function getRevenueById(id: number) {
+export async function getRevenueById(orgId: number, id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const { revenues } = await import("../drizzle/schema");
   const result = await db
     .select()
     .from(revenues)
-    .where(eq(revenues.id, id))
+    .where(and(eq(revenues.orgId, orgId), eq(revenues.id, id)))
     .limit(1);
   return result[0];
 }
 
-export async function createRevenue(data: InsertRevenue) {
+export async function createRevenue(
+  orgId: number,
+  data: Omit<InsertRevenue, "orgId">
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { revenues } = await import("../drizzle/schema");
-  await db.insert(revenues).values(data);
+  await db.insert(revenues).values({ ...data, orgId });
   const result = await db
     .select()
     .from(revenues)
+    .where(eq(revenues.orgId, orgId))
     .orderBy(desc(revenues.id))
     .limit(1);
   return result[0];
 }
 
-export async function updateRevenue(id: number, data: Partial<InsertRevenue>) {
+export async function updateRevenue(
+  orgId: number,
+  id: number,
+  data: Partial<InsertRevenue>
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { revenues } = await import("../drizzle/schema");
-  await db.update(revenues).set(data).where(eq(revenues.id, id));
-  const result = await db
-    .select()
-    .from(revenues)
-    .where(eq(revenues.id, id))
-    .limit(1);
-  return result[0];
+  await db
+    .update(revenues)
+    .set(data)
+    .where(and(eq(revenues.orgId, orgId), eq(revenues.id, id)));
+  return getRevenueById(orgId, id);
 }
 
-export async function deleteRevenue(id: number) {
+export async function deleteRevenue(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { revenues } = await import("../drizzle/schema");
-  await db.delete(revenues).where(eq(revenues.id, id));
+  await db
+    .delete(revenues)
+    .where(and(eq(revenues.orgId, orgId), eq(revenues.id, id)));
   return { success: true };
 }
 
-// Configuração da IA (linha única, id=1).
-export async function getAiConfig() {
+// ─── Config de IA (por organização) ──────────────────────────────────────────
+
+export async function getAiConfig(orgId: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
     .from(aiConfig)
-    .where(eq(aiConfig.id, 1))
+    .where(eq(aiConfig.orgId, orgId))
     .limit(1);
   return result[0];
 }
 
-export async function upsertAiConfig(data: Partial<InsertAiConfig>) {
+export async function upsertAiConfig(
+  orgId: number,
+  data: Partial<Omit<InsertAiConfig, "orgId">>
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db
     .insert(aiConfig)
-    .values({ id: 1, ...data })
+    .values({ orgId, ...data })
     .onDuplicateKeyUpdate({ set: data });
-  return getAiConfig();
+  return getAiConfig(orgId);
 }

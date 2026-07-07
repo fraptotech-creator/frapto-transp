@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import * as db from "./db";
 
 // Mock do banco de dados para evitar conexão real em testes
 vi.mock("./db", async importOriginal => {
@@ -35,6 +36,9 @@ const createAuthContext = (): TrpcContext => ({
   user: {
     id: 1,
     openId: "test-user",
+    orgId: 1,
+    orgRole: "owner",
+    passwordHash: null,
     email: "test@example.com",
     name: "Test User",
     loginMethod: "manus",
@@ -57,6 +61,12 @@ describe("Vehicles Router", () => {
   it("should list vehicles and return an array", async () => {
     const vehicles = await caller.vehicles.list();
     expect(Array.isArray(vehicles)).toBe(true);
+  });
+
+  it("isolamento: consulta é escopada pela org do usuário (orgId=1)", async () => {
+    await caller.vehicles.list();
+    // Trava de segurança multi-tenant: o router SEMPRE passa o orgId da sessão.
+    expect(db.getVehicles).toHaveBeenCalledWith(1);
   });
 
   it("should get vehicle by id", async () => {

@@ -43,3 +43,29 @@ export const adminProcedure = t.procedure.use(
     });
   })
 );
+
+// Exige usuário autenticado E vinculado a uma organização; injeta ctx.orgId
+// (não-nulo) para o escopo multi-tenant de todas as consultas.
+export const orgProcedure = protectedProcedure.use(async opts => {
+  const { ctx, next } = opts;
+  if (!ctx.user.orgId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Usuário sem organização.",
+    });
+  }
+  return next({ ctx: { ...ctx, orgId: ctx.user.orgId } });
+});
+
+// Como orgProcedure, mas exige que o usuário seja DONO da organização
+// (config de IA, cobrança, etc.).
+export const orgOwnerProcedure = orgProcedure.use(async opts => {
+  const { ctx, next } = opts;
+  if (ctx.user.orgRole !== "owner") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Apenas o dono da organização pode fazer isso.",
+    });
+  }
+  return next({ ctx });
+});

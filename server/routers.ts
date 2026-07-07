@@ -1,15 +1,21 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import {
   publicProcedure,
   router,
-  protectedProcedure,
-  adminProcedure,
+  orgProcedure,
+  orgOwnerProcedure,
 } from "./_core/trpc";
 import { ENV } from "./_core/env";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import {
+  getUserByEmail,
+  createOrgAndOwner,
   getVehicles,
   getVehicleById,
   createVehicle,
@@ -25,8 +31,6 @@ import {
   createTrip,
   updateTrip,
   deleteTrip,
-  getNotifications,
-  createNotification,
   getMaintenances,
   getMaintenanceById,
   getMaintenancesByVehicle,
@@ -45,7 +49,6 @@ import {
   getAiConfig,
   upsertAiConfig,
 } from "./db";
-import { TRPCError } from "@trpc/server";
 import { invokeLLM, type ChatMessage, type AiRuntimeConfig } from "./_core/llm";
 import type {
   InsertVehicle,
@@ -53,7 +56,6 @@ import type {
   InsertMaintenance,
   InsertExpense,
   InsertRevenue,
-  InsertAiConfig,
 } from "../drizzle/schema";
 
 const parseNumericString = (
@@ -64,9 +66,8 @@ const parseNumericString = (
   return isNaN(parsed) ? null : String(parsed);
 };
 
-// Para campos numéricos OBRIGATÓRIOS (ex.: valor de despesa/receita, notNull no
-// schema). Falha fechado: entrada não-numérica vira erro de validação visível,
-// em vez de null que estouraria no banco.
+// Campos numéricos OBRIGATÓRIOS (notNull no schema). Falha fechado: entrada
+// não-numérica vira erro de validação, em vez de null que estouraria no banco.
 const parseRequiredNumericString = (value: string): string => {
   const parsed = parseNumericString(value);
   if (parsed === null) {
@@ -78,16 +79,16 @@ const parseRequiredNumericString = (value: string): string => {
   return parsed;
 };
 
-// Monta um resumo textual do estado real da frota para dar contexto ao assistente.
-// Função de leitura: o assistente informa; nunca muta dados.
-async function buildFleetContext(): Promise<string> {
+// ─── Assistente de IA ────────────────────────────────────────────────────────
+
+async function buildFleetContext(orgId: number): Promise<string> {
   const now = Date.now();
   const in30Days = now + 30 * 24 * 60 * 60 * 1000;
   const [vehicles, drivers, trips, maintenances] = await Promise.all([
-    getVehicles(),
-    getDrivers(),
-    getTrips(),
-    getMaintenances(),
+    getVehicles(orgId),
+    getDrivers(orgId),
+    getTrips(orgId),
+    getMaintenances(orgId),
   ]);
 
   const fmt = (d: Date | null | undefined) =>
@@ -153,10 +154,9 @@ estiver no contexto, diga que não tem esse dado — nunca invente números.
 DADOS ATUAIS DA FROTA:
 `;
 
-// Resolve a configuração de IA: primeiro o que o admin salvou no banco; se não
-// houver, cai no ANTHROPIC_API_KEY do ambiente (compat). null = não configurado.
-async function resolveAiConfig(): Promise<AiRuntimeConfig | null> {
-  const cfg = await getAiConfig();
+// Config de IA da organização; fallback pro ANTHROPIC_API_KEY do ambiente.
+async function resolveAiConfig(orgId: number): Promise<AiRuntimeConfig | null> {
+  const cfg = await getAiConfig(orgId);
   if (cfg && cfg.enabled && cfg.apiKey) {
     return {
       provider: cfg.provider,
@@ -176,22 +176,105 @@ async function resolveAiConfig(): Promise<AiRuntimeConfig | null> {
   return null;
 }
 
+// ─── Router ──────────────────────────────────────────────────────────────────
+
 export const appRouter = router({
   system: systemRouter,
+
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(({ ctx }) => {
+      if (!ctx.user) return null;
+      // Nunca expõe o hash da senha ao browser.
+      const { passwordHash: _omit, ...safe } = ctx.user;
+      return safe;
+    }),
+
+    signup: publicProcedure
+      .input(
+        z.object({
+          orgName: z.string().min(1, "Nome da empresa é obrigatório"),
+          name: z.string().optional(),
+          email: z.string().email("Email inválido"),
+          password: z
+            .string()
+            .min(8, "A senha precisa de ao menos 8 caracteres"),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const email = input.email.toLowerCase().trim();
+        const existing = await getUserByEmail(email);
+        if (existing) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Já existe uma conta com este email.",
+          });
+        }
+        const passwordHash = await bcrypt.hash(input.password, 10);
+        const openId = `local_${randomBytes(16).toString("hex")}`;
+        const user = await createOrgAndOwner({
+          orgName: input.orgName.trim(),
+          openId,
+          email,
+          passwordHash,
+          name: input.name?.trim() || null,
+        });
+        if (!user) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Falha ao criar a conta.",
+          });
+        }
+        const token = await sdk.createSessionToken(openId, {
+          name: user.name ?? "",
+          expiresInMs: ONE_YEAR_MS,
+        });
+        ctx.res.cookie(COOKIE_NAME, token, {
+          ...getSessionCookieOptions(ctx.req),
+          maxAge: ONE_YEAR_MS,
+        });
+        return { success: true } as const;
+      }),
+
+    login: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email("Email inválido"),
+          password: z.string().min(1, "Informe a senha"),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const email = input.email.toLowerCase().trim();
+        const user = await getUserByEmail(email);
+        // Mensagem genérica (não revela se o email existe).
+        const invalid = new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Email ou senha inválidos.",
+        });
+        if (!user || !user.passwordHash) throw invalid;
+        const ok = await bcrypt.compare(input.password, user.passwordHash);
+        if (!ok) throw invalid;
+
+        const token = await sdk.createSessionToken(user.openId, {
+          name: user.name ?? "",
+          expiresInMs: ONE_YEAR_MS,
+        });
+        ctx.res.cookie(COOKIE_NAME, token, {
+          ...getSessionCookieOptions(ctx.req),
+          maxAge: ONE_YEAR_MS,
+        });
+        return { success: true } as const;
+      }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
 
-  // Assistente de IA de frota (Claude). Somente leitura — informa, não muta.
+  // Assistente de IA de frota. Somente leitura — informa, não muta.
   ai: router({
-    chat: protectedProcedure
+    chat: orgProcedure
       .input(
         z.object({
           messages: z
@@ -204,16 +287,16 @@ export const appRouter = router({
             .min(1),
         })
       )
-      .mutation(async ({ input }) => {
-        const cfg = await resolveAiConfig();
+      .mutation(async ({ input, ctx }) => {
+        const cfg = await resolveAiConfig(ctx.orgId);
         if (!cfg) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message:
-              "Assistente de IA não configurado. Um admin precisa configurar o provedor e a chave em Configurações.",
+              "Assistente de IA não configurado. Configure o provedor e a chave em Configurações.",
           });
         }
-        const context = await buildFleetContext();
+        const context = await buildFleetContext(ctx.orgId);
         const messages: ChatMessage[] = input.messages.map(m => ({
           role: m.role,
           content: m.content,
@@ -226,10 +309,10 @@ export const appRouter = router({
       }),
   }),
 
-  // Configurações do sistema (admin). A chave da IA nunca volta ao browser.
+  // Configurações (dono da org). A chave da IA nunca volta ao browser.
   settings: router({
-    getAiConfig: adminProcedure.query(async () => {
-      const cfg = await getAiConfig();
+    getAiConfig: orgOwnerProcedure.query(async ({ ctx }) => {
+      const cfg = await getAiConfig(ctx.orgId);
       return {
         provider: cfg?.provider ?? ("anthropic" as const),
         model: cfg?.model ?? "",
@@ -240,19 +323,24 @@ export const appRouter = router({
       };
     }),
 
-    updateAiConfig: adminProcedure
+    updateAiConfig: orgOwnerProcedure
       .input(
         z.object({
           provider: z.enum(["anthropic", "openai", "openai_compatible"]),
           model: z.string().optional(),
           baseUrl: z.string().optional(),
-          // Se vazio, mantém a chave já salva (não sobrescreve com vazio).
           apiKey: z.string().optional(),
           enabled: z.boolean(),
         })
       )
-      .mutation(async ({ input }) => {
-        const data: Partial<InsertAiConfig> = {
+      .mutation(async ({ input, ctx }) => {
+        const data: {
+          provider: "anthropic" | "openai" | "openai_compatible";
+          model: string | null;
+          baseUrl: string | null;
+          enabled: boolean;
+          apiKey?: string;
+        } = {
           provider: input.provider,
           model: input.model?.trim() || null,
           baseUrl: input.baseUrl?.trim() || null,
@@ -261,24 +349,20 @@ export const appRouter = router({
         if (input.apiKey && input.apiKey.trim().length > 0) {
           data.apiKey = input.apiKey.trim();
         }
-        await upsertAiConfig(data);
-        return { success: true };
+        await upsertAiConfig(ctx.orgId, data);
+        return { success: true } as const;
       }),
   }),
 
-  // Procedures para Veículos
+  // ─── Veículos ──────────────────────────────────────────────────────────────
   vehicles: router({
-    list: protectedProcedure.query(async () => {
-      return getVehicles();
-    }),
+    list: orgProcedure.query(({ ctx }) => getVehicles(ctx.orgId)),
 
-    getById: protectedProcedure
+    getById: orgProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return getVehicleById(input.id);
-      }),
+      .query(({ ctx, input }) => getVehicleById(ctx.orgId, input.id)),
 
-    create: protectedProcedure
+    create: orgProcedure
       .input(
         z.object({
           placa: z.string().min(1),
@@ -292,8 +376,8 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
-        return createVehicle({
+      .mutation(({ ctx, input }) =>
+        createVehicle(ctx.orgId, {
           placa: input.placa,
           marca: input.marca,
           modelo: input.modelo,
@@ -305,10 +389,10 @@ export const appRouter = router({
           crlvVencimento: input.crlvVencimento || null,
           seguroVencimento: input.seguroVencimento || null,
           observacoes: input.observacoes || null,
-        });
-      }),
+        })
+      ),
 
-    update: protectedProcedure
+    update: orgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -324,37 +408,29 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(({ ctx, input }) => {
         const { id, capacidadeCarga, ...rest } = input;
-        const updateData: Partial<InsertVehicle> = {
-          ...rest,
-        };
+        const updateData: Partial<InsertVehicle> = { ...rest };
         if (capacidadeCarga !== undefined) {
           updateData.capacidadeCarga = parseNumericString(capacidadeCarga);
         }
-        return updateVehicle(id, updateData);
+        return updateVehicle(ctx.orgId, id, updateData);
       }),
 
-    delete: protectedProcedure
+    delete: orgProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        return deleteVehicle(input.id);
-      }),
+      .mutation(({ ctx, input }) => deleteVehicle(ctx.orgId, input.id)),
   }),
 
-  // Procedures para Motoristas
+  // ─── Motoristas ──────────────────────────────────────────────────────────────
   drivers: router({
-    list: protectedProcedure.query(async () => {
-      return getDrivers();
-    }),
+    list: orgProcedure.query(({ ctx }) => getDrivers(ctx.orgId)),
 
-    getById: protectedProcedure
+    getById: orgProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return getDriverById(input.id);
-      }),
+      .query(({ ctx, input }) => getDriverById(ctx.orgId, input.id)),
 
-    create: protectedProcedure
+    create: orgProcedure
       .input(
         z.object({
           nome: z.string().min(1),
@@ -368,8 +444,8 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
-        return createDriver({
+      .mutation(({ ctx, input }) =>
+        createDriver(ctx.orgId, {
           nome: input.nome,
           cpf: input.cpf,
           email: input.email || null,
@@ -382,10 +458,10 @@ export const appRouter = router({
           dataAdmissao: new Date(),
           endereco: input.endereco || null,
           observacoes: input.observacoes || null,
-        });
-      }),
+        })
+      ),
 
-    update: protectedProcedure
+    update: orgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -404,31 +480,25 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(({ ctx, input }) => {
         const { id, ...rest } = input;
-        return updateDriver(id, rest);
+        return updateDriver(ctx.orgId, id, rest);
       }),
 
-    delete: protectedProcedure
+    delete: orgProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        return deleteDriver(input.id);
-      }),
+      .mutation(({ ctx, input }) => deleteDriver(ctx.orgId, input.id)),
   }),
 
-  // Procedures para Viagens
+  // ─── Viagens ─────────────────────────────────────────────────────────────────
   trips: router({
-    list: protectedProcedure.query(async () => {
-      return getTrips();
-    }),
+    list: orgProcedure.query(({ ctx }) => getTrips(ctx.orgId)),
 
-    getById: protectedProcedure
+    getById: orgProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return getTripById(input.id);
-      }),
+      .query(({ ctx, input }) => getTripById(ctx.orgId, input.id)),
 
-    create: protectedProcedure
+    create: orgProcedure
       .input(
         z.object({
           numeroViagem: z.string().min(1),
@@ -444,8 +514,8 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
-        return createTrip({
+      .mutation(({ ctx, input }) =>
+        createTrip(ctx.orgId, {
           numeroViagem: input.numeroViagem,
           motoristaId: input.motoristaId,
           veiculoId: input.veiculoId,
@@ -458,10 +528,10 @@ export const appRouter = router({
           pesoTotal: parseNumericString(input.pesoTotal),
           valor: parseNumericString(input.valor),
           observacoes: input.observacoes || null,
-        });
-      }),
+        })
+      ),
 
-    update: protectedProcedure
+    update: orgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -482,30 +552,22 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(({ ctx, input }) => {
         const { id, distancia, pesoTotal, valor, ...rest } = input;
-        const updateData: Partial<InsertTrip> = {
-          ...rest,
-        };
-        if (distancia !== undefined) {
+        const updateData: Partial<InsertTrip> = { ...rest };
+        if (distancia !== undefined)
           updateData.distancia = parseNumericString(distancia);
-        }
-        if (pesoTotal !== undefined) {
+        if (pesoTotal !== undefined)
           updateData.pesoTotal = parseNumericString(pesoTotal);
-        }
-        if (valor !== undefined) {
-          updateData.valor = parseNumericString(valor);
-        }
-        return updateTrip(id, updateData);
+        if (valor !== undefined) updateData.valor = parseNumericString(valor);
+        return updateTrip(ctx.orgId, id, updateData);
       }),
 
-    delete: protectedProcedure
+    delete: orgProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        return deleteTrip(input.id);
-      }),
+      .mutation(({ ctx, input }) => deleteTrip(ctx.orgId, input.id)),
 
-    updateStatus: protectedProcedure
+    updateStatus: orgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -518,36 +580,28 @@ export const appRouter = router({
           dataChegada: z.date().optional(),
         })
       )
-      .mutation(async ({ input }) => {
-        const updateData: Partial<InsertTrip> = {
-          status: input.status,
-        };
-        if (input.dataChegada) {
-          updateData.dataChegada = input.dataChegada;
-        }
-        return updateTrip(input.id, updateData);
+      .mutation(({ ctx, input }) => {
+        const updateData: Partial<InsertTrip> = { status: input.status };
+        if (input.dataChegada) updateData.dataChegada = input.dataChegada;
+        return updateTrip(ctx.orgId, input.id, updateData);
       }),
   }),
 
-  // Procedures para Manutenção
+  // ─── Manutenção ──────────────────────────────────────────────────────────────
   maintenance: router({
-    list: protectedProcedure.query(async () => {
-      return getMaintenances();
-    }),
+    list: orgProcedure.query(({ ctx }) => getMaintenances(ctx.orgId)),
 
-    getById: protectedProcedure
+    getById: orgProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return getMaintenanceById(input.id);
-      }),
+      .query(({ ctx, input }) => getMaintenanceById(ctx.orgId, input.id)),
 
-    getByVehicle: protectedProcedure
+    getByVehicle: orgProcedure
       .input(z.object({ veiculoId: z.number() }))
-      .query(async ({ input }) => {
-        return getMaintenancesByVehicle(input.veiculoId);
-      }),
+      .query(({ ctx, input }) =>
+        getMaintenancesByVehicle(ctx.orgId, input.veiculoId)
+      ),
 
-    create: protectedProcedure
+    create: orgProcedure
       .input(
         z.object({
           veiculoId: z.number(),
@@ -558,8 +612,8 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
-        return createMaintenance({
+      .mutation(({ ctx, input }) =>
+        createMaintenance(ctx.orgId, {
           veiculoId: input.veiculoId,
           tipo: input.tipo,
           descricao: input.descricao,
@@ -567,10 +621,10 @@ export const appRouter = router({
           custo: parseNumericString(input.custo),
           status: "pendente",
           observacoes: input.observacoes || null,
-        });
-      }),
+        })
+      ),
 
-    update: protectedProcedure
+    update: orgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -583,18 +637,14 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(({ ctx, input }) => {
         const { id, custo, ...rest } = input;
-        const updateData: Partial<InsertMaintenance> = {
-          ...rest,
-        };
-        if (custo !== undefined) {
-          updateData.custo = parseNumericString(custo);
-        }
-        return updateMaintenance(id, updateData);
+        const updateData: Partial<InsertMaintenance> = { ...rest };
+        if (custo !== undefined) updateData.custo = parseNumericString(custo);
+        return updateMaintenance(ctx.orgId, id, updateData);
       }),
 
-    updateStatus: protectedProcedure
+    updateStatus: orgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -603,37 +653,31 @@ export const appRouter = router({
           custo: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(({ ctx, input }) => {
         const { id, custo, ...rest } = input;
-        const updateData: Partial<InsertMaintenance> = {
-          ...rest,
-        };
-        if (custo !== undefined) {
-          updateData.custo = parseNumericString(custo);
-        }
-        return updateMaintenance(id, updateData);
+        const updateData: Partial<InsertMaintenance> = { ...rest };
+        if (custo !== undefined) updateData.custo = parseNumericString(custo);
+        return updateMaintenance(ctx.orgId, id, updateData);
       }),
   }),
 
-  // Procedures para Dashboard
+  // ─── Dashboard ───────────────────────────────────────────────────────────────
   dashboard: router({
-    stats: protectedProcedure.query(async () => {
+    stats: orgProcedure.query(async ({ ctx }) => {
       const [vehiclesList, driversList, tripsList, maintenanceList] =
         await Promise.all([
-          getVehicles(),
-          getDrivers(),
-          getTrips(),
-          getMaintenances(),
+          getVehicles(ctx.orgId),
+          getDrivers(ctx.orgId),
+          getTrips(ctx.orgId),
+          getMaintenances(ctx.orgId),
         ]);
 
-      // Calcular estatísticas básicas
       const fleetStatus = {
         ativo: vehiclesList.filter(v => v.status === "ativo").length,
         manutencao: vehiclesList.filter(v => v.status === "manutencao").length,
         inativo: vehiclesList.filter(v => v.status === "inativo").length,
       };
 
-      // Viagens por mês (últimos 6 meses)
       const last6Months = Array.from({ length: 6 })
         .map((_, i) => {
           const date = new Date();
@@ -650,7 +694,6 @@ export const appRouter = router({
         })
         .reverse();
 
-      // Alertas (manutenções próximas, documentos vencendo)
       const alerts = [
         ...maintenanceList
           .filter(
@@ -697,29 +740,22 @@ export const appRouter = router({
         totalVehicles: vehiclesList.length,
         totalDrivers: driversList.length,
         totalTrips: tripsList.length,
-        tripsByMonth: last6Months.map(m => ({
-          month: m.month,
-          count: m.count,
-        })),
+        tripsByMonth: last6Months,
         fleetStatus,
-        alerts: alerts.slice(0, 10), // Limitar a 10 alertas
+        alerts: alerts.slice(0, 10),
       };
     }),
   }),
 
-  // Procedures para Despesas
+  // ─── Despesas ────────────────────────────────────────────────────────────────
   expenses: router({
-    list: protectedProcedure.query(async () => {
-      return getExpenses();
-    }),
+    list: orgProcedure.query(({ ctx }) => getExpenses(ctx.orgId)),
 
-    getById: protectedProcedure
+    getById: orgProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return getExpenseById(input.id);
-      }),
+      .query(({ ctx, input }) => getExpenseById(ctx.orgId, input.id)),
 
-    create: protectedProcedure
+    create: orgProcedure
       .input(
         z.object({
           tipo: z.enum([
@@ -741,8 +777,8 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
-        return createExpense({
+      .mutation(({ ctx, input }) =>
+        createExpense(ctx.orgId, {
           tipo: input.tipo,
           descricao: input.descricao,
           valor: parseRequiredNumericString(input.valor),
@@ -753,10 +789,10 @@ export const appRouter = router({
           categoria: input.categoria || null,
           formaPagamento: input.formaPagamento || null,
           observacoes: input.observacoes || null,
-        });
-      }),
+        })
+      ),
 
-    update: protectedProcedure
+    update: orgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -781,35 +817,28 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(({ ctx, input }) => {
         const { id, valor, ...rest } = input;
         const updateData: Partial<InsertExpense> = { ...rest };
-        if (valor !== undefined) {
+        if (valor !== undefined)
           updateData.valor = parseRequiredNumericString(valor);
-        }
-        return updateExpense(id, updateData);
+        return updateExpense(ctx.orgId, id, updateData);
       }),
 
-    delete: protectedProcedure
+    delete: orgProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        return deleteExpense(input.id);
-      }),
+      .mutation(({ ctx, input }) => deleteExpense(ctx.orgId, input.id)),
   }),
 
-  // Procedures para Receitas
+  // ─── Receitas ────────────────────────────────────────────────────────────────
   revenues: router({
-    list: protectedProcedure.query(async () => {
-      return getRevenues();
-    }),
+    list: orgProcedure.query(({ ctx }) => getRevenues(ctx.orgId)),
 
-    getById: protectedProcedure
+    getById: orgProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return getRevenueById(input.id);
-      }),
+      .query(({ ctx, input }) => getRevenueById(ctx.orgId, input.id)),
 
-    create: protectedProcedure
+    create: orgProcedure
       .input(
         z.object({
           tipo: z.enum(["viagem", "frete", "servico", "outros"]),
@@ -824,8 +853,8 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
-        return createRevenue({
+      .mutation(({ ctx, input }) =>
+        createRevenue(ctx.orgId, {
           tipo: input.tipo,
           descricao: input.descricao,
           valor: parseRequiredNumericString(input.valor),
@@ -836,10 +865,10 @@ export const appRouter = router({
           formaPagamento: input.formaPagamento || null,
           status: input.status || "pendente",
           observacoes: input.observacoes || null,
-        });
-      }),
+        })
+      ),
 
-    update: protectedProcedure
+    update: orgProcedure
       .input(
         z.object({
           id: z.number(),
@@ -855,20 +884,17 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(({ ctx, input }) => {
         const { id, valor, ...rest } = input;
         const updateData: Partial<InsertRevenue> = { ...rest };
-        if (valor !== undefined) {
+        if (valor !== undefined)
           updateData.valor = parseRequiredNumericString(valor);
-        }
-        return updateRevenue(id, updateData);
+        return updateRevenue(ctx.orgId, id, updateData);
       }),
 
-    delete: protectedProcedure
+    delete: orgProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        return deleteRevenue(input.id);
-      }),
+      .mutation(({ ctx, input }) => deleteRevenue(ctx.orgId, input.id)),
   }),
 });
 

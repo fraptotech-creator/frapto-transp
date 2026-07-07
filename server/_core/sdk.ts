@@ -119,17 +119,14 @@ class SDKServer {
       throw ForbiddenError("Invalid session cookie");
     }
 
-    // O usuário é criado/atualizado no login (googleAuthLogin). Se a sessão é
-    // válida mas o usuário sumiu do banco, falha fechado (não sincroniza cego).
+    // O usuário é criado no cadastro (auth.signup). Se a sessão é válida mas o
+    // usuário sumiu do banco, falha fechado (não sincroniza cego).
     const user = await db.getUserByOpenId(session.openId);
     if (!user) {
       throw ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: new Date(),
-    });
+    await db.touchUserLastSignedIn(user.openId);
 
     return user;
   }

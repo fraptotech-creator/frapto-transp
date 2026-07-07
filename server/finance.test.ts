@@ -23,6 +23,9 @@ const createAuthContext = (): TrpcContext => ({
   user: {
     id: 1,
     openId: "test-user",
+    orgId: 1,
+    orgRole: "owner",
+    passwordHash: null,
     email: "test@example.com",
     name: "Test User",
     loginMethod: "google",
