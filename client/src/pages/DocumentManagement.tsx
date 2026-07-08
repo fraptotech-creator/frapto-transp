@@ -5,230 +5,238 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
-import { FileText, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { FileText, Upload, Download, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
-type DocItem = {
-  entityId: number;
-  entityKind: "veiculo" | "motorista";
-  entityName: string;
-  docType: string;
-  vencimento: Date | null;
+type DocType = "crlv" | "seguro" | "cnh" | "rg" | "cpf" | "outro";
+const TIPO_LABEL: Record<DocType, string> = {
+  crlv: "CRLV",
+  seguro: "Seguro",
+  cnh: "CNH",
+  rg: "RG",
+  cpf: "CPF",
+  outro: "Outro",
 };
 
-const formatDate = (d: Date | null) => {
-  if (!d) return "-";
-  return new Date(d).toLocaleDateString("pt-BR");
-};
-
-const getStatus = (vencimento: Date | null) => {
-  if (!vencimento) return "sem_data";
-  const now = Date.now();
-  const venc = new Date(vencimento).getTime();
-  const days = (venc - now) / (1000 * 60 * 60 * 24);
-  if (days < 0) return "vencido";
-  if (days <= 30) return "proximo";
-  return "ok";
-};
-
-const statusBadge = (status: string) => {
-  switch (status) {
-    case "vencido":
-      return {
-        label: "Vencido",
-        cls: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-        icon: AlertTriangle,
-      };
-    case "proximo":
-      return {
-        label: "Vence em breve",
-        cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-        icon: Clock,
-      };
-    case "sem_data":
-      return {
-        label: "Sem data",
-        cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-        icon: FileText,
-      };
-    default:
-      return {
-        label: "Em dia",
-        cls: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-        icon: CheckCircle2,
-      };
-  }
-};
+const fileToBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      resolve((reader.result as string).split(",")[1] ?? "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
 export default function DocumentManagement() {
-  const { data: vehicles, isLoading: loadingV } = trpc.vehicles.list.useQuery();
-  const { data: drivers, isLoading: loadingD } = trpc.drivers.list.useQuery();
+  const { data: status } = trpc.documents.status.useQuery();
+  const { data: docs, isLoading, refetch } = trpc.documents.list.useQuery();
 
-  const isLoading = loadingV || loadingD;
+  const uploadM = trpc.documents.upload.useMutation();
+  const downloadM = trpc.documents.downloadUrl.useMutation();
+  const deleteM = trpc.documents.delete.useMutation();
 
-  // Monta lista unificada de documentos a partir de veículos e motoristas
-  const docs: DocItem[] = [];
+  const [file, setFile] = useState<File | null>(null);
+  const [tipo, setTipo] = useState<DocType>("crlv");
+  const [descricao, setDescricao] = useState("");
 
-  vehicles?.forEach((v: any) => {
-    if (v.crlvVencimento) {
-      docs.push({
-        entityId: v.id,
-        entityKind: "veiculo",
-        entityName: `${v.placa} - ${v.marca} ${v.modelo}`,
-        docType: "CRLV",
-        vencimento: new Date(v.crlvVencimento),
+  const configured = status?.configured ?? false;
+
+  const handleUpload = async () => {
+    if (!file) {
+      toast.error("Escolha um arquivo.");
+      return;
+    }
+    try {
+      const dataBase64 = await fileToBase64(file);
+      await uploadM.mutateAsync({
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream",
+        dataBase64,
+        tipo,
+        descricao: descricao || undefined,
       });
+      toast.success("Documento enviado!");
+      setFile(null);
+      setDescricao("");
+      refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha no upload");
     }
-    if (v.seguroVencimento) {
-      docs.push({
-        entityId: v.id,
-        entityKind: "veiculo",
-        entityName: `${v.placa} - ${v.marca} ${v.modelo}`,
-        docType: "Seguro",
-        vencimento: new Date(v.seguroVencimento),
-      });
+  };
+
+  const handleDownload = async (id: number) => {
+    try {
+      const { url } = await downloadM.mutateAsync({ id });
+      window.open(url, "_blank");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao baixar");
     }
-  });
+  };
 
-  drivers?.forEach((d: any) => {
-    if (d.cnhVencimento) {
-      docs.push({
-        entityId: d.id,
-        entityKind: "motorista",
-        entityName: d.nome,
-        docType: `CNH (${d.cnhCategoria})`,
-        vencimento: new Date(d.cnhVencimento),
-      });
+  const handleDelete = async (id: number) => {
+    if (!confirm("Excluir este documento?")) return;
+    try {
+      await deleteM.mutateAsync({ id });
+      toast.success("Documento excluído.");
+      refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao excluir");
     }
-  });
-
-  const sortKey = (d: DocItem) =>
-    d.vencimento ? new Date(d.vencimento).getTime() : Number.MAX_SAFE_INTEGER;
-  docs.sort((a, b) => sortKey(a) - sortKey(b));
-
-  const vencidos = docs.filter(d => getStatus(d.vencimento) === "vencido");
-  const proximos = docs.filter(d => getStatus(d.vencimento) === "proximo");
-  const emDia = docs.filter(d => getStatus(d.vencimento) === "ok");
-
-  if (isLoading) {
-    return (
-      <div className="p-4 space-y-4">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-32" />
-        ))}
-      </div>
-    );
-  }
-
-  const renderList = (list: DocItem[]) => {
-    if (list.length === 0) {
-      return (
-        <p className="text-sm text-muted-foreground text-center py-6">
-          Nenhum documento nesta categoria.
-        </p>
-      );
-    }
-    return (
-      <div className="space-y-2">
-        {list.map((doc, i) => {
-          const status = getStatus(doc.vencimento);
-          const badge = statusBadge(status);
-          const Icon = badge.icon;
-          return (
-            <div
-              key={`${doc.entityKind}-${doc.entityId}-${doc.docType}-${i}`}
-              className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-3"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {doc.docType} —{" "}
-                  <span className="capitalize">{doc.entityKind}</span>:{" "}
-                  {doc.entityName}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Vencimento: {formatDate(doc.vencimento)}
-                </p>
-              </div>
-              <Badge
-                className={`${badge.cls} flex items-center gap-1 whitespace-nowrap`}
-              >
-                <Icon className="w-3 h-3" />
-                {badge.label}
-              </Badge>
-            </div>
-          );
-        })}
-      </div>
-    );
   };
 
   return (
-    <div className="p-4 space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold">Gestão de Documentos</h1>
-        <p className="text-sm text-muted-foreground">
-          Acompanhe vencimentos de CRLV, seguro e CNH
-        </p>
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="p-3 rounded-2xl bg-gradient-to-br from-primary to-purple-600 shadow-lg">
+          <FileText className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold">Documentos</h1>
+          <p className="text-sm text-muted-foreground">
+            Envie e guarde CRLV, CNH, seguro e outros arquivos da frota.
+          </p>
+        </div>
       </div>
 
-      {/* Resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Vencidos</p>
-            <p className="text-2xl font-bold text-red-600">{vencidos.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">
-              Vencendo em até 30 dias
-            </p>
-            <p className="text-2xl font-bold text-amber-600">
-              {proximos.length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Em dia</p>
-            <p className="text-2xl font-bold text-emerald-600">
-              {emDia.length}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border-0 shadow-sm">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-base">Documentos Vencidos</CardTitle>
-          <CardDescription className="text-xs">
-            Estes documentos precisam de ação imediata
-          </CardDescription>
+          <CardTitle>Enviar documento</CardTitle>
+          <CardDescription>PDF, JPG, PNG ou WEBP, até 10 MB.</CardDescription>
         </CardHeader>
-        <CardContent>{renderList(vencidos)}</CardContent>
+        <CardContent className="space-y-4">
+          {!configured ? (
+            <p className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-600">
+              Armazenamento de arquivos ainda não configurado pelo administrador
+              do sistema.
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <Select
+                    value={tipo}
+                    onValueChange={v => setTipo(v as DocType)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(TIPO_LABEL) as DocType[]).map(t => (
+                        <SelectItem key={t} value={t}>
+                          {TIPO_LABEL[t]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Descrição (opcional)</Label>
+                  <Input
+                    value={descricao}
+                    onChange={e => setDescricao(e.target.value)}
+                    placeholder="Ex: CRLV 2026 - ABC1234"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Arquivo</Label>
+                <Input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  onChange={e => setFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              <Button
+                onClick={handleUpload}
+                disabled={uploadM.isPending || !file}
+                className="w-full sm:w-auto"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {uploadM.isPending ? "Enviando…" : "Enviar"}
+              </Button>
+            </>
+          )}
+        </CardContent>
       </Card>
 
-      <Card className="border-0 shadow-sm">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-base">Vencendo em até 30 dias</CardTitle>
-          <CardDescription className="text-xs">
-            Programe a renovação para evitar problemas operacionais
-          </CardDescription>
+          <CardTitle>Documentos enviados</CardTitle>
         </CardHeader>
-        <CardContent>{renderList(proximos)}</CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Em dia</CardTitle>
-          <CardDescription className="text-xs">
-            Documentos com vencimento futuro tranquilo
-          </CardDescription>
-        </CardHeader>
-        <CardContent>{renderList(emDia)}</CardContent>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-32" />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {docs && docs.length > 0 ? (
+                  docs.map(d => (
+                    <TableRow key={d.id}>
+                      <TableCell>
+                        {TIPO_LABEL[d.tipo as DocType] ?? d.tipo}
+                      </TableCell>
+                      <TableCell>{d.descricao ?? "-"}</TableCell>
+                      <TableCell className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDownload(d.id)}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(d.id)}
+                        >
+                          <Trash2 className="w-4 h-4 text-rose-600" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={3}
+                      className="text-center text-muted-foreground py-6"
+                    >
+                      Nenhum documento enviado ainda.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
       </Card>
     </div>
   );

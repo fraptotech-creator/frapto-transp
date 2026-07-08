@@ -11,6 +11,7 @@ import {
   maintenance,
   expenses,
   revenues,
+  documents,
   aiConfig,
   InsertUser,
   InsertOrganization,
@@ -21,6 +22,7 @@ import {
   InsertMaintenance,
   InsertExpense,
   InsertRevenue,
+  InsertDocument,
   InsertAiConfig,
 } from "../drizzle/schema";
 
@@ -571,6 +573,54 @@ export async function deleteRevenue(orgId: number, id: number) {
   await db
     .delete(revenues)
     .where(and(eq(revenues.orgId, orgId), eq(revenues.id, id)));
+  return { success: true };
+}
+
+// ─── Documentos ──────────────────────────────────────────────────────────────
+
+export async function getDocuments(orgId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(documents)
+    .where(eq(documents.orgId, orgId))
+    .orderBy(desc(documents.id));
+}
+
+export async function getDocumentById(orgId: number, id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.orgId, orgId), eq(documents.id, id)))
+    .limit(1);
+  return result[0];
+}
+
+export async function createDocument(
+  orgId: number,
+  data: Omit<InsertDocument, "orgId">
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(documents).values({ ...data, orgId });
+  const result = await db
+    .select()
+    .from(documents)
+    .where(eq(documents.orgId, orgId))
+    .orderBy(desc(documents.id))
+    .limit(1);
+  return result[0];
+}
+
+export async function deleteDocument(orgId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .delete(documents)
+    .where(and(eq(documents.orgId, orgId), eq(documents.id, id)));
   return { success: true };
 }
 
