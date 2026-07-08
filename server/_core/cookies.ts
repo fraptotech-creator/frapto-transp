@@ -42,7 +42,9 @@ export function getSessionCookieOptions(
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
+    // "lax": não envia o cookie em POST/fetch cross-site (bloqueia CSRF).
+    // O app é first-party (sem embed em iframe de terceiros), então lax basta.
+    sameSite: "lax",
     secure: isSecureRequest(req),
   };
 }

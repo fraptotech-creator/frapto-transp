@@ -8,6 +8,12 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
 import { handleWebhookEvent } from "./stripe";
+import {
+  securityHeaders,
+  apiLimiter,
+  authLimiter,
+  originCheck,
+} from "./security";
 
 // Fail-closed: em produção, o app NÃO sobe sem os segredos essenciais.
 // Erro visível no boot > sessão insegura silenciosa (JWT fraco / login quebrado).
@@ -54,6 +60,12 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Atrás do proxy do Railway: confia no 1º hop pra pegar o IP real (rate-limit).
+  app.set("trust proxy", 1);
+  app.disable("x-powered-by");
+  // Headers de segurança como 1º middleware.
+  app.use(securityHeaders);
+
   // Webhook do Stripe ANTES do parser JSON: precisa do corpo CRU pra validar a
   // assinatura HMAC (fail-closed).
   app.post(
@@ -86,9 +98,13 @@ async function startServer() {
     res.status(200).json({ ok: true });
   });
   // Login (email+senha) é via tRPC (auth.signup / auth.login).
-  // tRPC API
+  // Rate-limit ESTRITO no login/cadastro (anti brute-force), antes do geral.
+  app.use(["/api/trpc/auth.login", "/api/trpc/auth.signup"], authLimiter);
+  // tRPC API: rate-limit geral + checagem de Origin (CSRF).
   app.use(
     "/api/trpc",
+    apiLimiter,
+    originCheck,
     createExpressMiddleware({
       router: appRouter,
       createContext,
