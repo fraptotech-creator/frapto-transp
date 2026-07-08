@@ -58,6 +58,9 @@ export const users = mysqlTable("users", {
     .notNull(),
   // Papel global do app (super-admin da plataforma, se necessário).
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  // Revogação de sessão: o token embute este número; logout incrementa,
+  // invalidando todos os cookies antigos (mesmo o roubado).
+  sessionVersion: int("sessionVersion").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

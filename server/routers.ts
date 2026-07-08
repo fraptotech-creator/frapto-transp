@@ -22,6 +22,7 @@ import {
 import {
   getUserByEmail,
   createOrgAndOwner,
+  incrementSessionVersion,
   getOrganization,
   getVehicles,
   getVehicleById,
@@ -233,6 +234,7 @@ export const appRouter = router({
         }
         const token = await sdk.createSessionToken(openId, {
           name: user.name ?? "",
+          sessionVersion: user.sessionVersion,
           expiresInMs: ONE_YEAR_MS,
         });
         ctx.res.cookie(COOKIE_NAME, token, {
@@ -263,6 +265,7 @@ export const appRouter = router({
 
         const token = await sdk.createSessionToken(user.openId, {
           name: user.name ?? "",
+          sessionVersion: user.sessionVersion,
           expiresInMs: ONE_YEAR_MS,
         });
         ctx.res.cookie(COOKIE_NAME, token, {
@@ -272,7 +275,11 @@ export const appRouter = router({
         return { success: true } as const;
       }),
 
-    logout: publicProcedure.mutation(({ ctx }) => {
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      // Revoga a sessão no servidor (mata o token, mesmo se roubado).
+      if (ctx.user) {
+        await incrementSessionVersion(ctx.user.openId);
+      }
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;

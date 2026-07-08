@@ -15,6 +15,8 @@ export type SessionPayload = {
   openId: string;
   appId: string;
   name: string;
+  // Versão da sessão (revogação). Ausente em tokens antigos (grandfather).
+  sver?: number;
 };
 
 /**
@@ -35,13 +37,18 @@ class SDKServer {
    */
   async createSessionToken(
     openId: string,
-    options: { expiresInMs?: number; name?: string } = {}
+    options: {
+      expiresInMs?: number;
+      name?: string;
+      sessionVersion?: number;
+    } = {}
   ): Promise<string> {
     return this.signSession(
       {
         openId,
         appId: ENV.appId,
         name: options.name || "",
+        sver: options.sessionVersion ?? 0,
       },
       options
     );
@@ -56,19 +63,25 @@ class SDKServer {
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
     const secretKey = this.getSessionSecret();
 
-    return new SignJWT({
+    const claims: Record<string, unknown> = {
       openId: payload.openId,
       appId: payload.appId,
       name: payload.name,
-    })
+    };
+    if (typeof payload.sver === "number") claims.sver = payload.sver;
+
+    return new SignJWT(claims)
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
       .setExpirationTime(expirationSeconds)
       .sign(secretKey);
   }
 
-  async verifySession(
-    cookieValue: string | undefined | null
-  ): Promise<{ openId: string; appId: string; name: string } | null> {
+  async verifySession(cookieValue: string | undefined | null): Promise<{
+    openId: string;
+    appId: string;
+    name: string;
+    sver?: number;
+  } | null> {
     if (!cookieValue) {
       console.warn("[Auth] Missing session cookie");
       return null;
@@ -79,7 +92,7 @@ class SDKServer {
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
-      const { openId, appId, name } = payload as Record<string, unknown>;
+      const { openId, appId, name, sver } = payload as Record<string, unknown>;
 
       // openId e appId identificam a sessão e SÃO obrigatórios. O `name` é só
       // exibição e pode ser vazio (usuário que cadastrou sem informar o nome) —
@@ -93,6 +106,7 @@ class SDKServer {
         openId,
         appId,
         name: isNonEmptyString(name) ? name : "",
+        sver: typeof sver === "number" ? sver : undefined,
       };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
@@ -123,6 +137,12 @@ class SDKServer {
     const user = await db.getUserByOpenId(session.openId);
     if (!user) {
       throw ForbiddenError("User not found");
+    }
+
+    // Revogação: se o token traz `sver` e ele diverge do atual do usuário, o
+    // token foi revogado (logout). Tokens antigos sem `sver` = grandfather.
+    if (session.sver !== undefined && session.sver !== user.sessionVersion) {
+      throw ForbiddenError("Session revoked");
     }
 
     await db.touchUserLastSignedIn(user.openId);

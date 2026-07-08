@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2";
 import {
@@ -124,6 +124,16 @@ export async function touchUserLastSignedIn(openId: string) {
   await db
     .update(users)
     .set({ lastSignedIn: new Date() })
+    .where(eq(users.openId, openId));
+}
+
+// Revogação de sessão: incrementa sessionVersion (mata os tokens antigos).
+export async function incrementSessionVersion(openId: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(users)
+    .set({ sessionVersion: sql`${users.sessionVersion} + 1` })
     .where(eq(users.openId, openId));
 }
 
