@@ -81,11 +81,10 @@ class SDKServer {
       });
       const { openId, appId, name } = payload as Record<string, unknown>;
 
-      if (
-        !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
-        !isNonEmptyString(name)
-      ) {
+      // openId e appId identificam a sessão e SÃO obrigatórios. O `name` é só
+      // exibição e pode ser vazio (usuário que cadastrou sem informar o nome) —
+      // rejeitar por name vazio invalidava a sessão desses usuários (bug).
+      if (!isNonEmptyString(openId) || !isNonEmptyString(appId)) {
         console.warn("[Auth] Session payload missing required fields");
         return null;
       }
@@ -93,7 +92,7 @@ class SDKServer {
       return {
         openId,
         appId,
-        name,
+        name: isNonEmptyString(name) ? name : "",
       };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
