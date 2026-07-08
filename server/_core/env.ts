@@ -13,6 +13,8 @@ export const ENV = {
   ownerEmail: process.env.OWNER_EMAIL ?? "",
   // Assistente de IA (Anthropic Claude)
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  // Google Maps (chave pública do browser, restrita por referrer). Entregue em runtime.
+  googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? "",
   // Stripe (paywall / assinatura)
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",

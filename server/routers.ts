@@ -4,6 +4,7 @@ import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import {
   publicProcedure,
+  protectedProcedure,
   router,
   orgProcedure,
   activeOrgProcedure,
@@ -242,6 +243,15 @@ async function resolveAiConfig(orgId: number): Promise<AiRuntimeConfig | null> {
 
 export const appRouter = router({
   system: systemRouter,
+
+  // Config pública do cliente (só p/ logado). A chave do Google Maps é pública
+  // por design (browser, restrita por referrer) — não é segredo como as demais.
+  config: router({
+    get: protectedProcedure.query(() => ({
+      googleMapsApiKey: ENV.googleMapsApiKey,
+      mapsConfigured: Boolean(ENV.googleMapsApiKey),
+    })),
+  }),
 
   auth: router({
     me: publicProcedure.query(({ ctx }) => {
