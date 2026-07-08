@@ -58,6 +58,7 @@ import {
   upsertAiConfig,
 } from "./db";
 import { invokeLLM, type ChatMessage, type AiRuntimeConfig } from "./_core/llm";
+import { assertSafeBaseUrl } from "./_core/urlSafety";
 import type {
   InsertVehicle,
   InsertTrip,
@@ -87,7 +88,47 @@ const parseRequiredNumericString = (value: string): string => {
   return parsed;
 };
 
+// Valida que os IDs referenciados pertencem à MESMA org — impede referência
+// órfã a veículo/motorista/viagem de outra empresa (defesa explícita de tenant).
+async function assertRefsOwned(
+  orgId: number,
+  refs: {
+    veiculoId?: number | null;
+    motoristaId?: number | null;
+    viagemId?: number | null;
+  }
+) {
+  if (
+    refs.veiculoId != null &&
+    !(await getVehicleById(orgId, refs.veiculoId))
+  ) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Veículo inválido." });
+  }
+  if (
+    refs.motoristaId != null &&
+    !(await getDriverById(orgId, refs.motoristaId))
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Motorista inválido.",
+    });
+  }
+  if (refs.viagemId != null && !(await getTripById(orgId, refs.viagemId))) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Viagem inválida." });
+  }
+}
+
 // ─── Assistente de IA ────────────────────────────────────────────────────────
+
+function sanitizeChatContent(s: string): string {
+  // Remove caracteres de controle (preserva tab/quebra de linha) e limita o tamanho.
+  let out = "";
+  for (const ch of s) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (c >= 32 || c === 9 || c === 10 || c === 13) out += ch;
+  }
+  return out.slice(0, 4000);
+}
 
 async function buildFleetContext(orgId: number): Promise<string> {
   const now = Date.now();
@@ -342,7 +383,7 @@ export const appRouter = router({
         const context = await buildFleetContext(ctx.orgId);
         const messages: ChatMessage[] = input.messages.map(m => ({
           role: m.role,
-          content: m.content,
+          content: sanitizeChatContent(m.content),
         }));
         const response = await invokeLLM(cfg, {
           system: FLEET_ASSISTANT_SYSTEM + context,
@@ -389,6 +430,18 @@ export const appRouter = router({
           baseUrl: input.baseUrl?.trim() || null,
           enabled: input.enabled,
         };
+        // Anti-SSRF: a Base URL custom (openai_compatible) não pode apontar para
+        // endereço interno/loopback/metadata.
+        if (input.provider === "openai_compatible" && data.baseUrl) {
+          try {
+            await assertSafeBaseUrl(data.baseUrl);
+          } catch (e) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: e instanceof Error ? e.message : "Base URL inválida.",
+            });
+          }
+        }
         if (input.apiKey && input.apiKey.trim().length > 0) {
           data.apiKey = input.apiKey.trim();
         }
@@ -557,8 +610,12 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(({ ctx, input }) =>
-        createTrip(ctx.orgId, {
+      .mutation(async ({ ctx, input }) => {
+        await assertRefsOwned(ctx.orgId, {
+          veiculoId: input.veiculoId,
+          motoristaId: input.motoristaId,
+        });
+        return createTrip(ctx.orgId, {
           numeroViagem: input.numeroViagem,
           motoristaId: input.motoristaId,
           veiculoId: input.veiculoId,
@@ -571,8 +628,8 @@ export const appRouter = router({
           pesoTotal: parseNumericString(input.pesoTotal),
           valor: parseNumericString(input.valor),
           observacoes: input.observacoes || null,
-        })
-      ),
+        });
+      }),
 
     update: activeOrgProcedure
       .input(
@@ -595,7 +652,11 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(({ ctx, input }) => {
+      .mutation(async ({ ctx, input }) => {
+        await assertRefsOwned(ctx.orgId, {
+          veiculoId: input.veiculoId,
+          motoristaId: input.motoristaId,
+        });
         const { id, distancia, pesoTotal, valor, ...rest } = input;
         const updateData: Partial<InsertTrip> = { ...rest };
         if (distancia !== undefined)
@@ -655,8 +716,9 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(({ ctx, input }) =>
-        createMaintenance(ctx.orgId, {
+      .mutation(async ({ ctx, input }) => {
+        await assertRefsOwned(ctx.orgId, { veiculoId: input.veiculoId });
+        return createMaintenance(ctx.orgId, {
           veiculoId: input.veiculoId,
           tipo: input.tipo,
           descricao: input.descricao,
@@ -664,8 +726,8 @@ export const appRouter = router({
           custo: parseNumericString(input.custo),
           status: "pendente",
           observacoes: input.observacoes || null,
-        })
-      ),
+        });
+      }),
 
     update: activeOrgProcedure
       .input(
@@ -820,8 +882,13 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(({ ctx, input }) =>
-        createExpense(ctx.orgId, {
+      .mutation(async ({ ctx, input }) => {
+        await assertRefsOwned(ctx.orgId, {
+          veiculoId: input.veiculoId,
+          motoristaId: input.motoristId,
+          viagemId: input.viagemId,
+        });
+        return createExpense(ctx.orgId, {
           tipo: input.tipo,
           descricao: input.descricao,
           valor: parseRequiredNumericString(input.valor),
@@ -832,8 +899,8 @@ export const appRouter = router({
           categoria: input.categoria || null,
           formaPagamento: input.formaPagamento || null,
           observacoes: input.observacoes || null,
-        })
-      ),
+        });
+      }),
 
     update: activeOrgProcedure
       .input(
@@ -896,8 +963,9 @@ export const appRouter = router({
           observacoes: z.string().optional(),
         })
       )
-      .mutation(({ ctx, input }) =>
-        createRevenue(ctx.orgId, {
+      .mutation(async ({ ctx, input }) => {
+        await assertRefsOwned(ctx.orgId, { viagemId: input.viagemId });
+        return createRevenue(ctx.orgId, {
           tipo: input.tipo,
           descricao: input.descricao,
           valor: parseRequiredNumericString(input.valor),
@@ -908,8 +976,8 @@ export const appRouter = router({
           formaPagamento: input.formaPagamento || null,
           status: input.status || "pendente",
           observacoes: input.observacoes || null,
-        })
-      ),
+        });
+      }),
 
     update: activeOrgProcedure
       .input(
