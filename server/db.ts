@@ -7,7 +7,6 @@ import {
   vehicles,
   drivers,
   trips,
-  notifications,
   maintenance,
   expenses,
   revenues,
@@ -18,7 +17,6 @@ import {
   InsertVehicle,
   InsertDriver,
   InsertTrip,
-  InsertNotification,
   InsertMaintenance,
   InsertExpense,
   InsertRevenue,
@@ -74,13 +72,6 @@ export async function getUserByEmail(email: string) {
     .from(users)
     .where(eq(users.email, email))
     .limit(1);
-  return result[0];
-}
-
-export async function getUserById(id: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
   return result[0];
 }
 
@@ -413,43 +404,6 @@ export async function updateMaintenance(
     .set(data)
     .where(and(eq(maintenance.orgId, orgId), eq(maintenance.id, id)));
   return getMaintenanceById(orgId, id);
-}
-
-// ─── Notificações ────────────────────────────────────────────────────────────
-
-export async function getNotifications(orgId: number, usuarioId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(notifications)
-    .where(
-      and(
-        eq(notifications.orgId, orgId),
-        eq(notifications.usuarioId, usuarioId)
-      )
-    );
-}
-
-export async function createNotification(
-  orgId: number,
-  data: Omit<InsertNotification, "orgId">
-) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.insert(notifications).values({ ...data, orgId });
-  const result = await db
-    .select()
-    .from(notifications)
-    .where(
-      and(
-        eq(notifications.orgId, orgId),
-        eq(notifications.usuarioId, data.usuarioId)
-      )
-    )
-    .orderBy(desc(notifications.id))
-    .limit(1);
-  return result[0];
 }
 
 // ─── Despesas ────────────────────────────────────────────────────────────────

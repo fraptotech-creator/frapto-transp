@@ -8,9 +8,6 @@ export const ENV = {
   // undefined cairia no ramo inseguro de !isProduction).
   isProduction: process.env.NODE_ENV === "production",
   isDevelopment: process.env.NODE_ENV === "development",
-  // Google OAuth (login próprio, sem intermediário Manus)
-  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
-  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   appBaseUrl: process.env.APP_BASE_URL ?? "",
   // Primeiro login com este email vira admin.
   ownerEmail: process.env.OWNER_EMAIL ?? "",
