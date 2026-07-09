@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, CheckCircle, Clock, Wrench } from "lucide-react";
 import { formatPlaca } from "@/lib/format";
+import { computeOilStatus, OIL_LABEL } from "@/lib/oil";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -387,6 +388,45 @@ export default function Maintenance() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Alertas de troca de óleo por km */}
+      {(() => {
+        const pendentes = (vehicles ?? [])
+          .map((v: any) => ({ v, oil: computeOilStatus(v) }))
+          .filter(x => x.oil.status !== "ok");
+        if (pendentes.length === 0) return null;
+        return (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4 space-y-2">
+              <p className="font-semibold text-sm flex items-center gap-1">
+                <Wrench className="w-4 h-4" /> Trocas de óleo
+              </p>
+              {pendentes.map(({ v, oil }) => (
+                <div
+                  key={v.id}
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
+                  <span className="truncate">
+                    {formatPlaca(v.placa)} — {v.marca} {v.modelo}
+                  </span>
+                  <span
+                    className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${
+                      oil.status === "vencida"
+                        ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                        : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                    }`}
+                  >
+                    {OIL_LABEL[oil.status]} ·{" "}
+                    {oil.status === "vencida"
+                      ? `${(-oil.kmRestante).toLocaleString("pt-BR")} km atrás`
+                      : `faltam ${oil.kmRestante.toLocaleString("pt-BR")} km`}
+                  </span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {isLoading ? (
         <div className="space-y-3">

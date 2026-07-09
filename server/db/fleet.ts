@@ -203,6 +203,19 @@ export async function accrueTripKm(orgId: number, tripId: number) {
     .where(and(eq(trips.orgId, orgId), eq(trips.id, tripId)));
 }
 
+// Registra que a troca de óleo foi feita AGORA: grava o odômetro atual do
+// veículo como "última troca". A próxima passa a contar a partir daqui.
+export async function resetOilChange(orgId: number, vehicleId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const v = await getVehicleById(orgId, vehicleId);
+  if (!v) return;
+  await db
+    .update(vehicles)
+    .set({ kmUltimaTrocaOleo: v.quilometragem ?? 0 })
+    .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, vehicleId)));
+}
+
 // ─── Manutenção ──────────────────────────────────────────────────────────────
 
 export async function getMaintenances(orgId: number) {

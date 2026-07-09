@@ -1,6 +1,7 @@
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { formatPlaca } from "@/lib/format";
+import { computeOilStatus, OIL_LABEL } from "@/lib/oil";
 import {
   Card,
   CardContent,
@@ -148,6 +149,60 @@ export default function VehicleDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Troca de óleo */}
+      {(() => {
+        const oil = computeOilStatus(vehicle);
+        const badgeClass =
+          oil.status === "vencida"
+            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+            : oil.status === "proxima"
+              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+              : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
+        const fmt = (n: number) => n.toLocaleString("pt-BR");
+        return (
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Troca de óleo</CardTitle>
+                <Badge className={badgeClass}>{OIL_LABEL[oil.status]}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Intervalo
+                  </p>
+                  <p className="font-medium">{fmt(oil.intervalo)} km</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Última troca em
+                  </p>
+                  <p className="font-medium">
+                    {fmt(vehicle.kmUltimaTrocaOleo ?? 0)} km
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Próxima troca em
+                  </p>
+                  <p className="font-medium">{fmt(oil.proximaTrocaKm)} km</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Situação</p>
+                  <p className="font-medium">
+                    {oil.status === "vencida"
+                      ? `Passou ${fmt(-oil.kmRestante)} km`
+                      : `Faltam ${fmt(oil.kmRestante)} km`}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Documents */}
       <Card className="border-0 shadow-sm">

@@ -22,7 +22,9 @@ import {
   createMaintenance,
   updateMaintenance,
   accrueTripKm,
+  resetOilChange,
 } from "../db";
+import { isOilChange, computeOilStatus } from "../_core/oil";
 import type {
   InsertVehicle,
   InsertDriver,
@@ -53,6 +55,7 @@ export const vehiclesRouter = router({
         tipo: z.enum(["caminhao", "van", "onibus", "carro"]),
         capacidadeCarga: z.string().optional(),
         quilometragem: z.number().int().min(0).optional(),
+        intervaloTrocaOleoKm: z.number().int().min(0).optional(),
         crlvVencimento: z.date().optional(),
         seguroVencimento: z.date().optional(),
         observacoes: z.string().optional(),
@@ -67,6 +70,9 @@ export const vehiclesRouter = router({
         tipo: input.tipo,
         status: "ativo",
         quilometragem: input.quilometragem ?? 0,
+        intervaloTrocaOleoKm: input.intervaloTrocaOleoKm || 10000,
+        // Veículo novo: assume óleo em dia → conta a partir do km inicial.
+        kmUltimaTrocaOleo: input.quilometragem ?? 0,
         capacidadeCarga: parseNumericString(input.capacidadeCarga),
         crlvVencimento: input.crlvVencimento || null,
         seguroVencimento: input.seguroVencimento || null,
@@ -86,6 +92,7 @@ export const vehiclesRouter = router({
         status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
         capacidadeCarga: z.string().optional(),
         quilometragem: z.number().int().min(0).optional(),
+        intervaloTrocaOleoKm: z.number().int().min(0).optional(),
         crlvVencimento: z.date().optional(),
         seguroVencimento: z.date().optional(),
         observacoes: z.string().optional(),
@@ -337,11 +344,19 @@ export const maintenanceRouter = router({
         observacoes: z.string().optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { id, custo, ...rest } = input;
+      const prev = await getMaintenanceById(ctx.orgId, id);
       const updateData: Partial<InsertMaintenance> = { ...rest };
       if (custo !== undefined) updateData.custo = parseNumericString(custo);
-      return updateMaintenance(ctx.orgId, id, updateData);
+      const updated = await updateMaintenance(ctx.orgId, id, updateData);
+      await maybeResetOil(
+        ctx.orgId,
+        input.status,
+        input.tipo ?? prev?.tipo,
+        prev
+      );
+      return updated;
     }),
 
   updateStatus: activeOrgProcedure
@@ -353,13 +368,35 @@ export const maintenanceRouter = router({
         custo: z.string().optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { id, custo, ...rest } = input;
+      const prev = await getMaintenanceById(ctx.orgId, id);
       const updateData: Partial<InsertMaintenance> = { ...rest };
       if (custo !== undefined) updateData.custo = parseNumericString(custo);
-      return updateMaintenance(ctx.orgId, id, updateData);
+      const updated = await updateMaintenance(ctx.orgId, id, updateData);
+      await maybeResetOil(ctx.orgId, input.status, prev?.tipo, prev);
+      return updated;
     }),
 });
+
+// Reset da troca de óleo SÓ na transição para "concluída" de uma manutenção de
+// óleo (evita re-registrar se ela já estava concluída). Efeito na borda.
+async function maybeResetOil(
+  orgId: number,
+  novoStatus: string | undefined,
+  tipo: string | null | undefined,
+  prev: { status: string; veiculoId: number } | undefined
+) {
+  if (
+    novoStatus === "concluida" &&
+    prev &&
+    prev.status !== "concluida" &&
+    isOilChange(tipo) &&
+    prev.veiculoId
+  ) {
+    await resetOilChange(orgId, prev.veiculoId);
+  }
+}
 
 export const dashboardRouter = router({
   stats: activeOrgProcedure.query(async ({ ctx }) => {
@@ -432,6 +469,21 @@ export const dashboardRouter = router({
           title: "CNH Vencendo",
           message: `A CNH do motorista ${d.nome} vence em ${new Date(d.cnhVencimento!).toLocaleDateString("pt-BR")}`,
           urgency: "media",
+        })),
+      ...vehiclesList
+        .map(v => ({ v, oil: computeOilStatus(v) }))
+        .filter(x => x.oil.status !== "ok")
+        .map(({ v, oil }) => ({
+          type: "oleo",
+          title:
+            oil.status === "vencida"
+              ? "Troca de óleo vencida"
+              : "Troca de óleo próxima",
+          message:
+            oil.status === "vencida"
+              ? `Veículo ${v.placa} passou ${-oil.kmRestante} km do ponto de troca de óleo.`
+              : `Veículo ${v.placa}: faltam ${oil.kmRestante} km para a troca de óleo.`,
+          urgency: oil.status === "vencida" ? "alta" : "media",
         })),
     ];
 

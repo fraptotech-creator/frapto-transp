@@ -57,6 +57,7 @@ const vehicleSchema = z.object({
   tipo: z.enum(["caminhao", "van", "onibus", "carro"]),
   capacidadeCarga: z.string().optional(),
   quilometragem: z.number().int().min(0),
+  intervaloTrocaOleoKm: z.number().int().min(0),
   crlvVencimento: z.string().optional(),
   seguroVencimento: z.string().optional(),
   observacoes: z.string().optional(),
@@ -83,6 +84,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
       tipo: vehicle?.tipo || "caminhao",
       capacidadeCarga: vehicle?.capacidadeCarga?.toString() || "",
       quilometragem: vehicle?.quilometragem ?? 0,
+      intervaloTrocaOleoKm: vehicle?.intervaloTrocaOleoKm ?? 10000,
       crlvVencimento: vehicle?.crlvVencimento
         ? new Date(vehicle.crlvVencimento).toISOString().split("T")[0]
         : "",
@@ -223,27 +225,50 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
             )}
           />
         </div>
-        <FormField
-          control={form.control}
-          name="quilometragem"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Quilometragem atual (km)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="0"
-                  {...field}
-                  onChange={e =>
-                    field.onChange(parseInt(e.target.value, 10) || 0)
-                  }
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="quilometragem"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Quilometragem atual (km)</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="0"
+                    {...field}
+                    onChange={e =>
+                      field.onChange(parseInt(e.target.value, 10) || 0)
+                    }
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="intervaloTrocaOleoKm"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Troca de óleo a cada (km)</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="10000"
+                    {...field}
+                    onChange={e =>
+                      field.onChange(parseInt(e.target.value, 10) || 0)
+                    }
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         <div className="grid grid-cols-3 gap-4">
           <FormField
             control={form.control}

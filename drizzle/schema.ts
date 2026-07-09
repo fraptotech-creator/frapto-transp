@@ -85,6 +85,10 @@ export const vehicles = mysqlTable(
       .notNull(),
     capacidadeCarga: decimal("capacidadeCarga", { precision: 10, scale: 2 }),
     quilometragem: int("quilometragem").default(0),
+    // Troca de óleo por km: intervalo (padrão 10.000) e o odômetro registrado
+    // na última troca. Próxima troca = kmUltimaTrocaOleo + intervaloTrocaOleoKm.
+    intervaloTrocaOleoKm: int("intervaloTrocaOleoKm").default(10000).notNull(),
+    kmUltimaTrocaOleo: int("kmUltimaTrocaOleo").default(0).notNull(),
     proximaManutencao: timestamp("proximaManutencao"),
     crlvVencimento: timestamp("crlvVencimento"),
     seguroVencimento: timestamp("seguroVencimento"),
