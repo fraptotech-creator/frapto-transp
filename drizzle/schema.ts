@@ -166,6 +166,11 @@ export const trips = mysqlTable(
     carga: text("carga"),
     pesoTotal: decimal("pesoTotal", { precision: 10, scale: 2 }),
     valor: decimal("valor", { precision: 12, scale: 2 }),
+    // Idempotência: vira true quando a distância já foi somada ao odômetro do
+    // veículo (na conclusão da viagem), pra nunca contar em dobro.
+    quilometragemAplicada: boolean("quilometragemAplicada")
+      .default(false)
+      .notNull(),
     observacoes: text("observacoes"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

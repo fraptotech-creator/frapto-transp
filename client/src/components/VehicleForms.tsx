@@ -56,6 +56,7 @@ const vehicleSchema = z.object({
     .max(new Date().getFullYear(), "Ano inválido."),
   tipo: z.enum(["caminhao", "van", "onibus", "carro"]),
   capacidadeCarga: z.string().optional(),
+  quilometragem: z.number().int().min(0),
   crlvVencimento: z.string().optional(),
   seguroVencimento: z.string().optional(),
   observacoes: z.string().optional(),
@@ -81,6 +82,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
       ano: vehicle?.ano || new Date().getFullYear(),
       tipo: vehicle?.tipo || "caminhao",
       capacidadeCarga: vehicle?.capacidadeCarga?.toString() || "",
+      quilometragem: vehicle?.quilometragem ?? 0,
       crlvVencimento: vehicle?.crlvVencimento
         ? new Date(vehicle.crlvVencimento).toISOString().split("T")[0]
         : "",
@@ -221,6 +223,27 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
             )}
           />
         </div>
+        <FormField
+          control={form.control}
+          name="quilometragem"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Quilometragem atual (km)</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="0"
+                  {...field}
+                  onChange={e =>
+                    field.onChange(parseInt(e.target.value, 10) || 0)
+                  }
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <div className="grid grid-cols-3 gap-4">
           <FormField
             control={form.control}

@@ -21,6 +21,7 @@ import {
   getMaintenancesByVehicle,
   createMaintenance,
   updateMaintenance,
+  accrueTripKm,
 } from "../db";
 import type {
   InsertVehicle,
@@ -51,6 +52,7 @@ export const vehiclesRouter = router({
         ano: z.number(),
         tipo: z.enum(["caminhao", "van", "onibus", "carro"]),
         capacidadeCarga: z.string().optional(),
+        quilometragem: z.number().int().min(0).optional(),
         crlvVencimento: z.date().optional(),
         seguroVencimento: z.date().optional(),
         observacoes: z.string().optional(),
@@ -64,7 +66,7 @@ export const vehiclesRouter = router({
         ano: input.ano,
         tipo: input.tipo,
         status: "ativo",
-        quilometragem: 0,
+        quilometragem: input.quilometragem ?? 0,
         capacidadeCarga: parseNumericString(input.capacidadeCarga),
         crlvVencimento: input.crlvVencimento || null,
         seguroVencimento: input.seguroVencimento || null,
@@ -83,6 +85,7 @@ export const vehiclesRouter = router({
         tipo: z.enum(["caminhao", "van", "onibus", "carro"]).optional(),
         status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
         capacidadeCarga: z.string().optional(),
+        quilometragem: z.number().int().min(0).optional(),
         crlvVencimento: z.date().optional(),
         seguroVencimento: z.date().optional(),
         observacoes: z.string().optional(),
@@ -256,7 +259,10 @@ export const tripsRouter = router({
       if (pesoTotal !== undefined)
         updateData.pesoTotal = parseNumericString(pesoTotal);
       if (valor !== undefined) updateData.valor = parseNumericString(valor);
-      return updateTrip(ctx.orgId, id, updateData);
+      const updated = await updateTrip(ctx.orgId, id, updateData);
+      // Concluiu por aqui? soma a distância ao odômetro do veículo (idempotente).
+      if (input.status === "concluida") await accrueTripKm(ctx.orgId, id);
+      return updated;
     }),
 
   delete: activeOrgProcedure
@@ -271,10 +277,13 @@ export const tripsRouter = router({
         dataChegada: z.date().optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const updateData: Partial<InsertTrip> = { status: input.status };
       if (input.dataChegada) updateData.dataChegada = input.dataChegada;
-      return updateTrip(ctx.orgId, input.id, updateData);
+      const trip = await updateTrip(ctx.orgId, input.id, updateData);
+      // Ao concluir, soma a distância ao odômetro do veículo (uma vez só).
+      if (input.status === "concluida") await accrueTripKm(ctx.orgId, input.id);
+      return trip;
     }),
 });
 

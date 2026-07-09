@@ -1,4 +1,5 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { tripKmToAccrue } from "../_core/odometer";
 import {
   vehicles,
   drivers,
@@ -180,6 +181,26 @@ export async function deleteTrip(orgId: number, id: number) {
   if (!db) throw new Error("Database not available");
   await db.delete(trips).where(and(eq(trips.orgId, orgId), eq(trips.id, id)));
   return { success: true };
+}
+
+// Ao concluir uma viagem, soma a distância ao odômetro do veículo — UMA vez só
+// (a flag quilometragemAplicada garante idempotência). Decisão pura decide o
+// quanto; aqui só aplicamos o efeito, dentro do escopo da org.
+export async function accrueTripKm(orgId: number, tripId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const trip = await getTripById(orgId, tripId);
+  if (!trip) return;
+  const km = tripKmToAccrue(trip);
+  if (km <= 0) return;
+  await db
+    .update(vehicles)
+    .set({ quilometragem: sql`${vehicles.quilometragem} + ${km}` })
+    .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, trip.veiculoId)));
+  await db
+    .update(trips)
+    .set({ quilometragemAplicada: true })
+    .where(and(eq(trips.orgId, orgId), eq(trips.id, tripId)));
 }
 
 // ─── Manutenção ──────────────────────────────────────────────────────────────
