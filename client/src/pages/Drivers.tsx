@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DriverDialog, DriverActions } from "@/components/DriverForms";
 import { useLocation } from "wouter";
+import { formatCpf, formatPhone } from "@/lib/format";
 import { Users, Phone, CreditCard, User } from "lucide-react";
 
 export default function Drivers() {
@@ -107,7 +108,7 @@ export default function Drivers() {
                       <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl">
                         <CreditCard className="w-4 h-4 text-gray-500 shrink-0" />
                         <span className="text-xs text-gray-400 truncate">
-                          {driver.cpf}
+                          {formatCpf(driver.cpf)}
                         </span>
                       </div>
 
@@ -115,7 +116,7 @@ export default function Drivers() {
                         <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl">
                           <Phone className="w-4 h-4 text-gray-500 shrink-0" />
                           <span className="text-xs text-gray-400 truncate">
-                            {driver.telefone}
+                            {formatPhone(driver.telefone)}
                           </span>
                         </div>
                       )}

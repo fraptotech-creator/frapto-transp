@@ -1,5 +1,6 @@
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { formatPlaca } from "@/lib/format";
 import {
   Card,
   CardContent,
@@ -86,7 +87,7 @@ export default function VehicleDetail() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">{vehicle.placa}</h1>
+            <h1 className="text-2xl font-bold">{formatPlaca(vehicle.placa)}</h1>
             <p className="text-sm text-muted-foreground">
               {vehicle.marca} {vehicle.modelo} ({vehicle.ano})
             </p>

@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, CheckCircle, Clock, Wrench } from "lucide-react";
+import { formatPlaca } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -198,7 +199,7 @@ export default function Maintenance() {
   const getVehicleName = (veiculoId: number) => {
     const vehicle = vehicles?.find((v: any) => v.id === veiculoId);
     return vehicle
-      ? `${vehicle.placa} - ${vehicle.marca} ${vehicle.modelo}`
+      ? `${formatPlaca(vehicle.placa)} - ${vehicle.marca} ${vehicle.modelo}`
       : "Veículo não encontrado";
   };
 
@@ -258,7 +259,8 @@ export default function Maintenance() {
                   <SelectContent>
                     {vehicles?.map((vehicle: any) => (
                       <SelectItem key={vehicle.id} value={String(vehicle.id)}>
-                        {vehicle.placa} - {vehicle.marca} {vehicle.modelo}
+                        {formatPlaca(vehicle.placa)} - {vehicle.marca}{" "}
+                        {vehicle.modelo}
                       </SelectItem>
                     ))}
                   </SelectContent>

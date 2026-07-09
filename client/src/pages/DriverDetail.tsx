@@ -1,5 +1,6 @@
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { formatCpf, formatPhone } from "@/lib/format";
 import {
   Card,
   CardContent,
@@ -77,7 +78,9 @@ export default function DriverDetail() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold">{driver.nome}</h1>
-            <p className="text-sm text-muted-foreground">CPF: {driver.cpf}</p>
+            <p className="text-sm text-muted-foreground">
+              CPF: {formatCpf(driver.cpf)}
+            </p>
           </div>
         </div>
         <DriverDialog driver={driver} />
@@ -102,7 +105,7 @@ export default function DriverDetail() {
                   href={`tel:${driver.telefone}`}
                   className="text-sm text-blue-600 hover:underline"
                 >
-                  {driver.telefone}
+                  {formatPhone(driver.telefone)}
                 </a>
               </div>
             )}

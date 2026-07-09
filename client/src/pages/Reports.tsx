@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, FileText, TrendingUp, DollarSign } from "lucide-react";
+import { formatPlaca } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   LineChart,
@@ -193,7 +194,7 @@ export default function Reports() {
         `frota-${today}.csv`,
         vehicles.map((v: any) => ({
           ID: v.id,
-          Placa: v.placa,
+          Placa: formatPlaca(v.placa),
           Marca: v.marca,
           Modelo: v.modelo,
           Ano: v.ano,
@@ -219,7 +220,9 @@ export default function Reports() {
             Destino: t.destino,
             DataPartida: formatDateBR(t.dataPartida),
             DataChegada: formatDateBR(t.dataChegada),
-            Veiculo: veh ? `${veh.placa} (${veh.marca} ${veh.modelo})` : "",
+            Veiculo: veh
+              ? `${formatPlaca(veh.placa)} (${veh.marca} ${veh.modelo})`
+              : "",
             Motorista: drv?.nome || "",
             DistanciaKm: t.distancia ?? "",
             ValorBRL: t.valor ?? "",
@@ -233,7 +236,9 @@ export default function Reports() {
           const veh = vehicles.find((v: any) => v.id === m.veiculoId);
           return {
             ID: m.id,
-            Veiculo: veh ? `${veh.placa} (${veh.marca} ${veh.modelo})` : "",
+            Veiculo: veh
+              ? `${formatPlaca(veh.placa)} (${veh.marca} ${veh.modelo})`
+              : "",
             Tipo: m.tipo,
             Status: m.status,
             DataPrevista: formatDateBR(m.dataPrevista),

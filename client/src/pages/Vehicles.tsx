@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VehicleDialog, VehicleActions } from "@/components/VehicleForms";
 import { useLocation } from "wouter";
+import { formatPlaca } from "@/lib/format";
 import { Truck, Calendar, Gauge } from "lucide-react";
 
 export default function Vehicles() {
@@ -93,7 +94,7 @@ export default function Vehicles() {
                   <div className="space-y-3">
                     <div>
                       <p className="text-2xl font-bold tracking-tight text-white">
-                        {vehicle.placa}
+                        {formatPlaca(vehicle.placa)}
                       </p>
                       <p className="text-sm text-gray-400 mt-1">
                         {vehicle.marca} {vehicle.modelo}

@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TripDialog, TripActions } from "@/components/TripForms";
+import { formatPlaca } from "@/lib/format";
 import {
   MapPin,
   Navigation,
@@ -179,7 +180,8 @@ export default function Trips() {
                       <div className="flex items-center gap-4 text-[11px] text-white/40">
                         {vehicle && (
                           <span className="flex items-center gap-1">
-                            <Truck className="w-3 h-3" /> {vehicle.placa}
+                            <Truck className="w-3 h-3" />{" "}
+                            {formatPlaca(vehicle.placa)}
                           </span>
                         )}
                         {driver && (

@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
+import { formatCpf, formatPhone } from "@/lib/format";
 import { Trash2, Edit } from "lucide-react";
 import {
   AlertDialog,
@@ -65,9 +66,9 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
     resolver: zodResolver(driverSchema),
     defaultValues: {
       nome: driver?.nome || "",
-      cpf: driver?.cpf || "",
+      cpf: formatCpf(driver?.cpf),
       email: driver?.email || "",
-      telefone: driver?.telefone || "",
+      telefone: formatPhone(driver?.telefone),
       cnh: driver?.cnh || "",
       cnhCategoria: driver?.cnhCategoria || "",
       cnhVencimento: driver?.cnhVencimento

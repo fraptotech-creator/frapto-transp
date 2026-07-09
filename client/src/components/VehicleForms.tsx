@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
+import { formatPlaca } from "@/lib/format";
 import { Trash2, Edit } from "lucide-react";
 import {
   AlertDialog,
@@ -74,7 +75,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
   const form = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
     defaultValues: {
-      placa: vehicle?.placa || "",
+      placa: formatPlaca(vehicle?.placa),
       marca: vehicle?.marca || "",
       modelo: vehicle?.modelo || "",
       ano: vehicle?.ano || new Date().getFullYear(),
