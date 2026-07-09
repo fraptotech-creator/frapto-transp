@@ -24,10 +24,16 @@ import {
 } from "../db";
 import type {
   InsertVehicle,
+  InsertDriver,
   InsertTrip,
   InsertMaintenance,
 } from "../../drizzle/schema";
 import { parseNumericString, assertRefsOwned } from "./_helpers";
+import {
+  onlyDigits,
+  normalizePlaca,
+  normalizeOptionalPhone,
+} from "../_core/normalize";
 
 export const vehiclesRouter = router({
   list: activeOrgProcedure.query(({ ctx }) => getVehicles(ctx.orgId)),
@@ -52,7 +58,7 @@ export const vehiclesRouter = router({
     )
     .mutation(({ ctx, input }) =>
       createVehicle(ctx.orgId, {
-        placa: input.placa,
+        placa: normalizePlaca(input.placa),
         marca: input.marca,
         modelo: input.modelo,
         ano: input.ano,
@@ -88,6 +94,9 @@ export const vehiclesRouter = router({
       if (capacidadeCarga !== undefined) {
         updateData.capacidadeCarga = parseNumericString(capacidadeCarga);
       }
+      if (rest.placa !== undefined) {
+        updateData.placa = normalizePlaca(rest.placa);
+      }
       return updateVehicle(ctx.orgId, id, updateData);
     }),
 
@@ -120,10 +129,10 @@ export const driversRouter = router({
     .mutation(({ ctx, input }) =>
       createDriver(ctx.orgId, {
         nome: input.nome,
-        cpf: input.cpf,
+        cpf: onlyDigits(input.cpf),
         email: input.email || null,
-        telefone: input.telefone || null,
-        cnh: input.cnh,
+        telefone: normalizeOptionalPhone(input.telefone),
+        cnh: onlyDigits(input.cnh),
         cnhCategoria: input.cnhCategoria,
         cnhVencimento: input.cnhVencimento,
         status: "disponivel",
@@ -155,7 +164,14 @@ export const driversRouter = router({
     )
     .mutation(({ ctx, input }) => {
       const { id, ...rest } = input;
-      return updateDriver(ctx.orgId, id, rest);
+      const updateData: Partial<InsertDriver> = { ...rest };
+      // Normaliza os campos de identidade quando enviados (dígitos apenas).
+      if (rest.cpf !== undefined) updateData.cpf = onlyDigits(rest.cpf);
+      if (rest.cnh !== undefined) updateData.cnh = onlyDigits(rest.cnh);
+      if (rest.telefone !== undefined) {
+        updateData.telefone = normalizeOptionalPhone(rest.telefone);
+      }
+      return updateDriver(ctx.orgId, id, updateData);
     }),
 
   delete: activeOrgProcedure
