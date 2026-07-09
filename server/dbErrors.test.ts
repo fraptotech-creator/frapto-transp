@@ -32,6 +32,31 @@ describe("friendlyDbErrorMessage", () => {
     );
   });
 
+  it("telefone duplicado", () => {
+    expect(friendlyDbErrorMessage(drizzleDup("drivers_telefone_por_org"))).toBe(
+      "Já existe um motorista com esse telefone nesta empresa."
+    );
+  });
+
+  // TRAP do bug real: o wrapper do drizzle lista TODAS as colunas do INSERT
+  // (inclui `cpf` E `cnh`). Se colidir a CNH, a mensagem tem de dizer CNH —
+  // e NÃO CPF (que aparece antes na lista de colunas).
+  it("colisão de CNH com wrapper listando cpf+cnh → mensagem de CNH", () => {
+    const mysqlErr = Object.assign(
+      new Error("Duplicate entry '1-X' for key 'drivers_cnh_por_org'"),
+      { code: "ER_DUP_ENTRY", errno: 1062 }
+    );
+    const drizzleErr = Object.assign(
+      new Error(
+        "Failed query: insert into `drivers` (`id`, `orgId`, `nome`, `cpf`, `email`, `telefone`, `cnh`, `cnhCategoria`) values ..."
+      ),
+      { cause: mysqlErr }
+    );
+    expect(friendlyDbErrorMessage(drizzleErr)).toBe(
+      "Já existe um motorista com essa CNH nesta empresa."
+    );
+  });
+
   it("número de viagem duplicado", () => {
     expect(
       friendlyDbErrorMessage(drizzleDup("trips.numero_viagem_org_unique"))

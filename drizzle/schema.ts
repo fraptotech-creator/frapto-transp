@@ -132,6 +132,9 @@ export const drivers = mysqlTable(
   t => ({
     cpfPorOrg: unique("drivers_cpf_por_org").on(t.orgId, t.cpf),
     cnhPorOrg: unique("drivers_cnh_por_org").on(t.orgId, t.cnh),
+    // Telefone é opcional; MySQL permite múltiplos NULL, então motoristas sem
+    // telefone não conflitam — só bloqueia quando o mesmo número se repete.
+    telefonePorOrg: unique("drivers_telefone_por_org").on(t.orgId, t.telefone),
   })
 );
 
