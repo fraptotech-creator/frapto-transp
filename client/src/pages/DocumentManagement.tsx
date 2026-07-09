@@ -28,6 +28,7 @@ import { trpc } from "@/lib/trpc";
 import { FileText, Upload, Download, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { showErrorDialog } from "@/lib/errorDialog";
 
 type DocType = "crlv" | "seguro" | "cnh" | "rg" | "cpf" | "outro";
 const TIPO_LABEL: Record<DocType, string> = {
@@ -81,7 +82,10 @@ export default function DocumentManagement() {
       setDescricao("");
       refetch();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha no upload");
+      showErrorDialog(
+        e instanceof Error ? e.message : "Falha no upload",
+        "Erro no upload"
+      );
     }
   };
 
@@ -90,7 +94,10 @@ export default function DocumentManagement() {
       const { url } = await downloadM.mutateAsync({ id });
       window.open(url, "_blank");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao baixar");
+      showErrorDialog(
+        e instanceof Error ? e.message : "Falha ao baixar",
+        "Erro ao baixar"
+      );
     }
   };
 
@@ -101,7 +108,10 @@ export default function DocumentManagement() {
       toast.success("Documento excluído.");
       refetch();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao excluir");
+      showErrorDialog(
+        e instanceof Error ? e.message : "Falha ao excluir",
+        "Erro ao excluir"
+      );
     }
   };
 

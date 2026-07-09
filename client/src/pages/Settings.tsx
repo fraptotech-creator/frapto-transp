@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { showErrorDialog } from "@/lib/errorDialog";
 
 type Provider = "anthropic" | "openai" | "openai_compatible";
 
@@ -73,8 +74,9 @@ export default function Settings() {
       setApiKey("");
       refetch();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Erro ao salvar configuração"
+      showErrorDialog(
+        error instanceof Error ? error.message : "Erro ao salvar configuração",
+        "Erro ao salvar configuração"
       );
     }
   };

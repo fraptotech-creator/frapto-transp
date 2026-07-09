@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { showErrorDialog } from "@/lib/errorDialog";
 import { Trash2, Edit } from "lucide-react";
 import {
   AlertDialog,
@@ -96,7 +97,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
       onSuccess();
     },
     onError: (error: any) => {
-      toast.error("Erro ao cadastrar veículo: " + error.message);
+      showErrorDialog(error.message, "Erro ao cadastrar veículo");
     },
   });
 
@@ -107,7 +108,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
       onSuccess();
     },
     onError: (error: any) => {
-      toast.error("Erro ao atualizar veículo: " + error.message);
+      showErrorDialog(error.message, "Erro ao atualizar veículo");
     },
   });
 
@@ -297,7 +298,7 @@ const DeleteVehicleDialog: React.FC<{ vehicleId: number }> = ({
       queryClient.invalidateQueries({ queryKey: [["vehicles", "list"]] });
     },
     onError: (error: any) => {
-      toast.error("Erro ao excluir veículo: " + error.message);
+      showErrorDialog(error.message, "Erro ao excluir veículo");
     },
   });
 

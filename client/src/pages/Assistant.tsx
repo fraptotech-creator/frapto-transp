@@ -2,7 +2,7 @@ import { AIChatBox, type Message } from "@/components/AIChatBox";
 import { trpc } from "@/lib/trpc";
 import { Sparkles } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
+import { showErrorDialog } from "@/lib/errorDialog";
 
 export default function Assistant() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -15,7 +15,10 @@ export default function Assistant() {
       ]);
     },
     onError: error => {
-      toast.error(error.message || "Erro ao falar com o assistente");
+      showErrorDialog(
+        error.message || "Erro ao falar com o assistente",
+        "Erro"
+      );
     },
   });
 

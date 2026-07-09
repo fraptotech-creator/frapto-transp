@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { useState } from "react";
 import { toast } from "sonner";
+import { showErrorDialog } from "@/lib/errorDialog";
 import {
   Table,
   TableBody,
@@ -118,7 +119,7 @@ export default function Financial() {
       setExpenseForm(emptyExpense);
       refetchExpenses();
     } catch (error: any) {
-      toast.error(error?.message || "Erro ao criar despesa");
+      showErrorDialog(error?.message || "Erro ao criar despesa", "Erro");
     }
   };
 
@@ -144,7 +145,7 @@ export default function Financial() {
       setRevenueForm(emptyRevenue);
       refetchRevenues();
     } catch (error: any) {
-      toast.error(error?.message || "Erro ao criar receita");
+      showErrorDialog(error?.message || "Erro ao criar receita", "Erro");
     }
   };
 
@@ -155,7 +156,7 @@ export default function Financial() {
       toast.success("Despesa excluída com sucesso!");
       refetchExpenses();
     } catch (error: any) {
-      toast.error(error?.message || "Erro ao excluir despesa");
+      showErrorDialog(error?.message || "Erro ao excluir despesa", "Erro");
     }
   };
 
@@ -166,7 +167,7 @@ export default function Financial() {
       toast.success("Receita excluída com sucesso!");
       refetchRevenues();
     } catch (error: any) {
-      toast.error(error?.message || "Erro ao excluir receita");
+      showErrorDialog(error?.message || "Erro ao excluir receita", "Erro");
     }
   };
 

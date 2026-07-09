@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { showErrorDialog } from "@/lib/errorDialog";
 
 type MaintenanceStatus = "pendente" | "em_andamento" | "concluida";
 
@@ -98,7 +99,7 @@ export default function Maintenance() {
       refetch();
     },
     onError: (error: any) => {
-      toast.error(error.message || "Erro ao criar manutenção");
+      showErrorDialog(error.message || "Erro ao criar manutenção", "Erro");
     },
   });
 
@@ -110,7 +111,7 @@ export default function Maintenance() {
       refetch();
     },
     onError: (error: any) => {
-      toast.error(error.message || "Erro ao atualizar status");
+      showErrorDialog(error.message || "Erro ao atualizar status", "Erro");
     },
   });
 

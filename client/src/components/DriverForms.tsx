@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { showErrorDialog } from "@/lib/errorDialog";
 import { Trash2, Edit } from "lucide-react";
 import {
   AlertDialog,
@@ -84,7 +85,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
       onSuccess();
     },
     onError: (error: any) => {
-      toast.error("Erro ao cadastrar motorista: " + error.message);
+      showErrorDialog(error.message, "Erro ao cadastrar motorista");
     },
   });
 
@@ -95,7 +96,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
       onSuccess();
     },
     onError: (error: any) => {
-      toast.error("Erro ao atualizar motorista: " + error.message);
+      showErrorDialog(error.message, "Erro ao atualizar motorista");
     },
   });
 
@@ -259,7 +260,7 @@ const DeleteDriverDialog: React.FC<{ driverId: number }> = ({ driverId }) => {
       queryClient.invalidateQueries({ queryKey: [["drivers", "list"]] });
     },
     onError: (error: any) => {
-      toast.error("Erro ao excluir motorista: " + error.message);
+      showErrorDialog(error.message, "Erro ao excluir motorista");
     },
   });
 

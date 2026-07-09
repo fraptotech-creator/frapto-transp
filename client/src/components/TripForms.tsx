@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { showErrorDialog } from "@/lib/errorDialog";
 import { Trash2, Edit, MapPin, Navigation } from "lucide-react";
 import {
   AlertDialog,
@@ -182,7 +183,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
       onSuccess();
     },
     onError: (error: any) => {
-      toast.error("Erro ao cadastrar viagem: " + error.message);
+      showErrorDialog(error.message, "Erro ao cadastrar viagem");
     },
   });
 
@@ -193,7 +194,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
       onSuccess();
     },
     onError: (error: any) => {
-      toast.error("Erro ao atualizar viagem: " + error.message);
+      showErrorDialog(error.message, "Erro ao atualizar viagem");
     },
   });
 
@@ -493,7 +494,7 @@ const DeleteTripDialog: React.FC<{ tripId: number }> = ({ tripId }) => {
       queryClient.invalidateQueries({ queryKey: [["trips", "list"]] });
     },
     onError: (error: any) => {
-      toast.error("Erro ao excluir viagem: " + error.message);
+      showErrorDialog(error.message, "Erro ao excluir viagem");
     },
   });
 
