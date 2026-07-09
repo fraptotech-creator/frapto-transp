@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Download, FileText, TrendingUp, DollarSign } from "lucide-react";
 import { formatPlaca } from "@/lib/format";
+import { exportTablePDF } from "@/lib/exportPdf";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   LineChart,
@@ -70,7 +71,6 @@ const formatDateBR = (d: any) =>
   d ? new Date(d).toLocaleDateString("pt-BR") : "";
 
 export default function Reports() {
-  const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
   const { data: vehicles } = trpc.vehicles.list.useQuery();
   const { data: drivers } = trpc.drivers.list.useQuery();
   const { data: trips } = trpc.trips.list.useQuery();
@@ -94,6 +94,14 @@ export default function Reports() {
     }
   })();
   const periodStart = Date.now() - periodMs;
+  const sinceDays =
+    reportPeriod === "1month"
+      ? 30
+      : reportPeriod === "3months"
+        ? 90
+        : reportPeriod === "1year"
+          ? 365
+          : 180;
 
   const tripsInPeriod = (trips || []).filter(
     (t: any) => new Date(t.dataPartida).getTime() >= periodStart
@@ -103,58 +111,16 @@ export default function Reports() {
       new Date(m.dataRealizada || m.dataPrevista).getTime() >= periodStart
   );
 
-  // Métricas financeiras
-  const totalRevenue = tripsInPeriod.reduce((sum: number, trip: any) => {
-    const valor = trip.valor ? parseFloat(trip.valor.toString()) : 0;
-    return sum + valor;
-  }, 0);
-
-  const totalMaintenanceCost = maintenancesInPeriod.reduce(
-    (sum: number, m: any) => {
-      const custo = m.custo ? parseFloat(m.custo.toString()) : 0;
-      return sum + custo;
-    },
-    0
-  );
-
-  const profit = totalRevenue - totalMaintenanceCost;
-
-  // Dados financeiros por mês usando tripsByMonth do dashboard
-  const financialData =
-    stats?.tripsByMonth?.map((month: { month: string; count: number }) => {
-      const monthTrips = tripsInPeriod.filter((t: any) => {
-        const tripDate = new Date(t.dataPartida);
-        return (
-          tripDate.toLocaleString("pt-BR", { month: "short" }).toLowerCase() ===
-          month.month.toLowerCase()
-        );
-      });
-
-      const revenue = monthTrips.reduce((sum: number, trip: any) => {
-        const valor = trip.valor ? parseFloat(trip.valor.toString()) : 0;
-        return sum + valor;
-      }, 0);
-
-      const costs = maintenancesInPeriod
-        .filter((m: any) => {
-          const mDate = new Date(m.dataRealizada || m.dataPrevista);
-          return (
-            mDate.toLocaleString("pt-BR", { month: "short" }).toLowerCase() ===
-            month.month.toLowerCase()
-          );
-        })
-        .reduce((sum: number, m: any) => {
-          const custo = m.custo ? parseFloat(m.custo.toString()) : 0;
-          return sum + custo;
-        }, 0);
-
-      return {
-        month: month.month,
-        receita: revenue,
-        custos: costs,
-        lucro: revenue - costs,
-      };
-    }) || [];
+  // Financeiro CONSOLIDADO (mesma fonte única da tela Financeiro): receita =
+  // viagens concluídas + receitas manuais; despesa = manutenção concluída +
+  // despesas manuais. Respeita o período selecionado.
+  const { data: fin, isLoading } = trpc.dashboard.financeSummary.useQuery({
+    sinceDays,
+  });
+  const totalRevenue = fin?.receitas ?? 0;
+  const totalCosts = fin?.despesas ?? 0;
+  const profit = fin?.saldo ?? 0;
+  const financialData = fin?.monthly ?? [];
 
   // Status de viagens
   const tripStatusData = [
@@ -180,19 +146,20 @@ export default function Reports() {
     },
   ];
 
-  // Exportações reais
-  const handleExportCSV = (reportType: string) => {
-    if (!vehicles || !drivers || !trips || !maintenances) {
-      toast.error("Carregando dados, tente novamente em alguns instantes.");
-      return;
-    }
-
-    const today = new Date().toISOString().split("T")[0];
-
+  // Monta título + linhas de um relatório (usado tanto no CSV quanto no PDF).
+  const buildReport = (
+    reportType: string
+  ): {
+    title: string;
+    filename: string;
+    rows: Record<string, any>[];
+  } | null => {
+    if (!vehicles || !drivers || !trips || !maintenances) return null;
     if (reportType === "frota") {
-      downloadCSV(
-        `frota-${today}.csv`,
-        vehicles.map((v: any) => ({
+      return {
+        title: "Relatório de Frota",
+        filename: "frota",
+        rows: vehicles.map((v: any) => ({
           ID: v.id,
           Placa: formatPlaca(v.placa),
           Marca: v.marca,
@@ -204,12 +171,14 @@ export default function Reports() {
           CapacidadeCargaKg: v.capacidadeCarga ?? "",
           VencimentoCRLV: formatDateBR(v.crlvVencimento),
           VencimentoSeguro: formatDateBR(v.seguroVencimento),
-        }))
-      );
-    } else if (reportType === "viagens") {
-      downloadCSV(
-        `viagens-${today}.csv`,
-        tripsInPeriod.map((t: any) => {
+        })),
+      };
+    }
+    if (reportType === "viagens") {
+      return {
+        title: "Relatório de Viagens",
+        filename: "viagens",
+        rows: tripsInPeriod.map((t: any) => {
           const veh = vehicles.find((v: any) => v.id === t.veiculoId);
           const drv = drivers.find((d: any) => d.id === t.motoristaId);
           return {
@@ -227,12 +196,14 @@ export default function Reports() {
             DistanciaKm: t.distancia ?? "",
             ValorBRL: t.valor ?? "",
           };
-        })
-      );
-    } else if (reportType === "manutencoes") {
-      downloadCSV(
-        `manutencoes-${today}.csv`,
-        maintenancesInPeriod.map((m: any) => {
+        }),
+      };
+    }
+    if (reportType === "manutencoes") {
+      return {
+        title: "Relatório de Manutenções",
+        filename: "manutencoes",
+        rows: maintenancesInPeriod.map((m: any) => {
           const veh = vehicles.find((v: any) => v.id === m.veiculoId);
           return {
             ID: m.id,
@@ -246,18 +217,41 @@ export default function Reports() {
             CustoBRL: m.custo ?? "",
             Descricao: m.descricao || "",
           };
-        })
-      );
-    } else if (reportType === "financeiro") {
-      downloadCSV(
-        `financeiro-${today}.csv`,
-        financialData.map((row: any) => ({
+        }),
+      };
+    }
+    if (reportType === "financeiro") {
+      return {
+        title: "Relatório Financeiro (mensal)",
+        filename: "financeiro",
+        rows: financialData.map((row: any) => ({
           Mes: row.month,
           ReceitaBRL: row.receita.toFixed(2),
-          CustosBRL: row.custos.toFixed(2),
+          DespesasBRL: row.custos.toFixed(2),
           LucroBRL: row.lucro.toFixed(2),
-        }))
-      );
+        })),
+      };
+    }
+    return null;
+  };
+
+  const handleExport = (reportType: string, fmt: "csv" | "pdf") => {
+    const rep = buildReport(reportType);
+    if (!rep) {
+      toast.error("Carregando dados, tente novamente em alguns instantes.");
+      return;
+    }
+    if (rep.rows.length === 0) {
+      toast.error("Não há dados para exportar.");
+      return;
+    }
+    const today = new Date().toISOString().split("T")[0];
+    if (fmt === "csv") {
+      downloadCSV(`${rep.filename}-${today}.csv`, rep.rows);
+    } else if (
+      exportTablePDF(`${rep.title} — ${formatDateBR(new Date())}`, rep.rows)
+    ) {
+      toast.success("Abrindo PDF para impressão/salvamento…");
     }
   };
 
@@ -302,48 +296,47 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Botões de exportação por categoria */}
+      {/* Botões de exportação por categoria (CSV e PDF) */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Exportar Dados (CSV)</CardTitle>
+          <CardTitle className="text-base">Exportar Dados</CardTitle>
           <CardDescription className="text-xs">
-            Os arquivos CSV podem ser abertos no Excel, Google Sheets e
-            similares
+            CSV abre no Excel / Google Sheets. PDF abre a tela de impressão —
+            escolha "Salvar como PDF".
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleExportCSV("frota")}
-          >
-            <Download className="w-3 h-3 mr-1" />
-            Frota
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleExportCSV("viagens")}
-          >
-            <Download className="w-3 h-3 mr-1" />
-            Viagens
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleExportCSV("manutencoes")}
-          >
-            <Download className="w-3 h-3 mr-1" />
-            Manutenções
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleExportCSV("financeiro")}
-          >
-            <Download className="w-3 h-3 mr-1" />
-            Financeiro
-          </Button>
+        <CardContent className="flex flex-wrap gap-3">
+          {[
+            { key: "frota", label: "Frota" },
+            { key: "viagens", label: "Viagens" },
+            { key: "manutencoes", label: "Manutenções" },
+            { key: "financeiro", label: "Financeiro" },
+          ].map(cat => (
+            <div
+              key={cat.key}
+              className="flex items-center gap-1 rounded-lg border px-2 py-1"
+            >
+              <span className="text-sm font-medium mr-1">{cat.label}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2"
+                onClick={() => handleExport(cat.key, "csv")}
+              >
+                <Download className="w-3 h-3 mr-1" />
+                CSV
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2"
+                onClick={() => handleExport(cat.key, "pdf")}
+              >
+                <FileText className="w-3 h-3 mr-1" />
+                PDF
+              </Button>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
@@ -375,11 +368,11 @@ export default function Reports() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">
-                  Custos de Manutenção
+                  Despesas (período)
                 </p>
                 <p className="text-2xl font-bold text-red-600">
                   R${" "}
-                  {totalMaintenanceCost.toLocaleString("pt-BR", {
+                  {totalCosts.toLocaleString("pt-BR", {
                     minimumFractionDigits: 2,
                   })}
                 </p>

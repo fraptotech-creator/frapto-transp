@@ -23,8 +23,11 @@ import {
   updateMaintenance,
   accrueTripKm,
   resetOilChange,
+  getExpenses,
+  getRevenues,
 } from "../db";
 import { isOilChange, computeOilStatus } from "../_core/oil";
+import { computeFinanceSummary, computeMonthlySeries } from "../_core/finance";
 import type {
   InsertVehicle,
   InsertDriver,
@@ -399,6 +402,26 @@ async function maybeResetOil(
 }
 
 export const dashboardRouter = router({
+  // Resumo financeiro CONSOLIDADO (fonte única): viagens + manutenções +
+  // lançamentos manuais. Usado pelo Financeiro e pelos Relatórios.
+  financeSummary: activeOrgProcedure
+    .input(z.object({ sinceDays: z.number().int().positive() }).optional())
+    .query(async ({ ctx, input }) => {
+      const [trips, maintenances, expenses, revenues] = await Promise.all([
+        getTrips(ctx.orgId),
+        getMaintenances(ctx.orgId),
+        getExpenses(ctx.orgId),
+        getRevenues(ctx.orgId),
+      ]);
+      const src = { trips, maintenances, expenses, revenues };
+      const sinceMs = input?.sinceDays
+        ? Date.now() - input.sinceDays * 24 * 60 * 60 * 1000
+        : null;
+      const summary = computeFinanceSummary(src, sinceMs);
+      const monthly = computeMonthlySeries(src, Date.now(), 6);
+      return { ...summary, monthly };
+    }),
+
   stats: activeOrgProcedure.query(async ({ ctx }) => {
     const [vehiclesList, driversList, tripsList, maintenanceList] =
       await Promise.all([

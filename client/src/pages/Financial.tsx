@@ -171,30 +171,13 @@ export default function Financial() {
     }
   };
 
-  // Totais
-  const totalExpenses =
-    expenses?.reduce((sum: number, exp: any) => {
-      const valor = exp.valor ? parseFloat(exp.valor.toString()) : 0;
-      return sum + valor;
-    }, 0) || 0;
-
-  const totalRevenues =
-    revenues
-      ?.filter((r: any) => r.status !== "cancelado")
-      .reduce((sum: number, rev: any) => {
-        const valor = rev.valor ? parseFloat(rev.valor.toString()) : 0;
-        return sum + valor;
-      }, 0) || 0;
-
-  const balance = totalRevenues - totalExpenses;
-
-  const revenuesPending =
-    revenues
-      ?.filter((r: any) => r.status === "pendente")
-      .reduce((sum: number, rev: any) => {
-        const valor = rev.valor ? parseFloat(rev.valor.toString()) : 0;
-        return sum + valor;
-      }, 0) || 0;
+  // Totais CONSOLIDADOS (fonte única no servidor): receita = viagens concluídas
+  // + receitas manuais; despesa = manutenção concluída + despesas manuais.
+  const { data: fin } = trpc.dashboard.financeSummary.useQuery();
+  const totalRevenues = fin?.receitas ?? 0;
+  const totalExpenses = fin?.despesas ?? 0;
+  const balance = fin?.saldo ?? 0;
+  const revenuesPending = fin?.aReceber ?? 0;
 
   if (loadingExpenses || loadingRevenues) {
     return (
