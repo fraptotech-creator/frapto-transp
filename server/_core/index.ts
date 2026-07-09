@@ -108,6 +108,13 @@ async function startServer() {
     createExpressMiddleware({
       router: appRouter,
       createContext,
+      // O cliente recebe a mensagem já saneada (ver errorFormatter); aqui
+      // logamos o erro REAL para diagnóstico, sem perdê-lo.
+      onError({ error, path }) {
+        if (error.code === "INTERNAL_SERVER_ERROR") {
+          console.error(`[tRPC] ${path ?? "?"} falhou:`, error.cause ?? error);
+        }
+      },
     })
   );
   // development mode uses Vite, production mode uses static files
