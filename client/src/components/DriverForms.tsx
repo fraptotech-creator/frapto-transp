@@ -22,6 +22,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
@@ -59,6 +60,86 @@ interface DriverFormProps {
   driver?: any;
   onSuccess: () => void;
 }
+
+// Seção de ACESSO do motorista (edição): define o usuário (apelido) e cria o
+// login pra motoristas cadastrados antes do recurso; permite renomear e resetar.
+const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
+  const { data: info, refetch } = trpc.drivers.loginInfo.useQuery({ driverId });
+  const [username, setUsername] = React.useState("");
+  React.useEffect(() => {
+    if (info?.username) setUsername(info.username);
+  }, [info?.username]);
+
+  const setLogin = trpc.drivers.setLogin.useMutation({
+    onSuccess: r => {
+      toast.success(
+        r.created
+          ? `Acesso criado! Usuário salvo. Senha inicial: ${r.defaultPassword}`
+          : "Usuário atualizado."
+      );
+      refetch();
+    },
+    onError: (e: any) => showErrorDialog(e.message, "Erro no acesso"),
+  });
+  const reset = trpc.drivers.resetPassword.useMutation({
+    onSuccess: r =>
+      toast.success(
+        `Senha resetada para "${r.defaultPassword}". Troca obrigatória no próximo acesso.`
+      ),
+    onError: (e: any) => showErrorDialog(e.message, "Erro ao resetar senha"),
+  });
+
+  return (
+    <div className="rounded-lg border p-3 space-y-3">
+      <p className="text-sm font-medium">Acesso do motorista (app)</p>
+      <div className="space-y-2">
+        <Label>Usuário (apelido para login)</Label>
+        <Input
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+          placeholder="ex: alexandre"
+          autoCapitalize="none"
+        />
+        <p className="text-xs text-muted-foreground">
+          {info?.hasLogin
+            ? "Este motorista já tem acesso. Você pode trocar o usuário."
+            : "Defina um usuário para CRIAR o acesso (senha inicial 123456, troca no 1º acesso)."}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={setLogin.isPending || username.trim().length < 3}
+          onClick={() =>
+            setLogin.mutate({ driverId, username: username.trim() })
+          }
+        >
+          {setLogin.isPending
+            ? "Salvando..."
+            : info?.hasLogin
+              ? "Salvar usuário"
+              : "Criar acesso"}
+        </Button>
+        {info?.hasLogin && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={reset.isPending}
+            onClick={() => {
+              if (confirm("Resetar a senha deste motorista para 123456?")) {
+                reset.mutate({ driverId });
+              }
+            }}
+          >
+            {reset.isPending ? "Resetando..." : "Resetar senha"}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
   const queryClient = useQueryClient();
@@ -101,17 +182,6 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
     },
     onError: (error: any) => {
       showErrorDialog(error.message, "Erro ao atualizar motorista");
-    },
-  });
-
-  const resetPasswordMutation = trpc.drivers.resetPassword.useMutation({
-    onSuccess: r => {
-      toast.success(
-        `Senha resetada para "${r.defaultPassword}". O motorista troca no próximo acesso.`
-      );
-    },
-    onError: (error: any) => {
-      showErrorDialog(error.message, "Erro ao resetar senha");
     },
   });
 
@@ -176,30 +246,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
           />
         )}
 
-        {isEdit && (
-          <div className="rounded-lg border p-3 space-y-2">
-            <p className="text-sm font-medium">Acesso do motorista</p>
-            <p className="text-xs text-muted-foreground">
-              Resetar volta a senha para a padrão (<strong>123456</strong>) e
-              obriga o motorista a trocar no próximo acesso.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={resetPasswordMutation.isPending}
-              onClick={() => {
-                if (confirm("Resetar a senha deste motorista para 123456?")) {
-                  resetPasswordMutation.mutate({ driverId: driver.id });
-                }
-              }}
-            >
-              {resetPasswordMutation.isPending
-                ? "Resetando..."
-                : "Resetar senha"}
-            </Button>
-          </div>
-        )}
+        {isEdit && <DriverAccessSection driverId={driver.id} />}
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}

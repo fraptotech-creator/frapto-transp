@@ -18,6 +18,7 @@ import {
   getUserByUsername,
   getDriverUser,
   setUserPassword,
+  setUsername,
   deleteDriverUser,
   incrementSessionVersion,
   getTrips,
@@ -202,6 +203,58 @@ export const driversRouter = router({
         throw e;
       }
       return driver;
+    }),
+
+  // Informa o usuário (apelido) de login do motorista, se já houver.
+  loginInfo: activeOrgProcedure
+    .input(z.object({ driverId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const user = await getDriverUser(ctx.orgId, input.driverId);
+      return { username: user?.username ?? null, hasLogin: !!user };
+    }),
+
+  // Define/renomeia o usuário de acesso do motorista. Se ainda não tem login,
+  // CRIA o acesso (senha inicial padrão, troca obrigatória). Serve para dar
+  // acesso a motoristas cadastrados antes do recurso existir.
+  setLogin: activeOrgProcedure
+    .input(
+      z.object({ driverId: z.number(), username: z.string().min(3).max(64) })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const driver = await getDriverById(ctx.orgId, input.driverId);
+      if (!driver) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Motorista não encontrado.",
+        });
+      }
+      const username = input.username.toLowerCase().trim();
+      // Usuário já usado por OUTRO login?
+      const taken = await getUserByUsername(username);
+      const current = await getDriverUser(ctx.orgId, input.driverId);
+      if (taken && taken.driverId !== input.driverId) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Esse usuário já está em uso. Escolha outro.",
+        });
+      }
+      if (current) {
+        await setUsername(current.openId, username);
+        return { created: false } as const;
+      }
+      const passwordHash = await bcrypt.hash(DRIVER_DEFAULT_PASSWORD, 10);
+      await createDriverUser({
+        orgId: ctx.orgId,
+        driverId: input.driverId,
+        openId: `driver_${randomBytes(16).toString("hex")}`,
+        username,
+        passwordHash,
+        name: driver.nome,
+      });
+      return {
+        created: true,
+        defaultPassword: DRIVER_DEFAULT_PASSWORD,
+      } as const;
     }),
 
   // Admin reseta a senha do motorista para a padrão (e o obriga a trocar);

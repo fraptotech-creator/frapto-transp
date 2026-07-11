@@ -111,6 +111,13 @@ export async function getDriverUser(orgId: number, driverId: number) {
   return result[0];
 }
 
+// Atualiza o usuário (apelido de login) de um login existente.
+export async function setUsername(openId: string, username: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ username }).where(eq(users.openId, openId));
+}
+
 // Define a senha de um usuário (troca no 1º acesso / reset). mustChange controla
 // se ele será obrigado a trocar no próximo login.
 export async function setUserPassword(
