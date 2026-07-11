@@ -212,6 +212,7 @@ export const tripsRouter = router({
         origem: z.string().min(1),
         destino: z.string().min(1),
         dataPartida: z.date(),
+        previsaoChegada: z.date().optional(),
         distancia: z.string().optional(),
         carga: z.string().optional(),
         pesoTotal: z.string().optional(),
@@ -231,6 +232,7 @@ export const tripsRouter = router({
         origem: input.origem,
         destino: input.destino,
         dataPartida: input.dataPartida,
+        previsaoChegada: input.previsaoChegada ?? null,
         status: "planejada",
         distancia: parseNumericString(input.distancia),
         carga: input.carga || null,
@@ -250,6 +252,7 @@ export const tripsRouter = router({
         origem: z.string().optional(),
         destino: z.string().optional(),
         dataPartida: z.date().optional(),
+        previsaoChegada: z.date().optional(),
         dataChegada: z.date().optional(),
         status: z
           .enum(["planejada", "em_andamento", "concluida", "cancelada"])

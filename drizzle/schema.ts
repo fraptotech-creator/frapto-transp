@@ -157,6 +157,8 @@ export const trips = mysqlTable(
     origem: varchar("origem", { length: 150 }).notNull(),
     destino: varchar("destino", { length: 150 }).notNull(),
     dataPartida: timestamp("dataPartida").notNull(),
+    // Previsão de chegada no cliente (planejada); dataChegada é a chegada REAL.
+    previsaoChegada: timestamp("previsaoChegada"),
     dataChegada: timestamp("dataChegada"),
     status: mysqlEnum("status", [
       "planejada",

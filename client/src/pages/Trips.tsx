@@ -191,10 +191,22 @@ export default function Trips() {
                         )}
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {new Date(trip.dataPartida).toLocaleDateString(
-                            "pt-BR"
-                          )}
+                          Partida:{" "}
+                          {new Date(trip.dataPartida).toLocaleString("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
                         </span>
+                        {trip.previsaoChegada && (
+                          <span className="flex items-center gap-1">
+                            <Navigation className="w-3 h-3" />
+                            Chegada prev.:{" "}
+                            {new Date(trip.previsaoChegada).toLocaleString(
+                              "pt-BR",
+                              { dateStyle: "short", timeStyle: "short" }
+                            )}
+                          </span>
+                        )}
                       </div>
                     </div>
 

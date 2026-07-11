@@ -53,6 +53,7 @@ const tripSchema = z.object({
   origem: z.string().min(1, "A origem é obrigatória."),
   destino: z.string().min(1, "O destino é obrigatório."),
   dataPartida: z.string().min(1, "A data de partida é obrigatória."),
+  previsaoChegada: z.string().optional(),
   status: z.enum(["planejada", "em_andamento", "concluida", "cancelada"]),
   distancia: z.string().optional(),
   carga: z.string().optional(),
@@ -67,6 +68,14 @@ interface TripFormProps {
   trip?: any;
   onSuccess: () => void;
 }
+
+// Formata uma data para o input datetime-local (yyyy-MM-ddTHH:mm) em hora LOCAL.
+const toLocalInput = (d: string | Date | null | undefined): string => {
+  if (!d) return "";
+  const dt = new Date(d);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+};
 
 // Gera um número de viagem padrão sugerido (ex.: V-20260427-123)
 const suggestTripNumber = () => {
@@ -95,9 +104,8 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
       motoristaId: trip?.motoristaId?.toString() || "",
       origem: trip?.origem || "",
       destino: trip?.destino || "",
-      dataPartida: trip?.dataPartida
-        ? new Date(trip.dataPartida).toISOString().split("T")[0]
-        : "",
+      dataPartida: toLocalInput(trip?.dataPartida),
+      previsaoChegada: toLocalInput(trip?.previsaoChegada),
       status: trip?.status || "planejada",
       distancia: trip?.distancia?.toString() || "",
       carga: trip?.carga || "",
@@ -209,6 +217,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
         origem: values.origem,
         destino: values.destino,
         dataPartida: new Date(values.dataPartida),
+        previsaoChegada: values.previsaoChegada
+          ? new Date(values.previsaoChegada)
+          : undefined,
         status: values.status,
         distancia: values.distancia || undefined,
         carga: values.carga || undefined,
@@ -225,6 +236,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
         origem: values.origem,
         destino: values.destino,
         dataPartida: new Date(values.dataPartida),
+        previsaoChegada: values.previsaoChegada
+          ? new Date(values.previsaoChegada)
+          : undefined,
         distancia: values.distancia || undefined,
         carga: values.carga || undefined,
         pesoTotal: values.pesoTotal || undefined,
@@ -361,14 +375,29 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
             name="dataPartida"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Data de Partida</FormLabel>
+                <FormLabel>Data e Hora de Partida</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <Input type="datetime-local" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="previsaoChegada"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Previsão de Chegada (cliente)</FormLabel>
+                <FormControl>
+                  <Input type="datetime-local" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="status"
