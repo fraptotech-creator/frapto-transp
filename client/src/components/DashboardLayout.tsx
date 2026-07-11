@@ -90,6 +90,12 @@ export default function DashboardLayout({
     return <Landing />;
   }
 
+  // Motorista não usa o painel de gestão — vai para a área própria.
+  if (user.orgRole === "driver") {
+    if (typeof window !== "undefined") window.location.href = "/motorista";
+    return <DashboardLayoutSkeleton />;
+  }
+
   // Logado: verifica a assinatura antes de liberar o sistema.
   return <GatedApp>{children}</GatedApp>;
 }

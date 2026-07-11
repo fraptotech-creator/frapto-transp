@@ -7,6 +7,7 @@ import { lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
+import DriverApp from "./pages/DriverApp";
 import Dashboard from "./pages/Dashboard";
 import Vehicles from "./pages/Vehicles";
 import Drivers from "./pages/Drivers";
@@ -64,9 +65,15 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <ErrorDialogHost />
-          <DashboardLayout>
-            <Router />
-          </DashboardLayout>
+          <Switch>
+            {/* Área do motorista: login e chrome próprios, fora do dashboard. */}
+            <Route path="/motorista" component={DriverApp} />
+            <Route>
+              <DashboardLayout>
+                <Router />
+              </DashboardLayout>
+            </Route>
+          </Switch>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
