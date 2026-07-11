@@ -207,6 +207,19 @@ export default function Trips() {
                             )}
                           </span>
                         )}
+                        {trip.dataChegada && (
+                          <span className="flex items-center gap-1 text-emerald-400">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Chegada:{" "}
+                            {new Date(trip.dataChegada).toLocaleString(
+                              "pt-BR",
+                              {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              }
+                            )}
+                          </span>
+                        )}
                       </div>
                     </div>
 
