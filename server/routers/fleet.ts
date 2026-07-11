@@ -27,7 +27,11 @@ import {
   getRevenues,
 } from "../db";
 import { isOilChange, computeOilStatus } from "../_core/oil";
-import { computeFinanceSummary, computeMonthlySeries } from "../_core/finance";
+import {
+  computeFinanceSummary,
+  computeMonthlySeries,
+  computeFinanceLedger,
+} from "../_core/finance";
 import type {
   InsertVehicle,
   InsertDriver,
@@ -419,7 +423,8 @@ export const dashboardRouter = router({
         : null;
       const summary = computeFinanceSummary(src, sinceMs);
       const monthly = computeMonthlySeries(src, Date.now(), 6);
-      return { ...summary, monthly };
+      const ledger = computeFinanceLedger(src);
+      return { ...summary, monthly, ledger };
     }),
 
   stats: activeOrgProcedure.query(async ({ ctx }) => {

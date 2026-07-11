@@ -88,6 +88,138 @@ export function computeFinanceSummary(
   };
 }
 
+// ─── Extrato itemizado (fonte única das LISTAS do Financeiro) ────────────────
+// Junta lançamentos manuais + viagens (receita) + manutenção concluída (despesa)
+// numa lista única, cada item marcado com sua origem e se é editável (só os
+// manuais podem ser apagados; viagem/manutenção são geridos nas telas próprias).
+
+export type LedgerSources = {
+  trips: {
+    id: number;
+    numeroViagem: string;
+    status: string;
+    valor: MoneyLike;
+    origem: string;
+    destino: string;
+    dataPartida: DateLike;
+  }[];
+  maintenances: {
+    id: number;
+    status: string;
+    tipo: string;
+    custo: MoneyLike;
+    dataRealizada: DateLike;
+    dataPrevista: DateLike;
+  }[];
+  expenses: {
+    id: number;
+    tipo: string;
+    descricao: string;
+    valor: MoneyLike;
+    data: DateLike;
+  }[];
+  revenues: {
+    id: number;
+    tipo: string;
+    descricao: string;
+    status: string;
+    valor: MoneyLike;
+    data: DateLike;
+  }[];
+};
+
+export type LedgerEntry = {
+  kind: "receita" | "despesa";
+  origem: "manual" | "viagem" | "manutencao";
+  categoria: string; // "Viagem" | "Manutenção" | tipo do lançamento manual
+  refId: number;
+  descricao: string;
+  data: string; // ISO — pronto para ordenar/filtrar no cliente
+  valor: number;
+  realizado: boolean; // receita recebida/viagem concluída; despesa sempre paga
+  editable: boolean; // só manuais podem ser apagados
+  status: string; // rótulo curto de exibição
+};
+
+const toIso = (d: DateLike): string => (d ? new Date(d).toISOString() : "");
+
+export function computeFinanceLedger(src: LedgerSources): LedgerEntry[] {
+  const entries: LedgerEntry[] = [];
+
+  for (const t of src.trips) {
+    if (t.status === "cancelada") continue;
+    const valor = num(t.valor);
+    if (valor === 0) continue;
+    const realizado = t.status === "concluida";
+    entries.push({
+      kind: "receita",
+      origem: "viagem",
+      categoria: "Viagem",
+      refId: t.id,
+      descricao: `Viagem ${t.numeroViagem}: ${t.origem} → ${t.destino}`,
+      data: toIso(t.dataPartida),
+      valor,
+      realizado,
+      editable: false,
+      status: realizado ? "Recebido" : "A receber",
+    });
+  }
+
+  for (const r of src.revenues) {
+    if (r.status === "cancelado") continue;
+    entries.push({
+      kind: "receita",
+      origem: "manual",
+      categoria: r.tipo,
+      refId: r.id,
+      descricao: r.descricao,
+      data: toIso(r.data),
+      valor: num(r.valor),
+      realizado: r.status === "recebido",
+      editable: true,
+      status: r.status === "recebido" ? "Recebido" : "Pendente",
+    });
+  }
+
+  for (const m of src.maintenances) {
+    if (m.status !== "concluida") continue;
+    const valor = num(m.custo);
+    if (valor === 0) continue;
+    entries.push({
+      kind: "despesa",
+      origem: "manutencao",
+      categoria: "Manutenção",
+      refId: m.id,
+      descricao: `Manutenção: ${m.tipo}`,
+      data: toIso(m.dataRealizada || m.dataPrevista),
+      valor,
+      realizado: true,
+      editable: false,
+      status: "Pago",
+    });
+  }
+
+  for (const e of src.expenses) {
+    entries.push({
+      kind: "despesa",
+      origem: "manual",
+      categoria: e.tipo,
+      refId: e.id,
+      descricao: e.descricao,
+      data: toIso(e.data),
+      valor: num(e.valor),
+      realizado: true,
+      editable: true,
+      status: "Pago",
+    });
+  }
+
+  // Mais recentes primeiro.
+  return entries.sort((a, b) =>
+    a.data < b.data ? 1 : a.data > b.data ? -1 : 0
+  );
+}
+
 export type MonthPoint = {
   month: string;
   receita: number;

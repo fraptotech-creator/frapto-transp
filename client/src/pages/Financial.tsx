@@ -73,20 +73,12 @@ const emptyRevenue = {
   observacoes: "",
 };
 
-const statusLabel = (s: string) =>
-  s === "recebido" ? "Recebido" : s === "pendente" ? "Pendente" : "Cancelado";
-
 export default function Financial() {
   const {
-    data: expenses,
-    isLoading: loadingExpenses,
-    refetch: refetchExpenses,
-  } = trpc.expenses.list.useQuery();
-  const {
-    data: revenues,
-    isLoading: loadingRevenues,
-    refetch: refetchRevenues,
-  } = trpc.revenues.list.useQuery();
+    data: fin,
+    isLoading,
+    refetch: refetchFin,
+  } = trpc.dashboard.financeSummary.useQuery();
 
   const createExpenseMutation = trpc.expenses.create.useMutation();
   const createRevenueMutation = trpc.revenues.create.useMutation();
@@ -98,6 +90,10 @@ export default function Financial() {
 
   const [expenseForm, setExpenseForm] = useState(emptyExpense);
   const [revenueForm, setRevenueForm] = useState(emptyRevenue);
+
+  // Filtro de data (yyyy-mm-dd) — aplicado às listas e aos totais.
+  const [dataDe, setDataDe] = useState("");
+  const [dataAte, setDataAte] = useState("");
 
   const handleCreateExpense = async () => {
     if (!expenseForm.descricao || !expenseForm.valor || !expenseForm.data) {
@@ -117,7 +113,7 @@ export default function Financial() {
       toast.success("Despesa criada com sucesso!");
       setExpenseDialogOpen(false);
       setExpenseForm(emptyExpense);
-      refetchExpenses();
+      refetchFin();
     } catch (error: any) {
       showErrorDialog(error?.message || "Erro ao criar despesa", "Erro");
     }
@@ -143,7 +139,7 @@ export default function Financial() {
       toast.success("Receita criada com sucesso!");
       setRevenueDialogOpen(false);
       setRevenueForm(emptyRevenue);
-      refetchRevenues();
+      refetchFin();
     } catch (error: any) {
       showErrorDialog(error?.message || "Erro ao criar receita", "Erro");
     }
@@ -154,7 +150,7 @@ export default function Financial() {
     try {
       await deleteExpenseMutation.mutateAsync({ id });
       toast.success("Despesa excluída com sucesso!");
-      refetchExpenses();
+      refetchFin();
     } catch (error: any) {
       showErrorDialog(error?.message || "Erro ao excluir despesa", "Erro");
     }
@@ -165,21 +161,35 @@ export default function Financial() {
     try {
       await deleteRevenueMutation.mutateAsync({ id });
       toast.success("Receita excluída com sucesso!");
-      refetchRevenues();
+      refetchFin();
     } catch (error: any) {
       showErrorDialog(error?.message || "Erro ao excluir receita", "Erro");
     }
   };
 
-  // Totais CONSOLIDADOS (fonte única no servidor): receita = viagens concluídas
-  // + receitas manuais; despesa = manutenção concluída + despesas manuais.
-  const { data: fin } = trpc.dashboard.financeSummary.useQuery();
-  const totalRevenues = fin?.receitas ?? 0;
-  const totalExpenses = fin?.despesas ?? 0;
-  const balance = fin?.saldo ?? 0;
-  const revenuesPending = fin?.aReceber ?? 0;
+  // Extrato itemizado consolidado (viagens + manutenções + lançamentos manuais),
+  // filtrado por data. Os totais dos cards acompanham o filtro.
+  const inRange = (iso: string) => {
+    if (!iso) return false;
+    const d = iso.slice(0, 10);
+    if (dataDe && d < dataDe) return false;
+    if (dataAte && d > dataAte) return false;
+    return true;
+  };
+  const ledger = (fin?.ledger ?? []).filter(e => inRange(e.data));
+  const receitaItems = ledger.filter(e => e.kind === "receita");
+  const despesaItems = ledger.filter(e => e.kind === "despesa");
 
-  if (loadingExpenses || loadingRevenues) {
+  const totalRevenues = receitaItems
+    .filter(e => e.realizado)
+    .reduce((s, e) => s + e.valor, 0);
+  const revenuesPending = receitaItems
+    .filter(e => !e.realizado)
+    .reduce((s, e) => s + e.valor, 0);
+  const totalExpenses = despesaItems.reduce((s, e) => s + e.valor, 0);
+  const balance = totalRevenues - totalExpenses;
+
+  if (isLoading) {
     return (
       <div className="p-4 space-y-4">
         {[...Array(4)].map((_, i) => (
@@ -248,6 +258,40 @@ export default function Financial() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Filtro de data */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <Label className="text-xs text-muted-foreground">De</Label>
+          <Input
+            type="date"
+            value={dataDe}
+            onChange={e => setDataDe(e.target.value)}
+            className="w-[160px]"
+          />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Até</Label>
+          <Input
+            type="date"
+            value={dataAte}
+            onChange={e => setDataAte(e.target.value)}
+            className="w-[160px]"
+          />
+        </div>
+        {(dataDe || dataAte) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setDataDe("");
+              setDataAte("");
+            }}
+          >
+            Limpar filtro
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="expenses" className="w-full">
@@ -407,29 +451,36 @@ export default function Financial() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {expenses && expenses.length > 0 ? (
-                expenses.map((exp: any) => (
-                  <TableRow key={exp.id}>
+              {despesaItems.length > 0 ? (
+                despesaItems.map(item => (
+                  <TableRow key={`${item.origem}-${item.refId}`}>
                     <TableCell>
-                      {new Date(exp.data).toLocaleDateString("pt-BR")}
+                      {new Date(item.data).toLocaleDateString("pt-BR")}
                     </TableCell>
-                    <TableCell className="capitalize">{exp.tipo}</TableCell>
-                    <TableCell>{exp.descricao}</TableCell>
+                    <TableCell className="capitalize">
+                      {item.categoria}
+                    </TableCell>
+                    <TableCell>{item.descricao}</TableCell>
                     <TableCell className="text-rose-600 font-medium">
                       R${" "}
-                      {parseFloat(exp.valor.toString()).toLocaleString(
-                        "pt-BR",
-                        { minimumFractionDigits: 2 }
-                      )}
+                      {item.valor.toLocaleString("pt-BR", {
+                        minimumFractionDigits: 2,
+                      })}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteExpense(exp.id)}
-                      >
-                        <Trash2 className="w-4 h-4 text-rose-600" />
-                      </Button>
+                      {item.editable ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteExpense(item.refId)}
+                        >
+                          <Trash2 className="w-4 h-4 text-rose-600" />
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          via Manutenção
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -439,7 +490,7 @@ export default function Financial() {
                     colSpan={5}
                     className="text-center text-muted-foreground py-6"
                   >
-                    Nenhuma despesa cadastrada
+                    Nenhuma despesa no período
                   </TableCell>
                 </TableRow>
               )}
@@ -630,42 +681,47 @@ export default function Financial() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {revenues && revenues.length > 0 ? (
-                revenues.map((rev: any) => (
-                  <TableRow key={rev.id}>
+              {receitaItems.length > 0 ? (
+                receitaItems.map(item => (
+                  <TableRow key={`${item.origem}-${item.refId}`}>
                     <TableCell>
-                      {new Date(rev.data).toLocaleDateString("pt-BR")}
+                      {new Date(item.data).toLocaleDateString("pt-BR")}
                     </TableCell>
-                    <TableCell className="capitalize">{rev.tipo}</TableCell>
-                    <TableCell>{rev.descricao}</TableCell>
+                    <TableCell className="capitalize">
+                      {item.categoria}
+                    </TableCell>
+                    <TableCell>{item.descricao}</TableCell>
                     <TableCell className="text-emerald-600 font-medium">
                       R${" "}
-                      {parseFloat(rev.valor.toString()).toLocaleString(
-                        "pt-BR",
-                        { minimumFractionDigits: 2 }
-                      )}
+                      {item.valor.toLocaleString("pt-BR", {
+                        minimumFractionDigits: 2,
+                      })}
                     </TableCell>
                     <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs ${
-                          rev.status === "recebido"
+                          item.realizado
                             ? "bg-emerald-100 text-emerald-700"
-                            : rev.status === "cancelado"
-                              ? "bg-rose-100 text-rose-700"
-                              : "bg-amber-100 text-amber-700"
+                            : "bg-amber-100 text-amber-700"
                         }`}
                       >
-                        {statusLabel(rev.status)}
+                        {item.status}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteRevenue(rev.id)}
-                      >
-                        <Trash2 className="w-4 h-4 text-rose-600" />
-                      </Button>
+                      {item.editable ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteRevenue(item.refId)}
+                        >
+                          <Trash2 className="w-4 h-4 text-rose-600" />
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          via Viagens
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -675,7 +731,7 @@ export default function Financial() {
                     colSpan={6}
                     className="text-center text-muted-foreground py-6"
                   >
-                    Nenhuma receita cadastrada
+                    Nenhuma receita no período
                   </TableCell>
                 </TableRow>
               )}
