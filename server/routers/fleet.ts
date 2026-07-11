@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { activeOrgProcedure, router } from "../_core/trpc";
 import {
   getVehicles,
@@ -11,6 +14,12 @@ import {
   createDriver,
   updateDriver,
   deleteDriver,
+  createDriverUser,
+  getUserByUsername,
+  getDriverUser,
+  setUserPassword,
+  deleteDriverUser,
+  incrementSessionVersion,
   getTrips,
   getTripById,
   createTrip,
@@ -122,6 +131,9 @@ export const vehiclesRouter = router({
     .mutation(({ ctx, input }) => deleteVehicle(ctx.orgId, input.id)),
 });
 
+// Senha inicial do motorista; ele é obrigado a trocar no 1º acesso.
+export const DRIVER_DEFAULT_PASSWORD = "123456";
+
 export const driversRouter = router({
   list: activeOrgProcedure.query(({ ctx }) => getDrivers(ctx.orgId)),
 
@@ -141,10 +153,20 @@ export const driversRouter = router({
         cnhVencimento: z.date(),
         endereco: z.string().optional(),
         observacoes: z.string().optional(),
+        // Login do motorista (usuário; senha inicial é a padrão).
+        username: z.string().min(3).max(64),
       })
     )
-    .mutation(({ ctx, input }) =>
-      createDriver(ctx.orgId, {
+    .mutation(async ({ ctx, input }) => {
+      const username = input.username.toLowerCase().trim();
+      // Confere disponibilidade ANTES de criar o motorista (evita órfão).
+      if (await getUserByUsername(username)) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Esse usuário já está em uso. Escolha outro.",
+        });
+      }
+      const driver = await createDriver(ctx.orgId, {
         nome: input.nome,
         cpf: onlyDigits(input.cpf),
         email: input.email || null,
@@ -157,8 +179,48 @@ export const driversRouter = router({
         dataAdmissao: new Date(),
         endereco: input.endereco || null,
         observacoes: input.observacoes || null,
-      })
-    ),
+      });
+      if (!driver) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Falha ao cadastrar motorista.",
+        });
+      }
+      try {
+        const passwordHash = await bcrypt.hash(DRIVER_DEFAULT_PASSWORD, 10);
+        await createDriverUser({
+          orgId: ctx.orgId,
+          driverId: driver.id,
+          openId: `driver_${randomBytes(16).toString("hex")}`,
+          username,
+          passwordHash,
+          name: input.nome,
+        });
+      } catch (e) {
+        // Falhou o login (ex.: corrida de username) → desfaz o motorista.
+        await deleteDriver(ctx.orgId, driver.id);
+        throw e;
+      }
+      return driver;
+    }),
+
+  // Admin reseta a senha do motorista para a padrão (e o obriga a trocar);
+  // derruba qualquer sessão ativa dele.
+  resetPassword: activeOrgProcedure
+    .input(z.object({ driverId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await getDriverUser(ctx.orgId, input.driverId);
+      if (!user) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Este motorista não tem login.",
+        });
+      }
+      const hash = await bcrypt.hash(DRIVER_DEFAULT_PASSWORD, 10);
+      await setUserPassword(user.openId, hash, true);
+      await incrementSessionVersion(user.openId);
+      return { defaultPassword: DRIVER_DEFAULT_PASSWORD } as const;
+    }),
 
   update: activeOrgProcedure
     .input(
@@ -193,7 +255,11 @@ export const driversRouter = router({
 
   delete: activeOrgProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(({ ctx, input }) => deleteDriver(ctx.orgId, input.id)),
+    .mutation(async ({ ctx, input }) => {
+      // Apaga também o login vinculado (se houver).
+      await deleteDriverUser(ctx.orgId, input.id);
+      return deleteDriver(ctx.orgId, input.id);
+    }),
 });
 
 export const tripsRouter = router({

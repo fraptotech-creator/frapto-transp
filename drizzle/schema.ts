@@ -50,10 +50,16 @@ export const users = mysqlTable("users", {
   orgId: int("orgId"),
   name: text("name"),
   email: varchar("email", { length: 320 }).unique(),
+  // Login alternativo por usuário (para motoristas, que podem não ter email).
+  username: varchar("username", { length: 64 }).unique(),
   passwordHash: text("passwordHash"),
   loginMethod: varchar("loginMethod", { length: 64 }),
+  // Se este usuário é o login de um motorista, aponta para o cadastro dele.
+  driverId: int("driverId"),
+  // Força troca de senha no próximo login (1º acesso / após reset pelo admin).
+  mustChangePassword: boolean("mustChangePassword").default(false).notNull(),
   // Papel dentro da organização.
-  orgRole: mysqlEnum("orgRole", ["owner", "member"])
+  orgRole: mysqlEnum("orgRole", ["owner", "member", "driver"])
     .default("member")
     .notNull(),
   // Papel global do app (super-admin da plataforma, se necessário).

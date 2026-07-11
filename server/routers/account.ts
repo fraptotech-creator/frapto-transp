@@ -14,8 +14,10 @@ import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import {
   getUserByEmail,
+  getUserByUsername,
   createOrgAndOwner,
   incrementSessionVersion,
+  setUserPassword,
   getOrganization,
 } from "../db";
 import {
@@ -114,6 +116,70 @@ export const authRouter = router({
         ...getSessionCookieOptions(ctx.req),
         maxAge: ONE_YEAR_MS,
       });
+      return { success: true } as const;
+    }),
+
+  // Login do MOTORISTA por usuário + senha (separado do login por email).
+  loginDriver: publicProcedure
+    .input(
+      z.object({
+        username: z.string().min(1, "Informe o usuário"),
+        password: z.string().min(1, "Informe a senha"),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const username = input.username.toLowerCase().trim();
+      const user = await getUserByUsername(username);
+      const invalid = new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Usuário ou senha inválidos.",
+      });
+      if (!user || !user.passwordHash || user.orgRole !== "driver")
+        throw invalid;
+      const ok = await bcrypt.compare(input.password, user.passwordHash);
+      if (!ok) throw invalid;
+
+      const token = await sdk.createSessionToken(user.openId, {
+        name: user.name ?? "",
+        sessionVersion: user.sessionVersion,
+        expiresInMs: ONE_YEAR_MS,
+      });
+      ctx.res.cookie(COOKIE_NAME, token, {
+        ...getSessionCookieOptions(ctx.req),
+        maxAge: ONE_YEAR_MS,
+      });
+      return { success: true } as const;
+    }),
+
+  // Troca da própria senha (1º acesso do motorista ou a qualquer momento).
+  changePassword: protectedProcedure
+    .input(
+      z.object({
+        currentPassword: z.string().min(1, "Informe a senha atual"),
+        newPassword: z
+          .string()
+          .min(4, "A nova senha precisa de ao menos 4 caracteres"),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.user.passwordHash) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Conta sem senha definida.",
+        });
+      }
+      const ok = await bcrypt.compare(
+        input.currentPassword,
+        ctx.user.passwordHash
+      );
+      if (!ok) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Senha atual incorreta.",
+        });
+      }
+      const hash = await bcrypt.hash(input.newPassword, 10);
+      await setUserPassword(ctx.user.openId, hash, false);
       return { success: true } as const;
     }),
 

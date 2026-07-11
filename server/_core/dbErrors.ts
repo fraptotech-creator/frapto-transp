@@ -38,6 +38,7 @@ const DUP_FIELD_MESSAGES: { key: RegExp; message: string }[] = [
     key: /numero/i,
     message: "Já existe uma viagem com esse número nesta empresa.",
   },
+  { key: /username/i, message: "Esse usuário já está em uso. Escolha outro." },
   { key: /email/i, message: "Esse e-mail já está em uso." },
 ];
 

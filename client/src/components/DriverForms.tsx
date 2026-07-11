@@ -49,6 +49,8 @@ const driverSchema = z.object({
   cnhVencimento: z.string().min(1, "O vencimento da CNH é obrigatório."),
   endereco: z.string().optional(),
   observacoes: z.string().optional(),
+  // Login do motorista (só no cadastro).
+  username: z.string().optional(),
 });
 
 type DriverFormValues = z.infer<typeof driverSchema>;
@@ -76,6 +78,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
         : "",
       endereco: driver?.endereco || "",
       observacoes: driver?.observacoes || "",
+      username: "",
     },
   });
 
@@ -101,17 +104,38 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
     },
   });
 
+  const resetPasswordMutation = trpc.drivers.resetPassword.useMutation({
+    onSuccess: r => {
+      toast.success(
+        `Senha resetada para "${r.defaultPassword}". O motorista troca no próximo acesso.`
+      );
+    },
+    onError: (error: any) => {
+      showErrorDialog(error.message, "Erro ao resetar senha");
+    },
+  });
+
   const onSubmit = (values: DriverFormValues) => {
-    const dataToSubmit = {
+    const base = {
       ...values,
       cnhVencimento: new Date(values.cnhVencimento),
       email: values.email || undefined,
     };
 
     if (isEdit) {
-      updateMutation.mutate({ id: driver.id, ...dataToSubmit });
+      // username não é editável aqui (login já criado).
+      const { username: _u, ...editData } = base;
+      updateMutation.mutate({ id: driver.id, ...editData });
     } else {
-      createMutation.mutate(dataToSubmit);
+      const username = (values.username || "").trim();
+      if (username.length < 3) {
+        showErrorDialog(
+          "Defina um usuário (mín. 3 caracteres) para o login do motorista.",
+          "Usuário obrigatório"
+        );
+        return;
+      }
+      createMutation.mutate({ ...base, username });
     }
   };
 
@@ -131,6 +155,51 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
             </FormItem>
           )}
         />
+
+        {!isEdit && (
+          <FormField
+            control={form.control}
+            name="username"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Usuário de acesso do motorista</FormLabel>
+                <FormControl>
+                  <Input placeholder="ex: joao.silva" {...field} />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">
+                  Senha inicial: <strong>123456</strong> — o motorista troca no
+                  1º acesso (na área do motorista).
+                </p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {isEdit && (
+          <div className="rounded-lg border p-3 space-y-2">
+            <p className="text-sm font-medium">Acesso do motorista</p>
+            <p className="text-xs text-muted-foreground">
+              Resetar volta a senha para a padrão (<strong>123456</strong>) e
+              obriga o motorista a trocar no próximo acesso.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={resetPasswordMutation.isPending}
+              onClick={() => {
+                if (confirm("Resetar a senha deste motorista para 123456?")) {
+                  resetPasswordMutation.mutate({ driverId: driver.id });
+                }
+              }}
+            >
+              {resetPasswordMutation.isPending
+                ? "Resetando..."
+                : "Resetar senha"}
+            </Button>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}

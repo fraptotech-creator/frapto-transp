@@ -67,6 +67,8 @@ export const adminProcedure = t.procedure.use(
 
 // Exige usuário autenticado E vinculado a uma organização; injeta ctx.orgId
 // (não-nulo) para o escopo multi-tenant de todas as consultas.
+// SANDBOX: motorista (orgRole "driver") é BLOQUEADO aqui — ele só acessa a área
+// própria (driverProcedure). Isso fecha, no servidor, gestão/valor/financeiro.
 export const orgProcedure = protectedProcedure.use(async opts => {
   const { ctx, next } = opts;
   if (!ctx.user.orgId) {
@@ -75,7 +77,37 @@ export const orgProcedure = protectedProcedure.use(async opts => {
       message: "Usuário sem organização.",
     });
   }
+  if (ctx.user.orgRole === "driver") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Acesso restrito à área do motorista.",
+    });
+  }
   return next({ ctx: { ...ctx, orgId: ctx.user.orgId } });
+});
+
+// Área do MOTORISTA: exige papel "driver" + vínculo com um motorista + org com
+// assinatura ativa. Injeta orgId e driverId (ambos não-nulos). Cadeia separada
+// de orgProcedure de propósito, para o motorista ficar sandboxed.
+export const driverProcedure = protectedProcedure.use(async opts => {
+  const { ctx, next } = opts;
+  if (ctx.user.orgRole !== "driver" || !ctx.user.orgId || !ctx.user.driverId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Acesso restrito ao motorista.",
+    });
+  }
+  const org = await getOrganization(ctx.user.orgId);
+  const status = org?.subscriptionStatus;
+  if (!(status === "active" || status === "trialing")) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: SUBSCRIPTION_REQUIRED_MSG,
+    });
+  }
+  return next({
+    ctx: { ...ctx, orgId: ctx.user.orgId, driverId: ctx.user.driverId },
+  });
 });
 
 // Como orgProcedure, mas exige que o usuário seja DONO da organização
