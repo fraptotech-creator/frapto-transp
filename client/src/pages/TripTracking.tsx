@@ -1,58 +1,73 @@
-/// <reference types="google.maps" />
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, MapPin, Truck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, MapPin, Truck, Navigation } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useGoogleMaps } from "@/hooks/useGoogleMaps";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { wazeUrl, googleMapsDirUrl } from "@/lib/nav";
 
 export default function TripTracking() {
   const [, params] = useRoute("/trips/:id/tracking");
   const [, setLocation] = useLocation();
   const tripId = params?.id ? parseInt(params.id, 10) : 0;
 
-  const { data: config } = trpc.config.get.useQuery();
   const { data: trip, isLoading } = trpc.trips.getById.useQuery(
     { id: tripId },
     { enabled: tripId > 0 }
   );
 
-  const { loaded, error: mapsError } = useGoogleMaps(
-    config?.googleMapsApiKey || undefined
+  const { data: route, isLoading: routeLoading } = trpc.geo.route.useQuery(
+    { origem: trip?.origem ?? "", destino: trip?.destino ?? "" },
+    { enabled: !!trip?.origem && !!trip?.destino }
   );
+
   const mapRef = useRef<HTMLDivElement>(null);
-  const [routeError, setRouteError] = useState(false);
+  const mapObj = useRef<L.Map | null>(null);
+  const overlay = useRef<L.LayerGroup | null>(null);
 
+  // Desmonta o mapa ao sair da tela.
   useEffect(() => {
-    if (!loaded || !trip || !mapRef.current) return;
-    setRouteError(false);
-    const map = new google.maps.Map(mapRef.current, {
-      zoom: 5,
-      center: { lat: -15.78, lng: -47.93 }, // Brasil
-      disableDefaultUI: false,
-      streetViewControl: false,
-      mapTypeControl: false,
-    });
-    const renderer = new google.maps.DirectionsRenderer({ map });
-    const service = new google.maps.DirectionsService();
-    service.route(
-      {
-        origin: trip.origem,
-        destination: trip.destino,
-        travelMode: google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
-          renderer.setDirections(result);
-        } else {
-          setRouteError(true);
-        }
+    return () => {
+      if (mapObj.current) {
+        mapObj.current.remove();
+        mapObj.current = null;
       }
-    );
-  }, [loaded, trip]);
+    };
+  }, []);
 
-  const mapsConfigured = config?.mapsConfigured ?? false;
+  // Desenha origem, destino e a rota quando os dados chegam.
+  useEffect(() => {
+    if (!route || !route.ok || !mapRef.current) return;
+    if (!mapObj.current) {
+      mapObj.current = L.map(mapRef.current);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap",
+        maxZoom: 19,
+      }).addTo(mapObj.current);
+    }
+    const map = mapObj.current;
+    if (!overlay.current) overlay.current = L.layerGroup().addTo(map);
+    overlay.current.clearLayers();
+
+    const line = L.polyline(route.geometry, { color: "#6366f1", weight: 5 });
+    const origem = L.circleMarker([route.origin.lat, route.origin.lng], {
+      color: "#10b981",
+      fillColor: "#10b981",
+      fillOpacity: 1,
+      radius: 8,
+    }).bindPopup("Origem");
+    const destino = L.circleMarker(
+      [route.destination.lat, route.destination.lng],
+      { color: "#ef4444", fillColor: "#ef4444", fillOpacity: 1, radius: 8 }
+    ).bindPopup("Destino");
+
+    overlay.current.addLayer(line);
+    overlay.current.addLayer(origem);
+    overlay.current.addLayer(destino);
+    map.fitBounds(line.getBounds(), { padding: [30, 30] });
+  }, [route]);
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
@@ -72,16 +87,36 @@ export default function TripTracking() {
           </CardTitle>
         </CardHeader>
         {trip && (
-          <CardContent className="grid gap-2 text-sm sm:grid-cols-3">
-            <p>
-              <strong>Origem:</strong> {trip.origem}
-            </p>
-            <p>
-              <strong>Destino:</strong> {trip.destino}
-            </p>
-            <p>
-              <strong>Status:</strong> {trip.status}
-            </p>
+          <CardContent className="space-y-3">
+            <div className="grid gap-2 text-sm sm:grid-cols-3">
+              <p>
+                <strong>Origem:</strong> {trip.origem}
+              </p>
+              <p>
+                <strong>Destino:</strong> {trip.destino}
+              </p>
+              <p>
+                <strong>Status:</strong> {trip.status}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.open(wazeUrl(trip.destino), "_blank")}
+              >
+                <Navigation className="w-4 h-4 mr-1" /> Navegar no Waze
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  window.open(googleMapsDirUrl(trip.destino), "_blank")
+                }
+              >
+                Abrir no Google Maps
+              </Button>
+            </div>
           </CardContent>
         )}
       </Card>
@@ -90,36 +125,29 @@ export default function TripTracking() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <MapPin className="w-4 h-4" /> Rota
+            {route?.ok && (
+              <span className="text-xs font-normal text-muted-foreground">
+                · {route.distanceKm} km · ~{route.durationMin} min
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {!mapsConfigured ? (
+          {routeLoading ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              Traçando a rota…
+            </div>
+          ) : route?.ok ? (
+            <div ref={mapRef} className="h-[420px] w-full bg-muted" />
+          ) : (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
               <MapPin className="w-10 h-10 opacity-30" />
-              <p className="font-medium">Mapa não configurado</p>
+              <p className="font-medium">Não foi possível traçar a rota</p>
               <p className="text-xs max-w-sm">
-                O administrador precisa definir a chave do Google Maps.
+                Verifique se a origem e o destino são endereços válidos (ex.:
+                "Viana, ES"). Você ainda pode usar o botão do Waze acima.
               </p>
             </div>
-          ) : mapsError ? (
-            <div className="py-16 text-center text-sm text-rose-500">
-              Falha ao carregar o Google Maps.
-            </div>
-          ) : (
-            <>
-              <div ref={mapRef} className="h-[420px] w-full bg-muted" />
-              {routeError && (
-                <p className="p-3 text-center text-xs text-amber-600">
-                  Não foi possível traçar a rota para estes endereços. Verifique
-                  origem e destino.
-                </p>
-              )}
-              {!loaded && (
-                <p className="p-3 text-center text-xs text-muted-foreground">
-                  Carregando mapa…
-                </p>
-              )}
-            </>
           )}
         </CardContent>
       </Card>

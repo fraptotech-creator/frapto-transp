@@ -1,7 +1,6 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { sdk } from "../_core/sdk";
-import { ENV } from "../_core/env";
 import {
   publicProcedure,
   protectedProcedure,
@@ -25,15 +24,6 @@ import {
   createPortalSession,
   isStripeConfigured,
 } from "../_core/stripe";
-
-// Config pública do cliente (só p/ logado). A chave do Google Maps é pública
-// por design (browser, restrita por referrer) — não é segredo como as demais.
-export const configRouter = router({
-  get: protectedProcedure.query(() => ({
-    googleMapsApiKey: ENV.googleMapsApiKey,
-    mapsConfigured: Boolean(ENV.googleMapsApiKey),
-  })),
-});
 
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }) => {

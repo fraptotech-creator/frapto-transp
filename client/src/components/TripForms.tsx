@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -89,9 +89,8 @@ const suggestTripNumber = () => {
 
 const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
   const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   const isEdit = !!trip;
-  const originInputRef = useRef<HTMLInputElement | null>(null);
-  const destinationInputRef = useRef<HTMLInputElement | null>(null);
 
   const { data: vehicles } = trpc.vehicles.list.useQuery();
   const { data: drivers } = trpc.drivers.list.useQuery();
@@ -115,73 +114,30 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
     },
   });
 
-  // Integrar Google Places Autocomplete (se disponível)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const g = (window as any).google;
-    if (!g || !g.maps || !g.maps.places) return;
-
-    const options = {
-      types: ["(cities)"],
-      componentRestrictions: { country: "br" },
-    };
-
-    if (originInputRef.current) {
-      const autocompleteOrigin = new g.maps.places.Autocomplete(
-        originInputRef.current,
-        options
-      );
-      autocompleteOrigin.addListener("place_changed", () => {
-        const place = autocompleteOrigin.getPlace();
-        if (place?.formatted_address) {
-          form.setValue("origem", place.formatted_address);
-          calculateDistance();
-        }
-      });
+  // Calcula a distância pela rota real (OpenStreetMap/OSRM) e preenche o campo.
+  const [calculando, setCalculando] = React.useState(false);
+  const calcularDistancia = async () => {
+    const origem = form.getValues("origem");
+    const destino = form.getValues("destino");
+    if (!origem || !destino) {
+      toast.error("Preencha origem e destino primeiro.");
+      return;
     }
-
-    if (destinationInputRef.current) {
-      const autocompleteDest = new g.maps.places.Autocomplete(
-        destinationInputRef.current,
-        options
-      );
-      autocompleteDest.addListener("place_changed", () => {
-        const place = autocompleteDest.getPlace();
-        if (place?.formatted_address) {
-          form.setValue("destino", place.formatted_address);
-          calculateDistance();
-        }
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const calculateDistance = () => {
-    const origin = form.getValues("origem");
-    const destination = form.getValues("destino");
-    const g = (window as any).google;
-
-    if (origin && destination && g && g.maps) {
-      const service = new g.maps.DistanceMatrixService();
-      service.getDistanceMatrix(
-        {
-          origins: [origin],
-          destinations: [destination],
-          travelMode: g.maps.TravelMode.DRIVING,
-        },
-        (response: any, status: any) => {
-          if (
-            status === "OK" &&
-            response &&
-            response.rows[0].elements[0].status === "OK"
-          ) {
-            const distanceKm =
-              response.rows[0].elements[0].distance.value / 1000;
-            form.setValue("distancia", distanceKm.toFixed(2));
-            toast.info(`Distância calculada: ${distanceKm.toFixed(2)} km`);
-          }
-        }
-      );
+    setCalculando(true);
+    try {
+      const r = await utils.geo.route.fetch({ origem, destino });
+      if (r.ok) {
+        form.setValue("distancia", String(r.distanceKm));
+        toast.success(`Distância: ${r.distanceKm} km (~${r.durationMin} min)`);
+      } else {
+        toast.error(
+          "Não foi possível calcular pela rota. Confira os endereços."
+        );
+      }
+    } catch {
+      toast.error("Falha ao calcular a distância.");
+    } finally {
+      setCalculando(false);
     }
   };
 
@@ -331,14 +287,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
                     <MapPin className="w-3 h-3 text-blue-500" /> Origem
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="Cidade de origem"
-                      {...field}
-                      ref={el => {
-                        field.ref(el);
-                        originInputRef.current = el;
-                      }}
-                    />
+                    <Input placeholder="Cidade de origem" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -353,14 +302,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
                     <MapPin className="w-3 h-3 text-emerald-500" /> Destino
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="Cidade de destino"
-                      {...field}
-                      ref={el => {
-                        field.ref(el);
-                        destinationInputRef.current = el;
-                      }}
-                    />
+                    <Input placeholder="Cidade de destino" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -428,7 +370,17 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
             name="distancia"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Distância (km)</FormLabel>
+                <FormLabel className="flex items-center justify-between">
+                  <span>Distância (km)</span>
+                  <button
+                    type="button"
+                    onClick={calcularDistancia}
+                    disabled={calculando}
+                    className="text-xs text-blue-500 hover:underline disabled:opacity-50"
+                  >
+                    {calculando ? "Calculando…" : "Calcular pela rota"}
+                  </button>
+                </FormLabel>
                 <FormControl>
                   <Input
                     type="number"

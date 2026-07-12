@@ -1,6 +1,6 @@
 import { router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
-import { configRouter, authRouter, billingRouter } from "./routers/account";
+import { authRouter, billingRouter } from "./routers/account";
 import { aiRouter, settingsRouter } from "./routers/ai";
 import { documentsRouter } from "./routers/documents";
 import {
@@ -12,11 +12,11 @@ import {
 } from "./routers/fleet";
 import { expensesRouter, revenuesRouter } from "./routers/finance";
 import { driverAppRouter } from "./routers/driverApp";
+import { geoRouter } from "./routers/geo";
 
 // Composição do roteador tRPC. Cada domínio vive em server/routers/*.
 export const appRouter = router({
   system: systemRouter,
-  config: configRouter,
   auth: authRouter,
   billing: billingRouter,
   ai: aiRouter,
@@ -30,6 +30,7 @@ export const appRouter = router({
   expenses: expensesRouter,
   revenues: revenuesRouter,
   driverApp: driverAppRouter,
+  geo: geoRouter,
 });
 
 export type AppRouter = typeof appRouter;
