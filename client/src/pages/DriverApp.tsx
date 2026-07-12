@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
+import { wazeUrl } from "@/lib/nav";
 import { Truck, MapPin, LogOut, Navigation, Clock } from "lucide-react";
 
 // Data/hora atual no formato do input datetime-local (hora local).
@@ -291,6 +292,26 @@ function TripCard({ trip, onChange }: { trip: any; onChange: () => void }) {
             Chegada registrada: {fmt(trip.dataChegada)}
           </p>
         )}
+
+        {/* Navegação (abre o Waze já navegando) */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => window.open(wazeUrl(trip.origem), "_blank")}
+          >
+            <Navigation className="w-4 h-4 mr-1" /> Origem
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => window.open(wazeUrl(trip.destino), "_blank")}
+          >
+            <Navigation className="w-4 h-4 mr-1" /> Destino
+          </Button>
+        </div>
 
         {trip.status === "planejada" && (
           <Button
