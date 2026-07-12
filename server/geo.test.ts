@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { parseNominatim, parseOsrm, candidateQueries } from "./_core/geo";
+import {
+  parseNominatim,
+  parseOsrm,
+  candidateQueries,
+  normalizeAddress,
+} from "./_core/geo";
+
+describe("normalizeAddress", () => {
+  it('remove "numero/nº" mantendo o dígito e arruma vírgulas', () => {
+    expect(normalizeAddress("Av São Paulo, numero 92, Marcilio Viana-ES")).toBe(
+      "Av São Paulo, 92, Marcilio Viana-ES"
+    );
+    expect(normalizeAddress("Rua X, nº 79,  Perocão")).toBe(
+      "Rua X, 79, Perocão"
+    );
+  });
+});
 
 describe("candidateQueries", () => {
   it("vai do específico ao geral removendo trechos iniciais", () => {

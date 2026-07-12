@@ -4,13 +4,28 @@
 
 export type LatLng = { lat: number; lng: number };
 
+// Normaliza o endereço p/ o geocoder: remove "número/nº/nro" (mantém o dígito)
+// e arruma espaços/vírgulas. Ex.: "Av São Paulo, numero 92, ..." → "Av São
+// Paulo, 92, ...". Melhora o casamento no Nominatim.
+export function normalizeAddress(q: string): string {
+  return (q ?? "")
+    .replace(/\bn[uú]meros?\b/gi, "")
+    .replace(/\bnros?\.?\b/gi, "")
+    .replace(/n[º°]/gi, "")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/(?:,\s*)+/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s,]+|[\s,]+$/g, "")
+    .trim();
+}
+
 // Gera tentativas de busca da MAIS específica p/ a mais geral, removendo os
 // primeiros trechos (rua, número) — ex.: "Av. São Paulo, 92, Perocão, Guarapari-ES"
 // → ["Av. São Paulo, 92, Perocão, Guarapari-ES", "92, Perocão, Guarapari-ES",
 //    "Perocão, Guarapari-ES", "Guarapari-ES"]. Aumenta a chance de o OSM achar
 // ao menos a cidade quando a rua exata não existe na base.
 export function candidateQueries(q: string): string[] {
-  const full = (q ?? "").trim();
+  const full = normalizeAddress(q);
   const parts = full
     .split(",")
     .map(s => s.trim())
