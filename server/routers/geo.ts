@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { activeOrgProcedure, router } from "../_core/trpc";
-import { parseNominatim, parseOsrm, type LatLng } from "../_core/geo";
+import {
+  parseNominatim,
+  parseOsrm,
+  candidateQueries,
+  type LatLng,
+} from "../_core/geo";
 
 // Identifica o app para o Nominatim (exigência da política de uso).
 const UA = "FraptoTransp/1.0 (gestao de frota; suporte via app)";
@@ -21,7 +26,7 @@ type RouteResult =
 const cache = new Map<string, RouteResult>();
 const CACHE_MAX = 500;
 
-async function geocode(q: string): Promise<LatLng | null> {
+async function geocodeOnce(q: string): Promise<LatLng | null> {
   // countrycodes=br: app de frota brasileiro — evita casar com cidades
   // homônimas no exterior (ex.: "Viana, ES" achava Viana na Espanha).
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(
@@ -36,6 +41,15 @@ async function geocode(q: string): Promise<LatLng | null> {
   } catch {
     return null;
   }
+}
+
+// Tenta do endereço completo até só a cidade (fallback progressivo).
+async function geocode(q: string): Promise<LatLng | null> {
+  for (const cand of candidateQueries(q)) {
+    const hit = await geocodeOnce(cand);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 // Rota (origem→destino) via OpenStreetMap. Devolve os pontos, a geometria da

@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { parseNominatim, parseOsrm } from "./_core/geo";
+import { parseNominatim, parseOsrm, candidateQueries } from "./_core/geo";
+
+describe("candidateQueries", () => {
+  it("vai do específico ao geral removendo trechos iniciais", () => {
+    expect(
+      candidateQueries("Av. São Paulo, 92, Perocão, Guarapari-ES")
+    ).toEqual([
+      "Av. São Paulo, 92, Perocão, Guarapari-ES",
+      "92, Perocão, Guarapari-ES",
+      "Perocão, Guarapari-ES",
+      "Guarapari-ES",
+    ]);
+  });
+  it("sem vírgula → só o texto", () => {
+    expect(candidateQueries("Guarapari ES")).toEqual(["Guarapari ES"]);
+  });
+});
 
 describe("parseNominatim", () => {
   it("extrai lat/lng do primeiro resultado", () => {

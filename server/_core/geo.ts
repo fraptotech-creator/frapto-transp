@@ -4,6 +4,27 @@
 
 export type LatLng = { lat: number; lng: number };
 
+// Gera tentativas de busca da MAIS específica p/ a mais geral, removendo os
+// primeiros trechos (rua, número) — ex.: "Av. São Paulo, 92, Perocão, Guarapari-ES"
+// → ["Av. São Paulo, 92, Perocão, Guarapari-ES", "92, Perocão, Guarapari-ES",
+//    "Perocão, Guarapari-ES", "Guarapari-ES"]. Aumenta a chance de o OSM achar
+// ao menos a cidade quando a rua exata não existe na base.
+export function candidateQueries(q: string): string[] {
+  const full = (q ?? "").trim();
+  const parts = full
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  const push = (s: string) => {
+    const t = s.trim();
+    if (t && !out.includes(t)) out.push(t);
+  };
+  push(full);
+  for (let i = 1; i < parts.length; i++) push(parts.slice(i).join(", "));
+  return out;
+}
+
 // Resposta do Nominatim: array de resultados com lat/lon (strings).
 export function parseNominatim(json: unknown): LatLng | null {
   if (!Array.isArray(json) || json.length === 0) return null;
