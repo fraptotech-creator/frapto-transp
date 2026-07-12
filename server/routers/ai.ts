@@ -2,11 +2,13 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { activeOrgProcedure, orgOwnerProcedure, router } from "../_core/trpc";
 import { getAiConfig, upsertAiConfig } from "../db";
-import { invokeLLM, type ChatMessage } from "../_core/llm";
+import { invokeLLM, invokeOpenAIAgent, type ChatMessage } from "../_core/llm";
+import { toOpenAiTools, runAiTool } from "../_core/aiTools";
 import { assertSafeBaseUrl } from "../_core/urlSafety";
 import {
   buildFleetContext,
   FLEET_ASSISTANT_SYSTEM,
+  AGENT_SYSTEM,
   resolveAiConfig,
   sanitizeChatContent,
 } from "./_helpers";
@@ -35,14 +37,26 @@ export const aiRouter = router({
             "Assistente de IA não configurado. Configure o provedor e a chave em Configurações.",
         });
       }
-      const context = await buildFleetContext(ctx.orgId);
       const messages: ChatMessage[] = input.messages.map(m => ({
         role: m.role,
         content: sanitizeChatContent(m.content),
       }));
-      const response = await invokeLLM(cfg, {
-        system: FLEET_ASSISTANT_SYSTEM + context,
+
+      // GPT/Groq/compatível: AGENTE com ferramentas (consulta o sistema sob
+      // demanda). Claude: contexto rico numa tacada (fora do loop de tools).
+      if (cfg.provider === "anthropic") {
+        const context = await buildFleetContext(ctx.orgId);
+        const response = await invokeLLM(cfg, {
+          system: FLEET_ASSISTANT_SYSTEM + context,
+          messages,
+        });
+        return { response };
+      }
+      const response = await invokeOpenAIAgent(cfg, {
+        system: AGENT_SYSTEM,
         messages,
+        tools: toOpenAiTools(),
+        runTool: (name, args) => runAiTool(ctx.orgId, name, args),
       });
       return { response };
     }),
