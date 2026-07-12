@@ -151,9 +151,13 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  // Itens admin-only (ex.: Configurações) só aparecem para admin.
+  // Itens "adminOnly" (ex.: Configurações) aparecem para o DONO da empresa
+  // (orgRole owner) ou o admin da plataforma — igual ao gate do backend.
   const visibleMenuItems = menuItems.filter(
-    item => !item.adminOnly || user?.role === "admin"
+    item =>
+      !item.adminOnly ||
+      user?.role === "admin" ||
+      user?.orgRole === "owner"
   );
   const activeMenuItem = visibleMenuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
