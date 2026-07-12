@@ -103,8 +103,26 @@ export async function invokeOpenAIAgent(
     ...params.messages.map(m => ({ role: m.role, content: m.content })),
   ];
 
+  // O Groq valida o tool_call que o PRÓPRIO modelo gerou; às vezes o modelo
+  // manda um argumento fora do schema e a API responde 400. Como a geração é
+  // estocástica, tentar de novo quase sempre produz um tool_call válido.
+  const createRetry = async (
+    req: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+    tries = 3
+  ) => {
+    let lastErr: unknown;
+    for (let i = 0; i < tries; i++) {
+      try {
+        return await client.chat.completions.create(req);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr;
+  };
+
   for (let step = 0; step < maxSteps; step++) {
-    const resp = await client.chat.completions.create({
+    const resp = await createRetry({
       model,
       max_tokens: maxTokens,
       messages: msgs,
@@ -130,7 +148,7 @@ export async function invokeOpenAIAgent(
   }
   // Estourou os passos: força a resposta em TEXTO. Mantém 'tools' (a conversa já
   // referencia tool_calls) mas proíbe novas chamadas com tool_choice:"none".
-  const final = await client.chat.completions.create({
+  const final = await createRetry({
     model,
     max_tokens: maxTokens,
     messages: msgs,

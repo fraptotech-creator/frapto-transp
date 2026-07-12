@@ -52,21 +52,13 @@ export const aiRouter = router({
         });
         return { response };
       }
-      try {
-        const response = await invokeOpenAIAgent(cfg, {
-          system: AGENT_SYSTEM,
-          messages,
-          tools: toOpenAiTools(),
-          runTool: (name, args) => runAiTool(ctx.orgId, name, args),
-        });
-        return { response };
-      } catch (e) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "DEBUG_AGENTE: " + (e instanceof Error ? e.message : String(e)),
-        });
-      }
+      const response = await invokeOpenAIAgent(cfg, {
+        system: AGENT_SYSTEM,
+        messages,
+        tools: toOpenAiTools(),
+        runTool: (name, args) => runAiTool(ctx.orgId, name, args),
+      });
+      return { response };
     }),
 });
 
