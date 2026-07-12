@@ -115,23 +115,27 @@ export async function invokeOpenAIAgent(
     if (!msg) return "";
     if (msg.tool_calls && msg.tool_calls.length > 0) {
       msgs.push(msg);
+      // Responde a TODOS os tool_calls (os provedores exigem uma resposta por
+      // id; faltar uma gera erro 400 na próxima chamada).
       for (const tc of msg.tool_calls) {
-        if (tc.type !== "function") continue;
-        const out = await params.runTool(
-          tc.function.name,
-          tc.function.arguments
-        );
+        const out =
+          tc.type === "function"
+            ? await params.runTool(tc.function.name, tc.function.arguments)
+            : JSON.stringify({ erro: "tipo de ferramenta não suportado" });
         msgs.push({ role: "tool", tool_call_id: tc.id, content: out });
       }
       continue;
     }
     return (msg.content ?? "").trim();
   }
-  // Estourou os passos: última chamada SEM ferramentas para forçar a resposta.
+  // Estourou os passos: força a resposta em TEXTO. Mantém 'tools' (a conversa já
+  // referencia tool_calls) mas proíbe novas chamadas com tool_choice:"none".
   const final = await client.chat.completions.create({
     model,
     max_tokens: maxTokens,
     messages: msgs,
+    tools: params.tools,
+    tool_choice: "none",
   });
   return (final.choices[0]?.message?.content ?? "").trim();
 }
