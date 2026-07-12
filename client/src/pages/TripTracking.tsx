@@ -141,7 +141,13 @@ export default function TripTracking() {
               Traçando a rota…
             </div>
           ) : route?.ok ? (
-            <div ref={mapRef} className="h-[420px] w-full bg-muted" />
+            <>
+              <div ref={mapRef} className="h-[420px] w-full bg-muted" />
+              <p className="p-2 text-center text-[11px] text-muted-foreground">
+                Traçado aproximado (mapa gratuito OpenStreetMap). Para navegação
+                exata, use os botões acima (Waze / Google Maps).
+              </p>
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
               <MapPin className="w-10 h-10 opacity-30" />
