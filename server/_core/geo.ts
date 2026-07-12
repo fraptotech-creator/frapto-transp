@@ -86,3 +86,48 @@ export function parseOsrm(json: unknown): ParsedRoute | null {
     durationMin: Math.round((Number.isFinite(durS) ? durS : 0) / 60),
   };
 }
+
+// ─── OpenRouteService (geocoder Pelias + rotas) — quando há chave ─────────────
+
+// Geocode ORS: features[0].geometry.coordinates = [lon, lat].
+export function parseOrsGeocode(json: unknown): LatLng | null {
+  const feat = (json as { features?: unknown[] })?.features?.[0] as
+    | { geometry?: { coordinates?: unknown } }
+    | undefined;
+  const c = feat?.geometry?.coordinates;
+  if (!Array.isArray(c) || c.length < 2) return null;
+  const lng = Number(c[0]);
+  const lat = Number(c[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+// Directions ORS (GeoJSON): features[0].geometry.coordinates [lon,lat] +
+// properties.summary.{distance(m),duration(s)}.
+export function parseOrsDirections(json: unknown): ParsedRoute | null {
+  const feat = (json as { features?: unknown[] })?.features?.[0] as
+    | {
+        geometry?: { coordinates?: unknown };
+        properties?: { summary?: { distance?: unknown; duration?: unknown } };
+      }
+    | undefined;
+  const coords = feat?.geometry?.coordinates;
+  if (!Array.isArray(coords) || coords.length === 0) return null;
+  const geometry: [number, number][] = [];
+  for (const c of coords) {
+    if (Array.isArray(c) && c.length >= 2) {
+      const lng = Number(c[0]);
+      const lat = Number(c[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng))
+        geometry.push([lat, lng]);
+    }
+  }
+  if (geometry.length === 0) return null;
+  const distM = Number(feat?.properties?.summary?.distance ?? 0);
+  const durS = Number(feat?.properties?.summary?.duration ?? 0);
+  return {
+    geometry,
+    distanceKm: Math.round((Number.isFinite(distM) ? distM : 0) / 100) / 10,
+    durationMin: Math.round((Number.isFinite(durS) ? durS : 0) / 60),
+  };
+}

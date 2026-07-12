@@ -4,7 +4,49 @@ import {
   parseOsrm,
   candidateQueries,
   normalizeAddress,
+  parseOrsGeocode,
+  parseOrsDirections,
 } from "./_core/geo";
+
+describe("parseOrsGeocode", () => {
+  it("extrai lat/lng do feature (coords [lon,lat])", () => {
+    const r = parseOrsGeocode({
+      features: [{ geometry: { coordinates: [-40.4984, -20.6718] } }],
+    });
+    expect(r).toEqual({ lat: -20.6718, lng: -40.4984 });
+  });
+  it("vazio → null", () => {
+    expect(parseOrsGeocode({ features: [] })).toBeNull();
+    expect(parseOrsGeocode({})).toBeNull();
+  });
+});
+
+describe("parseOrsDirections", () => {
+  it("converte geometria e lê summary distance/duration", () => {
+    const r = parseOrsDirections({
+      features: [
+        {
+          geometry: {
+            coordinates: [
+              [-40.3, -20.38],
+              [-40.5, -20.6],
+            ],
+          },
+          properties: { summary: { distance: 40200, duration: 2880 } },
+        },
+      ],
+    });
+    expect(r?.geometry).toEqual([
+      [-20.38, -40.3],
+      [-20.6, -40.5],
+    ]);
+    expect(r?.distanceKm).toBe(40.2);
+    expect(r?.durationMin).toBe(48);
+  });
+  it("sem features → null", () => {
+    expect(parseOrsDirections({ features: [] })).toBeNull();
+  });
+});
 
 describe("normalizeAddress", () => {
   it('remove "numero/nº" mantendo o dígito e arruma vírgulas', () => {

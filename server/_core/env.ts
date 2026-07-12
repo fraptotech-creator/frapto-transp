@@ -17,6 +17,9 @@ export const ENV = {
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
   stripePriceId: process.env.STRIPE_PRICE_ID ?? "",
+  // OpenRouteService (geocoder/rotas melhores — chave grátis, sem cartão).
+  // Vazio = usa OpenStreetMap público (Nominatim/OSRM) como padrão.
+  orsApiKey: process.env.ORS_API_KEY ?? "",
   // Cloudflare R2 (upload de documentos)
   r2AccountId: process.env.R2_ACCOUNT_ID ?? "",
   r2AccessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
