@@ -82,10 +82,6 @@ export const AI_TOOLS: ToolDef[] = [
           enum: ["planejada", "em_andamento", "concluida", "cancelada"],
           description: "filtra por status (opcional)",
         },
-        limite: {
-          type: "number",
-          description: "máximo de viagens (padrão 20)",
-        },
       },
     },
     run: async (orgId, args) => {
@@ -164,7 +160,6 @@ export const AI_TOOLS: ToolDef[] = [
       type: "object",
       properties: {
         tipo: { type: "string", enum: ["receita", "despesa"] },
-        limite: { type: "number", description: "máximo de itens (padrão 30)" },
       },
     },
     run: async (orgId, args) => {
