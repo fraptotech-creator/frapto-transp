@@ -11,8 +11,16 @@ export const ENV = {
   appBaseUrl: process.env.APP_BASE_URL ?? "",
   // Primeiro login com este email vira admin.
   ownerEmail: process.env.OWNER_EMAIL ?? "",
-  // Assistente de IA (Anthropic Claude)
+  // Assistente de IA (Anthropic Claude) — fallback legado.
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  // Padrão de IA do SISTEMA (grátis pra todos): só a chave é obrigatória; o
+  // resto já aponta pro Groq (OpenAI-compatível, rápido, sem cartão). Cada
+  // empresa pode trocar em Configurações.
+  defaultAiKey: process.env.DEFAULT_AI_KEY ?? "",
+  defaultAiProvider: process.env.DEFAULT_AI_PROVIDER ?? "openai_compatible",
+  defaultAiBaseUrl:
+    process.env.DEFAULT_AI_BASE_URL ?? "https://api.groq.com/openai/v1",
+  defaultAiModel: process.env.DEFAULT_AI_MODEL ?? "llama-3.3-70b-versatile",
   // Stripe (paywall / assinatura)
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",

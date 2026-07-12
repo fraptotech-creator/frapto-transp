@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { ENV } from "../_core/env";
-import { type AiRuntimeConfig } from "../_core/llm";
+import { type AiRuntimeConfig, type AiProvider } from "../_core/llm";
 import {
   getVehicleById,
   getDriverById,
@@ -147,26 +147,69 @@ estiver no contexto, diga que não tem esse dado — nunca invente números.
 DADOS ATUAIS DA FROTA:
 `;
 
-// Config de IA da organização; fallback pro ANTHROPIC_API_KEY do ambiente.
-export async function resolveAiConfig(
-  orgId: number
-): Promise<AiRuntimeConfig | null> {
-  const cfg = await getAiConfig(orgId);
-  if (cfg && cfg.enabled && cfg.apiKey) {
+const coerceProvider = (p: string): AiProvider =>
+  p === "anthropic" || p === "openai" || p === "openai_compatible"
+    ? p
+    : "openai_compatible";
+
+// Decisão PURA de qual IA usar (testável): 1º a config da EMPRESA (se ativa e
+// com chave); 2º o PADRÃO do sistema (grátis, ex.: Groq); 3º o Anthropic legado.
+export function pickAiConfig(
+  orgCfg:
+    | {
+        provider: AiProvider;
+        apiKey: string | null;
+        model: string | null;
+        baseUrl: string | null;
+        enabled: boolean;
+      }
+    | null
+    | undefined,
+  defaults: {
+    key: string;
+    provider: string;
+    model: string;
+    baseUrl: string;
+    anthropicKey: string;
+  }
+): AiRuntimeConfig | null {
+  if (orgCfg && orgCfg.enabled && orgCfg.apiKey) {
     return {
-      provider: cfg.provider,
-      apiKey: cfg.apiKey,
-      model: cfg.model ?? "",
-      baseUrl: cfg.baseUrl,
+      provider: orgCfg.provider,
+      apiKey: orgCfg.apiKey,
+      model: orgCfg.model ?? "",
+      baseUrl: orgCfg.baseUrl,
     };
   }
-  if (ENV.anthropicApiKey) {
+  if (defaults.key) {
+    return {
+      provider: coerceProvider(defaults.provider),
+      apiKey: defaults.key,
+      model: defaults.model || "",
+      baseUrl: defaults.baseUrl || null,
+    };
+  }
+  if (defaults.anthropicKey) {
     return {
       provider: "anthropic",
-      apiKey: ENV.anthropicApiKey,
+      apiKey: defaults.anthropicKey,
       model: "claude-haiku-4-5",
       baseUrl: null,
     };
   }
   return null;
+}
+
+// Resolve a IA da organização (busca a config no banco + aplica os padrões).
+export async function resolveAiConfig(
+  orgId: number
+): Promise<AiRuntimeConfig | null> {
+  const cfg = await getAiConfig(orgId);
+  return pickAiConfig(cfg, {
+    key: ENV.defaultAiKey,
+    provider: ENV.defaultAiProvider,
+    model: ENV.defaultAiModel,
+    baseUrl: ENV.defaultAiBaseUrl,
+    anthropicKey: ENV.anthropicApiKey,
+  });
 }
