@@ -533,19 +533,21 @@ export const dashboardRouter = router({
   financeSummary: activeOrgProcedure
     .input(z.object({ sinceDays: z.number().int().positive() }).optional())
     .query(async ({ ctx, input }) => {
-      const [trips, maintenances, expenses, revenues] = await Promise.all([
-        getTrips(ctx.orgId),
-        getMaintenances(ctx.orgId),
-        getExpenses(ctx.orgId),
-        getRevenues(ctx.orgId),
-      ]);
+      const [trips, maintenances, expenses, revenues, vehicles] =
+        await Promise.all([
+          getTrips(ctx.orgId),
+          getMaintenances(ctx.orgId),
+          getExpenses(ctx.orgId),
+          getRevenues(ctx.orgId),
+          getVehicles(ctx.orgId),
+        ]);
       const src = { trips, maintenances, expenses, revenues };
       const sinceMs = input?.sinceDays
         ? Date.now() - input.sinceDays * 24 * 60 * 60 * 1000
         : null;
       const summary = computeFinanceSummary(src, sinceMs);
       const monthly = computeMonthlySeries(src, Date.now(), 6);
-      const ledger = computeFinanceLedger(src);
+      const ledger = computeFinanceLedger(src, vehicles);
       return { ...summary, monthly, ledger };
     }),
 

@@ -166,6 +166,36 @@ describe("computeFinanceLedger", () => {
     ).toBeUndefined();
   });
 
+  it("vincula a placa do veículo na despesa; despesa geral fica null", () => {
+    const es = computeFinanceLedger(
+      {
+        trips: [],
+        maintenances: [],
+        expenses: [
+          {
+            id: 1,
+            tipo: "combustivel",
+            descricao: "posto",
+            valor: "100",
+            data: "2026-07-01",
+            veiculoId: 7,
+          },
+          {
+            id: 2,
+            tipo: "pedagio",
+            descricao: "praça",
+            valor: "20",
+            data: "2026-07-01",
+          },
+        ],
+        revenues: [],
+      },
+      [{ id: 7, placa: "ABC1234" }]
+    );
+    expect(es.find(e => e.refId === 1)!.veiculo).toBe("ABC1234");
+    expect(es.find(e => e.refId === 2)!.veiculo).toBeNull();
+  });
+
   it("só os manuais são editáveis; viagem em aberto não é 'realizado'", () => {
     expect(entries.find(e => e.refId === 20)!.editable).toBe(true);
     expect(entries.find(e => e.refId === 10)!.editable).toBe(false);

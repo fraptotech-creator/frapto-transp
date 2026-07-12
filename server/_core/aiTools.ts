@@ -155,7 +155,7 @@ export const AI_TOOLS: ToolDef[] = [
   {
     name: "extrato_financeiro",
     description:
-      "Extrato itemizado (cada receita/despesa): origem, categoria, descrição, data, valor e status. Da mais recente para a mais antiga.",
+      "Extrato itemizado (cada receita/despesa): origem, categoria, descrição, data, valor, status e o VEÍCULO vinculado (placa; null = despesa geral). Da mais recente para a mais antiga.",
     parameters: {
       type: "object",
       properties: {
@@ -163,18 +163,18 @@ export const AI_TOOLS: ToolDef[] = [
       },
     },
     run: async (orgId, args) => {
-      const [trips, maintenances, expenses, revenues] = await Promise.all([
-        getTrips(orgId),
-        getMaintenances(orgId),
-        getExpenses(orgId),
-        getRevenues(orgId),
-      ]);
-      let led = computeFinanceLedger({
-        trips,
-        maintenances,
-        expenses,
-        revenues,
-      });
+      const [trips, maintenances, expenses, revenues, vehicles] =
+        await Promise.all([
+          getTrips(orgId),
+          getMaintenances(orgId),
+          getExpenses(orgId),
+          getRevenues(orgId),
+          getVehicles(orgId),
+        ]);
+      let led = computeFinanceLedger(
+        { trips, maintenances, expenses, revenues },
+        vehicles
+      );
       const tipo = str(args.tipo);
       if (tipo) led = led.filter(e => e.kind === tipo);
       return led.slice(0, clampLimit(args.limite, 30, 60));

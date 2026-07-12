@@ -102,6 +102,7 @@ export type LedgerSources = {
     origem: string;
     destino: string;
     dataPartida: DateLike;
+    veiculoId?: number | null;
   }[];
   maintenances: {
     id: number;
@@ -110,6 +111,7 @@ export type LedgerSources = {
     custo: MoneyLike;
     dataRealizada: DateLike;
     dataPrevista: DateLike;
+    veiculoId?: number | null;
   }[];
   expenses: {
     id: number;
@@ -117,6 +119,7 @@ export type LedgerSources = {
     descricao: string;
     valor: MoneyLike;
     data: DateLike;
+    veiculoId?: number | null;
   }[];
   revenues: {
     id: number;
@@ -139,12 +142,18 @@ export type LedgerEntry = {
   realizado: boolean; // receita recebida/viagem concluída; despesa sempre paga
   editable: boolean; // só manuais podem ser apagados
   status: string; // rótulo curto de exibição
+  veiculo: string | null; // placa do veículo vinculado (null = geral/sem veículo)
 };
 
 const toIso = (d: DateLike): string => (d ? new Date(d).toISOString() : "");
 
-export function computeFinanceLedger(src: LedgerSources): LedgerEntry[] {
+export function computeFinanceLedger(
+  src: LedgerSources,
+  vehicles: { id: number; placa: string }[] = []
+): LedgerEntry[] {
   const entries: LedgerEntry[] = [];
+  const placa = (id: number | null | undefined): string | null =>
+    id == null ? null : (vehicles.find(v => v.id === id)?.placa ?? null);
 
   for (const t of src.trips) {
     if (t.status === "cancelada") continue;
@@ -162,6 +171,7 @@ export function computeFinanceLedger(src: LedgerSources): LedgerEntry[] {
       realizado,
       editable: false,
       status: realizado ? "Recebido" : "A receber",
+      veiculo: placa(t.veiculoId),
     });
   }
 
@@ -178,6 +188,7 @@ export function computeFinanceLedger(src: LedgerSources): LedgerEntry[] {
       realizado: r.status === "recebido",
       editable: true,
       status: r.status === "recebido" ? "Recebido" : "Pendente",
+      veiculo: null,
     });
   }
 
@@ -196,6 +207,7 @@ export function computeFinanceLedger(src: LedgerSources): LedgerEntry[] {
       realizado: true,
       editable: false,
       status: "Pago",
+      veiculo: placa(m.veiculoId),
     });
   }
 
@@ -211,6 +223,7 @@ export function computeFinanceLedger(src: LedgerSources): LedgerEntry[] {
       realizado: true,
       editable: true,
       status: "Pago",
+      veiculo: placa(e.veiculoId),
     });
   }
 

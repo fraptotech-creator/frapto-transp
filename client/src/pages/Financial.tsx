@@ -31,6 +31,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
+import { formatPlaca } from "@/lib/format";
 import {
   Table,
   TableBody,
@@ -56,6 +57,7 @@ const emptyExpense = {
   descricao: "",
   valor: "",
   data: new Date().toISOString().split("T")[0],
+  veiculoId: "", // vazio = despesa geral (sem veículo)
   categoria: "",
   formaPagamento: "",
   observacoes: "",
@@ -79,6 +81,7 @@ export default function Financial() {
     isLoading,
     refetch: refetchFin,
   } = trpc.dashboard.financeSummary.useQuery();
+  const { data: vehicles } = trpc.vehicles.list.useQuery();
 
   const createExpenseMutation = trpc.expenses.create.useMutation();
   const createRevenueMutation = trpc.revenues.create.useMutation();
@@ -106,6 +109,9 @@ export default function Financial() {
         descricao: expenseForm.descricao,
         valor: expenseForm.valor,
         data: new Date(expenseForm.data),
+        veiculoId: expenseForm.veiculoId
+          ? parseInt(expenseForm.veiculoId, 10)
+          : undefined,
         categoria: expenseForm.categoria || undefined,
         formaPagamento: expenseForm.formaPagamento || undefined,
         observacoes: expenseForm.observacoes || undefined,
@@ -343,6 +349,32 @@ export default function Financial() {
                     </Select>
                   </div>
                   <div>
+                    <Label>Veículo (opcional)</Label>
+                    <Select
+                      value={expenseForm.veiculoId || "none"}
+                      onValueChange={v =>
+                        setExpenseForm({
+                          ...expenseForm,
+                          veiculoId: v === "none" ? "" : v,
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          Despesa geral (sem veículo)
+                        </SelectItem>
+                        {vehicles?.map((v: any) => (
+                          <SelectItem key={v.id} value={String(v.id)}>
+                            {formatPlaca(v.placa)} — {v.marca} {v.modelo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
                     <Label>Descrição *</Label>
                     <Input
                       placeholder="Ex: Abastecimento posto X"
@@ -460,7 +492,15 @@ export default function Financial() {
                     <TableCell className="capitalize">
                       {item.categoria}
                     </TableCell>
-                    <TableCell>{item.descricao}</TableCell>
+                    <TableCell>
+                      {item.descricao}
+                      {item.veiculo && (
+                        <span className="text-xs text-muted-foreground">
+                          {" "}
+                          · 🚛 {item.veiculo}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-rose-600 font-medium">
                       R${" "}
                       {item.valor.toLocaleString("pt-BR", {
@@ -690,7 +730,15 @@ export default function Financial() {
                     <TableCell className="capitalize">
                       {item.categoria}
                     </TableCell>
-                    <TableCell>{item.descricao}</TableCell>
+                    <TableCell>
+                      {item.descricao}
+                      {item.veiculo && (
+                        <span className="text-xs text-muted-foreground">
+                          {" "}
+                          · 🚛 {item.veiculo}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-emerald-600 font-medium">
                       R${" "}
                       {item.valor.toLocaleString("pt-BR", {
