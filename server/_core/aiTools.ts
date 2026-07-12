@@ -79,8 +79,8 @@ export const AI_TOOLS: ToolDef[] = [
       properties: {
         status: {
           type: "string",
-          enum: ["planejada", "em_andamento", "concluida", "cancelada"],
-          description: "filtra por status (opcional)",
+          description:
+            "filtra por status (opcional): planejada, em_andamento, concluida ou cancelada",
         },
       },
     },
@@ -116,7 +116,8 @@ export const AI_TOOLS: ToolDef[] = [
       properties: {
         status: {
           type: "string",
-          enum: ["pendente", "em_andamento", "concluida"],
+          description:
+            "filtra por status (opcional): pendente, em_andamento ou concluida",
         },
       },
     },
@@ -159,7 +160,10 @@ export const AI_TOOLS: ToolDef[] = [
     parameters: {
       type: "object",
       properties: {
-        tipo: { type: "string", enum: ["receita", "despesa"] },
+        tipo: {
+          type: "string",
+          description: "filtra (opcional): 'receita' ou 'despesa'",
+        },
       },
     },
     run: async (orgId, args) => {

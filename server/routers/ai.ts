@@ -52,13 +52,29 @@ export const aiRouter = router({
         });
         return { response };
       }
-      const response = await invokeOpenAIAgent(cfg, {
-        system: AGENT_SYSTEM,
-        messages,
-        tools: toOpenAiTools(),
-        runTool: (name, args) => runAiTool(ctx.orgId, name, args),
-      });
-      return { response };
+      try {
+        const response = await invokeOpenAIAgent(cfg, {
+          system: AGENT_SYSTEM,
+          messages,
+          tools: toOpenAiTools(),
+          runTool: (name, args) => runAiTool(ctx.orgId, name, args),
+        });
+        return { response };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const status = (e as { status?: number })?.status;
+        // Rate limit do provedor (plano gratuito): mensagem clara, não "erro".
+        if (
+          status === 429 ||
+          /rate limit|too many requests|\b429\b/i.test(msg)
+        ) {
+          return {
+            response:
+              "O assistente recebeu muitas solicitações agora (limite do plano gratuito). Aguarde alguns segundos e pergunte de novo.",
+          };
+        }
+        throw e;
+      }
     }),
 });
 
