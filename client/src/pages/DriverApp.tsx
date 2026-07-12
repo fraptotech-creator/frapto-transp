@@ -130,8 +130,8 @@ function ChangePassword({ firstAccess }: { firstAccess?: boolean }) {
   });
 
   const submit = () => {
-    if (next.length < 4) {
-      showErrorDialog("A nova senha precisa de ao menos 4 caracteres.", "Erro");
+    if (next.length < 6) {
+      showErrorDialog("A nova senha precisa de ao menos 6 caracteres.", "Erro");
       return;
     }
     if (next !== confirm) {

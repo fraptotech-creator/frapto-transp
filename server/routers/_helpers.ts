@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { ENV } from "../_core/env";
+import { assertSafeBaseUrl } from "../_core/urlSafety";
 import { type AiRuntimeConfig, type AiProvider } from "../_core/llm";
 import {
   getVehicleById,
@@ -288,6 +289,24 @@ export async function resolveAiConfig(
   orgId: number
 ): Promise<AiRuntimeConfig | null> {
   const cfg = await getAiConfig(orgId);
+  // Anti-SSRF: a Base URL custom (openai_compatible da EMPRESA) é revalidada a
+  // CADA chamada, não só ao salvar — barra DNS-rebind para host interno/metadata.
+  if (
+    cfg?.enabled &&
+    cfg.apiKey &&
+    cfg.provider === "openai_compatible" &&
+    cfg.baseUrl
+  ) {
+    try {
+      await assertSafeBaseUrl(cfg.baseUrl);
+    } catch {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "A Base URL do provedor de IA é inválida ou insegura. Ajuste em Configurações.",
+      });
+    }
+  }
   return pickAiConfig(cfg, {
     key: ENV.defaultAiKey,
     provider: ENV.defaultAiProvider,

@@ -14,6 +14,7 @@ import { randomBytes } from "crypto";
 import {
   getUserByEmail,
   getUserByUsername,
+  getUserByOpenId,
   createOrgAndOwner,
   incrementSessionVersion,
   setUserPassword,
@@ -148,7 +149,7 @@ export const authRouter = router({
         currentPassword: z.string().min(1, "Informe a senha atual"),
         newPassword: z
           .string()
-          .min(4, "A nova senha precisa de ao menos 4 caracteres"),
+          .min(6, "A nova senha precisa de ao menos 6 caracteres"),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -170,6 +171,19 @@ export const authRouter = router({
       }
       const hash = await bcrypt.hash(input.newPassword, 10);
       await setUserPassword(ctx.user.openId, hash, false);
+      // Revoga as OUTRAS sessões (troca de senha invalida tokens antigos) e
+      // reemite o cookie desta sessão para não deslogar quem acabou de trocar.
+      await incrementSessionVersion(ctx.user.openId);
+      const updated = await getUserByOpenId(ctx.user.openId);
+      const token = await sdk.createSessionToken(ctx.user.openId, {
+        name: updated?.name ?? "",
+        sessionVersion: updated?.sessionVersion ?? 0,
+        expiresInMs: ONE_YEAR_MS,
+      });
+      ctx.res.cookie(COOKIE_NAME, token, {
+        ...getSessionCookieOptions(ctx.req),
+        maxAge: ONE_YEAR_MS,
+      });
       return { success: true } as const;
     }),
 
