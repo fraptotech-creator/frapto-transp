@@ -33,8 +33,14 @@ const CACHE_MAX = 500;
 
 // ─── OpenRouteService (quando ENV.orsApiKey está setado) ─────────────────────
 
-async function geocodeOrs(q: string): Promise<LatLng | null> {
-  const url = `${ORS}/geocode/search?api_key=${ENV.orsApiKey}&boundary.country=BR&size=1&text=${encodeURIComponent(
+// Busca o endereço DENTRO de um círculo ao redor do centro da cidade — impede
+// o Pelias de casar a rua/número numa cidade errada (ele adora fazer isso).
+async function geocodeOrsNear(
+  q: string,
+  center: LatLng,
+  radiusKm: number
+): Promise<LatLng | null> {
+  const url = `${ORS}/geocode/search?api_key=${ENV.orsApiKey}&size=1&boundary.circle.lat=${center.lat}&boundary.circle.lon=${center.lng}&boundary.circle.radius=${radiusKm}&text=${encodeURIComponent(
     q
   )}`;
   try {
@@ -89,18 +95,30 @@ async function routeOsrm(o: LatLng, d: LatLng): Promise<ParsedRoute | null> {
 
 // ─── Orquestração (ORS quando há chave; senão OSM; com fallback) ─────────────
 
-// Geocodifica tentando do endereço completo até só a cidade. Com chave ORS usa
-// o Pelias (mais preciso); cai no Nominatim se o ORS não achar.
+// Estratégia em 2 passos:
+//   1) acha o CENTRO da cidade (último candidato = "Cidade-UF") via Nominatim,
+//      que é confiável para cidade;
+//   2) com chave ORS, busca o endereço detalhado DENTRO de um círculo ao redor
+//      da cidade (do específico ao geral) — garante a cidade certa e, quando a
+//      rua existe, o ponto exato.
+// Sem chave ORS (ou se nada casar no círculo), cai no Nominatim normal e, por
+// fim, no próprio centro da cidade.
 async function geocode(q: string): Promise<LatLng | null> {
-  for (const cand of candidateQueries(q)) {
-    if (ENV.orsApiKey) {
-      const viaOrs = await geocodeOrs(cand);
-      if (viaOrs) return viaOrs;
+  const cands = candidateQueries(q);
+  if (cands.length === 0) return null;
+  const center = await geocodeNominatim(cands[cands.length - 1]);
+
+  if (ENV.orsApiKey && center) {
+    for (const cand of cands) {
+      const hit = await geocodeOrsNear(cand, center, 25);
+      if (hit) return hit;
     }
-    const viaOsm = await geocodeNominatim(cand);
-    if (viaOsm) return viaOsm;
   }
-  return null;
+  for (const cand of cands) {
+    const hit = await geocodeNominatim(cand);
+    if (hit) return hit;
+  }
+  return center;
 }
 
 async function traceRoute(o: LatLng, d: LatLng): Promise<ParsedRoute | null> {
