@@ -22,7 +22,9 @@ const cache = new Map<string, RouteResult>();
 const CACHE_MAX = 500;
 
 async function geocode(q: string): Promise<LatLng | null> {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
+  // countrycodes=br: app de frota brasileiro — evita casar com cidades
+  // homônimas no exterior (ex.: "Viana, ES" achava Viana na Espanha).
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(
     q
   )}`;
   try {
