@@ -8,6 +8,7 @@ export function wazeUrl(address: string): string {
   return `https://waze.com/ul?q=${enc(address)}&navigate=yes`;
 }
 
-export function googleMapsDirUrl(address: string): string {
-  return `https://www.google.com/maps/dir/?api=1&destination=${enc(address)}`;
+// Rota origem→destino no Google Maps (não usa a localização atual como partida).
+export function googleMapsDirUrl(origem: string, destino: string): string {
+  return `https://www.google.com/maps/dir/?api=1&origin=${enc(origem)}&destination=${enc(destino)}`;
 }

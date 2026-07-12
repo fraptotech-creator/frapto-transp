@@ -111,7 +111,10 @@ export default function TripTracking() {
                 size="sm"
                 variant="ghost"
                 onClick={() =>
-                  window.open(googleMapsDirUrl(trip.destino), "_blank")
+                  window.open(
+                    googleMapsDirUrl(trip.origem, trip.destino),
+                    "_blank"
+                  )
                 }
               >
                 Abrir no Google Maps
