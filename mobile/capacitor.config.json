@@ -1,0 +1,8 @@
+{
+  "appId": "app.fraptotransp.rastreio",
+  "appName": "Frapto Transp Rastreio",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

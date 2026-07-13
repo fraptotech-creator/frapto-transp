@@ -1,0 +1,52 @@
+name: Build APK — Rastreio (motorista)
+
+# Build do app nativo de rastreio na NUVEM (sem Android Studio local).
+# Rode manualmente em: aba Actions → "Build APK — Rastreio" → Run workflow.
+# Ao terminar, baixe o APK em "Artifacts" e instale no celular do motorista.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Instala dependências
+        working-directory: mobile
+        run: npm install
+
+      - name: Build da web (vite → dist)
+        working-directory: mobile
+        run: npm run build
+
+      - name: Gera projeto Android
+        working-directory: mobile
+        run: npx cap add android
+
+      - name: Sincroniza plugins nativos
+        working-directory: mobile
+        run: npx cap sync android
+
+      - name: Compila o APK (debug)
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Publica o APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: frapto-rastreio-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
