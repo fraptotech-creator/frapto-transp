@@ -1,9 +1,18 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TripDialog, TripActions } from "@/components/TripForms";
 import { formatPlaca } from "@/lib/format";
+import { filtrarPorStatus, type TripStatusFilter } from "@/lib/tripFilter";
 import {
   MapPin,
   Navigation,
@@ -22,6 +31,10 @@ export default function Trips() {
   const { data: vehicles } = trpc.vehicles.list.useQuery();
   const { data: drivers } = trpc.drivers.list.useQuery();
   const [, setLocation] = useLocation();
+  const [statusFiltro, setStatusFiltro] = useState<TripStatusFilter>("todas");
+
+  // Lista aplicando o filtro de status (os cards de contagem seguem no total).
+  const tripsFiltradas = filtrarPorStatus(trips ?? [], statusFiltro);
 
   const getStatusConfig = (status: string) => {
     const configs: Record<
@@ -119,6 +132,28 @@ export default function Trips() {
         </div>
       )}
 
+      {/* Filtro por status */}
+      {trips && trips.length > 0 && (
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-xs text-muted-foreground">Filtrar:</span>
+          <Select
+            value={statusFiltro}
+            onValueChange={v => setStatusFiltro(v as TripStatusFilter)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas</SelectItem>
+              <SelectItem value="planejada">Planejada</SelectItem>
+              <SelectItem value="em_andamento">Em andamento</SelectItem>
+              <SelectItem value="concluida">Concluída</SelectItem>
+              <SelectItem value="cancelada">Cancelada</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Trip List */}
       {isLoading ? (
         <div className="space-y-3">
@@ -126,9 +161,9 @@ export default function Trips() {
             <Skeleton key={i} className="h-32" />
           ))}
         </div>
-      ) : trips && trips.length > 0 ? (
+      ) : tripsFiltradas.length > 0 ? (
         <div className="space-y-3">
-          {trips.map((trip: any) => {
+          {tripsFiltradas.map((trip: any) => {
             const config = getStatusConfig(trip.status);
             const StatusIcon = config.icon;
             const vehicle = getVehicle(trip.veiculoId);
@@ -294,10 +329,14 @@ export default function Trips() {
             <Route className="w-12 h-12 text-white/20" />
           </div>
           <p className="text-white/40 text-sm font-medium">
-            Nenhuma viagem cadastrada
+            {trips && trips.length > 0
+              ? "Nenhuma viagem com esse status"
+              : "Nenhuma viagem cadastrada"}
           </p>
           <p className="text-white/20 text-xs">
-            Crie uma nova viagem para começar o rastreamento
+            {trips && trips.length > 0
+              ? "Troque o filtro para ver outras viagens"
+              : "Crie uma nova viagem para começar o rastreamento"}
           </p>
         </div>
       )}
