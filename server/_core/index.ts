@@ -4,6 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
+import { handleTrackIngest } from "../routers/trackHttp";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
@@ -97,6 +98,12 @@ async function startServer() {
   app.get("/api/ping", (_req, res) => {
     res.status(200).json({ ok: true });
   });
+  // Ingestão de rastreio do app nativo (GPS em segundo plano). Autenticada por
+  // token de motorista no corpo — NÃO usa cookie/Origin (é um cliente nativo,
+  // não o browser), por isso fica fora do originCheck do /api/trpc. Rate-limit
+  // geral por IP (cada aparelho tem seu IP; posta a cada ~15-30s).
+  app.post("/api/track", apiLimiter, handleTrackIngest);
+
   // Login (email+senha) é via tRPC (auth.signup / auth.login).
   // Rate-limit ESTRITO no login/cadastro (anti brute-force), antes do geral.
   app.use(["/api/trpc/auth.login", "/api/trpc/auth.signup"], authLimiter);

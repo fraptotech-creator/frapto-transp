@@ -136,6 +136,10 @@ export const drivers = mysqlTable(
     endereco: text("endereco"),
     dataAdmissao: timestamp("dataAdmissao").defaultNow().notNull(),
     observacoes: text("observacoes"),
+    // Segredo por motorista usado pelo app nativo (serviço de GPS em segundo
+    // plano) para enviar posição direto ao /api/track quando o app está
+    // fechado — o cookie da sessão não existe nesse contexto.
+    trackingToken: varchar("trackingToken", { length: 64 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

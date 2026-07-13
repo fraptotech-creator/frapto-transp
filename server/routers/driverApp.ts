@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { randomBytes } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { driverProcedure, router } from "../_core/trpc";
 import {
@@ -7,6 +8,8 @@ import {
   updateTrip,
   accrueTripKm,
   addTripPosition,
+  getDriverById,
+  setDriverTrackingToken,
 } from "../db";
 import { canRecordPosition } from "../_core/tracking";
 import type { Trip } from "../../drizzle/schema";
@@ -99,4 +102,23 @@ export const driverAppRouter = router({
       });
       return { recorded: true } as const;
     }),
+
+  // Token de rastreio do motorista, usado pelo app NATIVO para enviar posição
+  // em segundo plano (via /api/track) quando o app está fechado — nesse estado
+  // não há cookie de sessão. Gera na 1ª vez e reusa depois.
+  ensureTrackingToken: driverProcedure.mutation(async ({ ctx }) => {
+    const driver = await getDriverById(ctx.orgId, ctx.driverId);
+    if (!driver) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Motorista não encontrado.",
+      });
+    }
+    let token = driver.trackingToken;
+    if (!token) {
+      token = randomBytes(24).toString("hex");
+      await setDriverTrackingToken(ctx.orgId, ctx.driverId, token);
+    }
+    return { token } as const;
+  }),
 });

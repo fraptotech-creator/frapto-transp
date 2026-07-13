@@ -229,6 +229,33 @@ export async function addTripPosition(
   await db.insert(tripPositions).values({ ...data, orgId });
 }
 
+// Busca o motorista pelo token de rastreio (usado pelo /api/track — o app
+// nativo em background não tem cookie de sessão). Token é global; a org e o
+// driverId saem do REGISTRO, nunca de input do cliente (fail-closed).
+export async function getDriverByTrackingToken(token: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(drivers)
+    .where(eq(drivers.trackingToken, token))
+    .limit(1);
+  return result[0];
+}
+
+export async function setDriverTrackingToken(
+  orgId: number,
+  driverId: number,
+  token: string
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(drivers)
+    .set({ trackingToken: token })
+    .where(and(eq(drivers.orgId, orgId), eq(drivers.id, driverId)));
+}
+
 export async function getTripPositions(orgId: number, tripId: number) {
   const db = await getDb();
   if (!db) return [];
