@@ -12,6 +12,7 @@ import {
   setDriverTrackingToken,
 } from "../db";
 import { canRecordPosition } from "../_core/tracking";
+import { visivelParaMotorista } from "../_core/driverTrips";
 import type { Trip } from "../../drizzle/schema";
 
 // Remove o valor/frete ANTES de enviar ao motorista (ele nunca vê o valor).
@@ -23,10 +24,13 @@ function stripValor(t: Trip): Omit<Trip, "valor"> {
 // Área do MOTORISTA. Todos os endpoints são escopados ao motorista logado
 // (ctx.driverId) e à org dele — ele só enxerga/afeta as viagens vinculadas.
 export const driverAppRouter = router({
-  // Só as viagens DELE, sem o valor.
+  // Só as viagens DELE que ainda precisam de ação (planejada/em_andamento),
+  // sem o valor. Concluída/cancelada não aparecem pro motorista.
   myTrips: driverProcedure.query(async ({ ctx }) => {
     const trips = await getTrips(ctx.orgId);
-    return trips.filter(t => t.motoristaId === ctx.driverId).map(stripValor);
+    return trips
+      .filter(t => t.motoristaId === ctx.driverId && visivelParaMotorista(t))
+      .map(stripValor);
   }),
 
   tripDetail: driverProcedure
