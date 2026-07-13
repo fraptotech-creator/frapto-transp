@@ -23,6 +23,7 @@ import {
   incrementSessionVersion,
   getTrips,
   getTripById,
+  getTripPositions,
   createTrip,
   updateTrip,
   deleteTrip,
@@ -321,6 +322,11 @@ export const tripsRouter = router({
   getById: activeOrgProcedure
     .input(z.object({ id: z.number() }))
     .query(({ ctx, input }) => getTripById(ctx.orgId, input.id)),
+
+  // Trajeto rastreado (posições GPS enviadas pelo celular do motorista).
+  positions: activeOrgProcedure
+    .input(z.object({ tripId: z.number() }))
+    .query(({ ctx, input }) => getTripPositions(ctx.orgId, input.tripId)),
 
   create: activeOrgProcedure
     .input(

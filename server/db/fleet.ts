@@ -5,10 +5,12 @@ import {
   drivers,
   trips,
   maintenance,
+  tripPositions,
   InsertVehicle,
   InsertDriver,
   InsertTrip,
   InsertMaintenance,
+  InsertTripPosition,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
 
@@ -214,6 +216,29 @@ export async function resetOilChange(orgId: number, vehicleId: number) {
     .update(vehicles)
     .set({ kmUltimaTrocaOleo: v.quilometragem ?? 0 })
     .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, vehicleId)));
+}
+
+// ─── Rastreio (posições GPS da viagem) ───────────────────────────────────────
+
+export async function addTripPosition(
+  orgId: number,
+  data: Omit<InsertTripPosition, "orgId">
+) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(tripPositions).values({ ...data, orgId });
+}
+
+export async function getTripPositions(orgId: number, tripId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(tripPositions)
+    .where(
+      and(eq(tripPositions.orgId, orgId), eq(tripPositions.tripId, tripId))
+    )
+    .orderBy(tripPositions.capturedAt);
 }
 
 // ─── Manutenção ──────────────────────────────────────────────────────────────

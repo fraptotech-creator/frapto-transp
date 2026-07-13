@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,62 @@ const STATUS_LABEL: Record<string, string> = {
   concluida: "Concluída",
   cancelada: "Cancelada",
 };
+
+// Intervalo mínimo entre envios de posição (não floodar o servidor).
+const TRACK_MIN_INTERVAL_MS = 20_000;
+
+type TrackState = "off" | "on" | "denied" | "unsupported";
+
+// Rastreio ao vivo: enquanto `active`, observa o GPS do aparelho e envia a
+// posição (no máximo 1 a cada TRACK_MIN_INTERVAL_MS). Funciona com o app
+// ABERTO — o navegador suspende a geolocalização quando o app sai da tela
+// (rastreio contínuo com app fechado exige o app nativo, etapa 2).
+function useLiveTracking(
+  tripId: number,
+  active: boolean,
+  send: (p: { lat: number; lng: number; velocidade: number | null }) => void
+): TrackState {
+  const [state, setState] = useState<TrackState>("off");
+  const lastSentRef = useRef(0);
+  const sendRef = useRef(send);
+  sendRef.current = send;
+
+  useEffect(() => {
+    if (!active) {
+      setState("off");
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setState("unsupported");
+      return;
+    }
+    setState("on");
+    const watchId = navigator.geolocation.watchPosition(
+      pos => {
+        const now = Date.now();
+        if (now - lastSentRef.current < TRACK_MIN_INTERVAL_MS) return;
+        lastSentRef.current = now;
+        const spd = pos.coords.speed; // m/s (pode ser null)
+        sendRef.current({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          velocidade:
+            spd != null && !Number.isNaN(spd)
+              ? Math.round(spd * 3.6 * 100) / 100 // km/h
+              : null,
+        });
+      },
+      err => {
+        if (err.code === err.PERMISSION_DENIED) setState("denied");
+      },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 30_000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+    // tripId no dep para reiniciar o watch se mudar de viagem.
+  }, [active, tripId]);
+
+  return state;
+}
 
 export default function DriverApp() {
   const { user, loading } = useAuth();
@@ -236,6 +292,11 @@ function DriverHome({ name }: { name: string }) {
 
 function TripCard({ trip, onChange }: { trip: any; onChange: () => void }) {
   const [chegada, setChegada] = useState(nowLocalInput());
+  const emAndamento = trip.status === "em_andamento";
+  const reportPosition = trpc.driverApp.reportPosition.useMutation();
+  const trackState = useLiveTracking(trip.id, emAndamento, p =>
+    reportPosition.mutate({ tripId: trip.id, ...p })
+  );
   const start = trpc.driverApp.startTrip.useMutation({
     onSuccess: () => {
       toast.success("Viagem iniciada!");
@@ -323,7 +384,35 @@ function TripCard({ trip, onChange }: { trip: any; onChange: () => void }) {
           </Button>
         )}
 
-        {trip.status === "em_andamento" && (
+        {emAndamento && (
+          <div
+            className={`flex items-center gap-2 rounded-lg border p-2 text-xs ${
+              trackState === "on"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : trackState === "denied"
+                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                  : "text-muted-foreground"
+            }`}
+          >
+            {trackState === "on" && (
+              <>
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                Rastreando sua localização · mantenha o app aberto
+              </>
+            )}
+            {trackState === "denied" && (
+              <>⚠️ Ative a localização do navegador para ser rastreado</>
+            )}
+            {trackState === "unsupported" && (
+              <>Este aparelho não permite rastreio pelo navegador</>
+            )}
+          </div>
+        )}
+
+        {emAndamento && (
           <div className="space-y-2 rounded-lg border p-3">
             <Label className="text-xs">Data e hora de chegada no cliente</Label>
             <Input

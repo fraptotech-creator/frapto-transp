@@ -195,6 +195,27 @@ export const trips = mysqlTable(
 export type Trip = typeof trips.$inferSelect;
 export type InsertTrip = typeof trips.$inferInsert;
 
+// Posições GPS reportadas pelo celular do motorista durante a viagem (rastreio).
+export const tripPositions = mysqlTable(
+  "trip_positions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    orgId: int("orgId").notNull(),
+    tripId: int("tripId").notNull(),
+    veiculoId: int("veiculoId"),
+    lat: decimal("lat", { precision: 10, scale: 7 }).notNull(),
+    lng: decimal("lng", { precision: 10, scale: 7 }).notNull(),
+    velocidade: decimal("velocidade", { precision: 6, scale: 2 }),
+    capturedAt: timestamp("capturedAt").defaultNow().notNull(),
+  },
+  t => ({
+    tripIdx: index("trip_positions_trip_idx").on(t.orgId, t.tripId),
+  })
+);
+
+export type TripPosition = typeof tripPositions.$inferSelect;
+export type InsertTripPosition = typeof tripPositions.$inferInsert;
+
 // Tabela de manutenção de veículos
 export const maintenance = mysqlTable(
   "maintenance",
