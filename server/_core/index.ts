@@ -4,7 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
-import { handleTrackIngest } from "../routers/trackHttp";
+import { handleTrackIngest, handleTrackLogin } from "../routers/trackHttp";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
@@ -103,6 +103,8 @@ async function startServer() {
   // não o browser), por isso fica fora do originCheck do /api/trpc. Rate-limit
   // geral por IP (cada aparelho tem seu IP; posta a cada ~15-30s).
   app.post("/api/track", apiLimiter, handleTrackIngest);
+  // Login do app nativo (rate-limit estrito anti brute-force).
+  app.post("/api/track/login", authLimiter, handleTrackLogin);
 
   // Login (email+senha) é via tRPC (auth.signup / auth.login).
   // Rate-limit ESTRITO no login/cadastro (anti brute-force), antes do geral.

@@ -1,12 +1,68 @@
 import type { Request, Response } from "express";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { normalizeTrackPayload } from "../_core/trackIngest";
 import { canRecordPosition } from "../_core/tracking";
 import {
   getDriverByTrackingToken,
+  getUserByUsername,
+  getDriverById,
+  setDriverTrackingToken,
   getTripById,
   getTrips,
   addTripPosition,
 } from "../db";
+
+// Login REST do app NATIVO de rastreio (sem tRPC/superjson). Valida
+// usuário+senha do motorista e devolve o token de rastreio. Fail-closed;
+// protegido por rate-limit estrito na borda (authLimiter).
+export async function handleTrackLogin(req: Request, res: Response) {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const username =
+      typeof body.username === "string"
+        ? body.username.toLowerCase().trim()
+        : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!username || !password) {
+      res.status(400).json({ error: "informe usuário e senha" });
+      return;
+    }
+    const user = await getUserByUsername(username);
+    if (
+      !user ||
+      !user.passwordHash ||
+      user.orgRole !== "driver" ||
+      !user.orgId ||
+      !user.driverId
+    ) {
+      res.status(401).json({ error: "usuário ou senha inválidos" });
+      return;
+    }
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      res.status(401).json({ error: "usuário ou senha inválidos" });
+      return;
+    }
+    const driver = await getDriverById(user.orgId, user.driverId);
+    if (!driver) {
+      res.status(401).json({ error: "motorista não encontrado" });
+      return;
+    }
+    let token = driver.trackingToken;
+    if (!token) {
+      token = randomBytes(24).toString("hex");
+      await setDriverTrackingToken(user.orgId, user.driverId, token);
+    }
+    res.status(200).json({ token, nome: driver.nome });
+  } catch (err) {
+    console.error(
+      "[track] login error",
+      err instanceof Error ? err.message : err
+    );
+    res.status(500).json({ error: "erro interno" });
+  }
+}
 
 // Ingestão de posição do app NATIVO (GPS em segundo plano). Autenticado por
 // token de motorista — org/driverId saem do registro do token, nunca do
