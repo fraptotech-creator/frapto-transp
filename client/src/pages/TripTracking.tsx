@@ -90,7 +90,6 @@ export default function TripTracking() {
       overlay.current.addLayer(line);
       overlay.current.addLayer(origem);
       overlay.current.addLayer(destino);
-      bounds.extend(line.getBounds());
     }
 
     if (hasTrack) {
@@ -117,11 +116,18 @@ export default function TripTracking() {
           radius: 9,
         }).bindPopup(`🚛 Posição atual${vel}<br/>${when}`);
         overlay.current.addLayer(here);
-        pts.forEach(p => bounds.extend(p));
       }
+      pts.forEach(p => bounds.extend(p));
     }
 
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+    // Com rastreio ao vivo, enquadra no TRAJETO do motorista (pra o movimento
+    // ficar visível); sem rastreio, na rota planejada inteira. maxZoom evita
+    // zoom exagerado quando há só 1-2 pontos.
+    if (!hasTrack && hasRoute && route) {
+      bounds.extend(L.polyline(route.geometry).getBounds());
+    }
+    if (bounds.isValid())
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
   }, [route, positions]);
 
   return (
