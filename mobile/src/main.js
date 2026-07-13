@@ -1,4 +1,4 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import BackgroundGeolocation from "@transistorsoft/capacitor-background-geolocation";
 
 // Servidor de produção do Frapto Transp.
@@ -27,6 +27,34 @@ function setStatus(on, text) {
   $("stopBtn").classList.toggle("hidden", !on);
 }
 
+// POST em JSON. No app nativo usa CapacitorHttp (rede nativa, sem CORS); no
+// navegador (dev) usa fetch. Retorna { ok, status, data }.
+async function apiPost(path, body) {
+  const url = `${BASE}${path}`;
+  if (isNative) {
+    const res = await CapacitorHttp.post({
+      url,
+      headers: { "Content-Type": "application/json" },
+      data: body,
+    });
+    let data = res.data;
+    if (typeof data === "string") {
+      try {
+        data = JSON.parse(data);
+      } catch {
+        /* deixa como string */
+      }
+    }
+    return { ok: res.status >= 200 && res.status < 300, status: res.status, data };
+  }
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+}
+
 // ─── Login (REST, sem tRPC) ─────────────────────────────────────────────────
 async function doLogin() {
   const username = $("username").value.trim();
@@ -39,14 +67,11 @@ async function doLogin() {
   $("loginBtn").disabled = true;
   $("loginBtn").textContent = "Entrando...";
   try {
-    const r = await fetch(`${BASE}/api/track/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    const data = await r.json().catch(() => ({}));
+    const r = await apiPost("/api/track/login", { username, password });
+    const data = r.data || {};
     if (!r.ok || !data.token) {
-      $("loginErr").textContent = data.error || "Falha ao entrar.";
+      $("loginErr").textContent =
+        data.error || `Falha ao entrar (HTTP ${r.status}).`;
       return;
     }
     localStorage.setItem(TOKEN_KEY, data.token);
@@ -54,7 +79,9 @@ async function doLogin() {
     showTrack();
     await configureTracking(data.token);
   } catch (e) {
-    $("loginErr").textContent = "Sem conexão. Tente de novo.";
+    // Mostra o erro REAL pra diagnóstico (rede/CORS/URL/TLS).
+    const msg = e && e.message ? e.message : String(e);
+    $("loginErr").textContent = `Erro: ${msg}`;
   } finally {
     $("loginBtn").disabled = false;
     $("loginBtn").textContent = "Entrar";
