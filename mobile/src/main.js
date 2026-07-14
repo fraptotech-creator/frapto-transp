@@ -128,18 +128,22 @@ async function configureTracking(token) {
   }
   const state = await BackgroundGeolocation.ready({
     desiredAccuracy: BackgroundGeolocation.DESIRED_ACCURACY_HIGH,
-    distanceFilter: 20, // metros entre pontos
+    distanceFilter: 50, // metros entre pontos (menos requisições)
     stopOnTerminate: false, // continua se o app for fechado
     startOnBoot: true, // volta após reiniciar o celular
     foregroundService: true,
     // Envia a posição direto ao servidor (nativo), mesmo com o app fechado.
     url: `${BASE}/api/track`,
-    httpRootProperty: ".",
+    // Agrupa várias posições num POST só (bem menos requisições). O servidor
+    // lê o campo "location" (objeto único ou array).
+    httpRootProperty: "location",
     locationTemplate:
       '{"lat":<%= latitude %>,"lng":<%= longitude %>,"speed":<%= speed %>}',
     params: { token },
     autoSync: true,
-    batchSync: false,
+    batchSync: true,
+    autoSyncThreshold: 5,
+    maxBatchSize: 50,
     notification: {
       title: "Frapto Transp",
       text: "Rastreamento ativo",

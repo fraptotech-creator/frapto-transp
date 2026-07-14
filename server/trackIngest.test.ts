@@ -53,6 +53,26 @@ describe("normalizeTrackPayload", () => {
     ]);
   });
 
+  it("aceita o campo 'location' único (transistorsoft)", () => {
+    const r = normalizeTrackPayload({
+      token: "t",
+      location: { lat: -20, lng: -40, speed: 12 },
+    });
+    expect(r.token).toBe("t");
+    expect(r.points).toEqual([{ tripId: null, lat: -20, lng: -40, speed: 12 }]);
+  });
+
+  it("aceita 'location' em lote (batchSync)", () => {
+    const r = normalizeTrackPayload({
+      token: "t",
+      location: [
+        { lat: -20, lng: -40 },
+        { lat: -21, lng: -41 },
+      ],
+    });
+    expect(r.points).toHaveLength(2);
+  });
+
   it("sem token → token null", () => {
     expect(normalizeTrackPayload({ lat: -20, lng: -40 }).token).toBeNull();
   });

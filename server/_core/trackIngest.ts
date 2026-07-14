@@ -50,11 +50,18 @@ export function normalizeTrackPayload(body: unknown): TrackPayload {
   const o = body as Record<string, unknown>;
   const token = typeof o.token === "string" && o.token ? o.token : null;
 
+  // Formatos aceitos: lote em locations[]/points[]; o campo `location` do
+  // transistorsoft (objeto único OU array quando batchSync); ou ponto único no
+  // próprio corpo.
   const rawPoints: unknown[] = Array.isArray(o.locations)
     ? o.locations
     : Array.isArray(o.points)
       ? o.points
-      : [o]; // ponto único no próprio corpo
+      : Array.isArray(o.location)
+        ? o.location
+        : o.location && typeof o.location === "object"
+          ? [o.location]
+          : [o];
 
   const points: TrackPoint[] = [];
   for (const rp of rawPoints) {
