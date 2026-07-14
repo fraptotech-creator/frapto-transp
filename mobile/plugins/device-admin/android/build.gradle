@@ -39,4 +39,5 @@ repositories {
 
 dependencies {
     implementation project(':capacitor-android')
+    implementation "androidx.appcompat:appcompat:${safeExtGet('androidxAppCompatVersion', '1.7.0')}"
 }
