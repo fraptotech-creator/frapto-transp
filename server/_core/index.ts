@@ -14,6 +14,8 @@ import {
   apiLimiter,
   authLimiter,
   originCheck,
+  trackLimiter,
+  trackIpBackstop,
 } from "./security";
 
 // Fail-closed: em produção, o app NÃO sobe sem os segredos essenciais.
@@ -102,7 +104,9 @@ async function startServer() {
   // token de motorista no corpo — NÃO usa cookie/Origin (é um cliente nativo,
   // não o browser), por isso fica fora do originCheck do /api/trpc. Rate-limit
   // geral por IP (cada aparelho tem seu IP; posta a cada ~15-30s).
-  app.post("/api/track", apiLimiter, handleTrackIngest);
+  // Rastreio: teto por IP (anti-flood) + limite por token (não trava frota
+  // atrás do mesmo IP de operadora). Ambos ANTES do handler.
+  app.post("/api/track", trackIpBackstop, trackLimiter, handleTrackIngest);
   // Login do app nativo (rate-limit estrito anti brute-force).
   app.post("/api/track/login", authLimiter, handleTrackLogin);
 

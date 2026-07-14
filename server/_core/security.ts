@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { ENV } from "./env";
 
 // Headers de segurança (1º middleware). Sem CSP por ora (evita quebrar o bundle
@@ -33,6 +33,33 @@ export const apiLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { error: "Muitas requisições. Tente novamente em instantes." },
+});
+
+// Rate-limit do rastreio (/api/track). Chaveado pelo TOKEN do motorista, não
+// por IP: várias vans atrás do mesmo IP de operadora (CGNAT) não se
+// auto-bloqueiam. Sem token, cai no IP (normalizado p/ IPv6).
+export const trackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 240,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    const t =
+      req.body && typeof req.body.token === "string" ? req.body.token : "";
+    return t ? `tok:${t}` : ipKeyGenerator(req.ip ?? "0.0.0.0");
+  },
+  message: { error: "Muitas requisições de rastreio. Aguarde um instante." },
+});
+
+// Teto por IP no /api/track: limita abuso (ex.: rotação de tokens falsos) sem
+// travar frota legítima. Ceiling alto — só barra flood.
+export const trackIpBackstop = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 1200,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? "0.0.0.0"),
+  message: { error: "Muitas requisições deste IP." },
 });
 
 // Rate-limit estrito para login/cadastro (anti brute-force).

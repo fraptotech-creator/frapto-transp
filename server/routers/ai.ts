@@ -5,6 +5,7 @@ import { getAiConfig, upsertAiConfig } from "../db";
 import { invokeLLM, invokeOpenAIAgent, type ChatMessage } from "../_core/llm";
 import { toOpenAiTools, runAiTool } from "../_core/aiTools";
 import { assertSafeBaseUrl } from "../_core/urlSafety";
+import { allowRequest } from "../_core/rateLimit";
 import {
   buildFleetContext,
   FLEET_ASSISTANT_SYSTEM,
@@ -29,6 +30,13 @@ export const aiRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      // Limite por empresa: protege a cota/custo do provedor de IA.
+      if (!allowRequest(`ai:${ctx.orgId}`, 20, 60 * 1000, Date.now())) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Muitas perguntas à IA em pouco tempo. Aguarde um instante.",
+        });
+      }
       const cfg = await resolveAiConfig(ctx.orgId);
       if (!cfg) {
         throw new TRPCError({
