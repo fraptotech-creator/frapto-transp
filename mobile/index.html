@@ -153,6 +153,23 @@
         </p>
       </div>
 
+      <!-- TERMO DE CIÊNCIA (LGPD) -->
+      <div id="consentView" class="hidden">
+        <div class="card">
+          <h1 style="font-size: 16px; margin: 0 0 10px">
+            Aviso de rastreamento
+          </h1>
+          <p class="muted" style="line-height: 1.5">
+            Durante as suas viagens, a sua localização é compartilhada com a
+            empresa para acompanhar a entrega. O registro acontece somente
+            quando há uma viagem <strong>em andamento</strong>. Fora de viagem,
+            nada é registrado.
+          </p>
+        </div>
+        <button id="consentBtn">Li e concordo</button>
+        <button class="link" id="consentLogout">Sair</button>
+      </div>
+
       <!-- RASTREIO -->
       <div id="trackView" class="hidden">
         <div class="card">
@@ -166,6 +183,21 @@
         <button id="startBtn">Iniciar rastreamento</button>
         <button id="stopBtn" class="stop hidden">Parar rastreamento</button>
         <p class="err" id="trackErr"></p>
+
+        <!-- Aviso/botão de otimização de bateria (aparece só se necessário) -->
+        <div
+          id="batteryCard"
+          class="card hidden"
+          style="border-color: #b45309; background: #1f1600"
+        >
+          <p style="margin: 0 0 10px; font-size: 14px; color: #fcd34d">
+            ⚠️ Pra o rastreio não parar sozinho, desative a otimização de
+            bateria para este app.
+          </p>
+          <button id="batteryBtn" style="margin-top: 0; background: #b45309">
+            Desativar otimização de bateria
+          </button>
+        </div>
         <p class="muted" style="margin-top: 14px">
           Pode fechar o app e usar o Waze normalmente: o rastreio continua em
           segundo plano. O sistema só registra a posição quando você tem uma

@@ -5,19 +5,40 @@ import BackgroundGeolocation from "@transistorsoft/capacitor-background-geolocat
 const BASE = "https://frapto-transp-production.up.railway.app";
 const TOKEN_KEY = "frapto_track_token";
 const NAME_KEY = "frapto_track_name";
+const CONSENT_KEY = "frapto_track_consent";
 
 const $ = id => document.getElementById(id);
 const isNative = Capacitor.isNativePlatform();
 
 // ─── Telas ────────────────────────────────────────────────────────────────
-function showLogin() {
-  $("loginView").classList.remove("hidden");
+function hideAll() {
+  $("loginView").classList.add("hidden");
+  $("consentView").classList.add("hidden");
   $("trackView").classList.add("hidden");
 }
+function showLogin() {
+  hideAll();
+  $("loginView").classList.remove("hidden");
+}
+function showConsent() {
+  hideAll();
+  $("consentView").classList.remove("hidden");
+}
 function showTrack() {
-  $("loginView").classList.add("hidden");
+  hideAll();
   $("trackView").classList.remove("hidden");
   $("driverName").textContent = localStorage.getItem(NAME_KEY) || "";
+}
+
+// Após logar (ou sessão salva): só vai pro rastreio se já aceitou o termo.
+function proceedAfterLogin() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (localStorage.getItem(CONSENT_KEY) !== "1") {
+    showConsent();
+    return;
+  }
+  showTrack();
+  if (token) configureTracking(token);
 }
 
 function setStatus(on, text) {
@@ -45,7 +66,11 @@ async function apiPost(path, body) {
         /* deixa como string */
       }
     }
-    return { ok: res.status >= 200 && res.status < 300, status: res.status, data };
+    return {
+      ok: res.status >= 200 && res.status < 300,
+      status: res.status,
+      data,
+    };
   }
   const r = await fetch(url, {
     method: "POST",
@@ -76,8 +101,7 @@ async function doLogin() {
     }
     localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(NAME_KEY, data.nome || "");
-    showTrack();
-    await configureTracking(data.token);
+    proceedAfterLogin();
   } catch (e) {
     // Mostra o erro REAL pra diagnóstico (rede/CORS/URL/TLS).
     const msg = e && e.message ? e.message : String(e);
@@ -133,6 +157,31 @@ async function configureTracking(token) {
   });
 
   setStatus(state.enabled, state.enabled ? "Rastreando" : "Parado");
+  checkBattery();
+}
+
+// Otimização de bateria: se o Android estiver otimizando o app, o serviço pode
+// ser morto. Mostra o aviso/botão só quando NÃO está isento.
+async function checkBattery() {
+  if (!isNative) return;
+  try {
+    const ok =
+      await BackgroundGeolocation.deviceSettings.isIgnoringBatteryOptimizations();
+    $("batteryCard").classList.toggle("hidden", ok);
+  } catch {
+    /* API pode não existir no aparelho — ignora */
+  }
+}
+
+async function fixBattery() {
+  try {
+    const req =
+      await BackgroundGeolocation.deviceSettings.showIgnoreBatteryOptimizations();
+    await BackgroundGeolocation.deviceSettings.show(req);
+    setTimeout(checkBattery, 1500);
+  } catch {
+    /* usuário pode ter cancelado */
+  }
 }
 
 async function startTracking() {
@@ -171,12 +220,16 @@ $("password").addEventListener("keydown", e => {
 $("startBtn").addEventListener("click", startTracking);
 $("stopBtn").addEventListener("click", stopTracking);
 $("logoutBtn").addEventListener("click", logout);
+$("batteryBtn").addEventListener("click", fixBattery);
+$("consentBtn").addEventListener("click", () => {
+  localStorage.setItem(CONSENT_KEY, "1");
+  proceedAfterLogin();
+});
+$("consentLogout").addEventListener("click", logout);
 
-// Sessão salva → já entra na tela de rastreio.
-const saved = localStorage.getItem(TOKEN_KEY);
-if (saved) {
-  showTrack();
-  configureTracking(saved);
+// Sessão salva → decide entre termo e rastreio.
+if (localStorage.getItem(TOKEN_KEY)) {
+  proceedAfterLogin();
 } else {
   showLogin();
 }
