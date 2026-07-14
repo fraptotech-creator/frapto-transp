@@ -198,6 +198,21 @@
             Desativar otimização de bateria
           </button>
         </div>
+
+        <!-- Proteção contra desinstalação (Device Admin) -->
+        <button id="adminBtn" class="hidden" style="background: #0f766e">
+          🔒 Ativar proteção contra desinstalação
+        </button>
+        <p id="adminActive" class="muted hidden" style="margin-top: 12px">
+          🔒 Proteção contra desinstalação <strong>ativa</strong>.
+          <button
+            class="link"
+            id="adminRemove"
+            style="display: inline; margin: 0 0 0 4px; padding: 0"
+          >
+            liberar
+          </button>
+        </p>
         <p class="muted" style="margin-top: 14px">
           Pode fechar o app e usar o Waze normalmente: o rastreio continua em
           segundo plano. O sistema só registra a posição quando você tem uma

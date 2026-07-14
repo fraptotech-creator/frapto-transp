@@ -1,5 +1,6 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import BackgroundGeolocation from "@transistorsoft/capacitor-background-geolocation";
+import { FraptoDeviceAdmin } from "frapto-device-admin";
 
 // Servidor de produção do Frapto Transp.
 const BASE = "https://frapto-transp-production.up.railway.app";
@@ -158,6 +159,7 @@ async function configureTracking(token) {
 
   setStatus(state.enabled, state.enabled ? "Rastreando" : "Parado");
   checkBattery();
+  checkAdmin();
 }
 
 // Otimização de bateria: se o Android estiver otimizando o app, o serviço pode
@@ -181,6 +183,38 @@ async function fixBattery() {
     setTimeout(checkBattery, 1500);
   } catch {
     /* usuário pode ter cancelado */
+  }
+}
+
+// Proteção contra desinstalação (Device Admin). Mostra o botão de ativar ou o
+// aviso de "ativa + liberar", conforme o estado atual.
+async function checkAdmin() {
+  if (!isNative) return;
+  try {
+    const { active } = await FraptoDeviceAdmin.isAdminActive();
+    $("adminBtn").classList.toggle("hidden", active);
+    $("adminActive").classList.toggle("hidden", !active);
+  } catch {
+    /* plugin indisponível — ignora */
+  }
+}
+
+async function activateAdmin() {
+  try {
+    await FraptoDeviceAdmin.requestAdmin();
+    // O usuário volta da tela do sistema; reconfere ao focar de novo.
+    setTimeout(checkAdmin, 1000);
+  } catch {
+    /* ignora */
+  }
+}
+
+async function removeAdminProtection() {
+  try {
+    await FraptoDeviceAdmin.removeAdmin();
+    checkAdmin();
+  } catch {
+    /* ignora */
   }
 }
 
@@ -221,6 +255,8 @@ $("startBtn").addEventListener("click", startTracking);
 $("stopBtn").addEventListener("click", stopTracking);
 $("logoutBtn").addEventListener("click", logout);
 $("batteryBtn").addEventListener("click", fixBattery);
+$("adminBtn").addEventListener("click", activateAdmin);
+$("adminRemove").addEventListener("click", removeAdminProtection);
 $("consentBtn").addEventListener("click", () => {
   localStorage.setItem(CONSENT_KEY, "1");
   proceedAfterLogin();

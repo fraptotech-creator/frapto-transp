@@ -1,0 +1,18 @@
+{
+  "name": "frapto-device-admin",
+  "version": "0.0.1",
+  "description": "Device Admin (impede desinstalação acidental) para o app de rastreio.",
+  "type": "module",
+  "main": "dist/plugin.js",
+  "module": "dist/plugin.js",
+  "types": "dist/definitions.d.ts",
+  "files": ["dist/", "android/"],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=6.0.0"
+  }
+}
