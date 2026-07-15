@@ -103,7 +103,7 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
         <p className="text-xs text-muted-foreground">
           {info?.hasLogin
             ? "Este motorista já tem acesso. Você pode trocar o usuário."
-            : "Defina um usuário para CRIAR o acesso (senha inicial 123456, troca no 1º acesso)."}
+            : "Defina um usuário para CRIAR o acesso (uma senha inicial é gerada e mostrada ao salvar; troca no 1º acesso)."}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -128,7 +128,11 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
             size="sm"
             disabled={reset.isPending}
             onClick={() => {
-              if (confirm("Resetar a senha deste motorista para 123456?")) {
+              if (
+                confirm(
+                  "Resetar a senha deste motorista? Uma nova senha será gerada e mostrada."
+                )
+              ) {
                 reset.mutate({ driverId });
               }
             }}
@@ -164,8 +168,11 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
   });
 
   const createMutation = trpc.drivers.create.useMutation({
-    onSuccess: () => {
-      toast.success("Motorista cadastrado com sucesso!");
+    onSuccess: r => {
+      toast.success(
+        `Motorista cadastrado! Senha inicial: ${r.initialPassword} — anote e passe ao motorista (troca no 1º acesso).`,
+        { duration: 15000 }
+      );
       queryClient.invalidateQueries({ queryKey: [["drivers", "list"]] });
       onSuccess();
     },
@@ -237,8 +244,9 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
                   <Input placeholder="ex: joao.silva" {...field} />
                 </FormControl>
                 <p className="text-xs text-muted-foreground">
-                  Senha inicial: <strong>123456</strong> — o motorista troca no
-                  1º acesso (na área do motorista).
+                  Uma <strong>senha inicial única</strong> é gerada e mostrada
+                  ao salvar — anote e passe ao motorista. Ele troca no 1º
+                  acesso.
                 </p>
                 <FormMessage />
               </FormItem>

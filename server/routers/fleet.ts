@@ -134,8 +134,12 @@ export const vehiclesRouter = router({
     .mutation(({ ctx, input }) => deleteVehicle(ctx.orgId, input.id)),
 });
 
-// Senha inicial do motorista; ele é obrigado a trocar no 1º acesso.
-export const DRIVER_DEFAULT_PASSWORD = "123456";
+// Senha inicial do motorista: ALEATÓRIA por motorista (não mais a constante
+// "123456" compartilhada — que era previsível e igual p/ todos). Mostrada UMA
+// vez ao admin no cadastro/reset; troca obrigatória no 1º acesso.
+function genInitialPassword(): string {
+  return randomBytes(4).toString("hex"); // 8 chars hex, fácil de digitar
+}
 
 // O trackingToken é uma CREDENCIAL bearer (posta em /api/track sem cookie) —
 // vive só no aparelho do motorista. NUNCA deve ir pro browser da gestão. Strip
@@ -205,8 +209,9 @@ export const driversRouter = router({
           message: "Falha ao cadastrar motorista.",
         });
       }
+      const initialPassword = genInitialPassword();
       try {
-        const passwordHash = await bcrypt.hash(DRIVER_DEFAULT_PASSWORD, 10);
+        const passwordHash = await bcrypt.hash(initialPassword, 10);
         await createDriverUser({
           orgId: ctx.orgId,
           driverId: driver.id,
@@ -220,7 +225,7 @@ export const driversRouter = router({
         await deleteDriver(ctx.orgId, driver.id);
         throw e;
       }
-      return stripDriverSecret(driver);
+      return { ...stripDriverSecret(driver), initialPassword };
     }),
 
   // Informa o usuário (apelido) de login do motorista, se já houver.
@@ -260,7 +265,8 @@ export const driversRouter = router({
         await setUsername(current.openId, username);
         return { created: false } as const;
       }
-      const passwordHash = await bcrypt.hash(DRIVER_DEFAULT_PASSWORD, 10);
+      const initialPassword = genInitialPassword();
+      const passwordHash = await bcrypt.hash(initialPassword, 10);
       await createDriverUser({
         orgId: ctx.orgId,
         driverId: input.driverId,
@@ -271,7 +277,7 @@ export const driversRouter = router({
       });
       return {
         created: true,
-        defaultPassword: DRIVER_DEFAULT_PASSWORD,
+        defaultPassword: initialPassword,
       } as const;
     }),
 
@@ -287,13 +293,14 @@ export const driversRouter = router({
           message: "Este motorista não tem login.",
         });
       }
-      const hash = await bcrypt.hash(DRIVER_DEFAULT_PASSWORD, 10);
+      const newPassword = genInitialPassword();
+      const hash = await bcrypt.hash(newPassword, 10);
       await setUserPassword(user.openId, hash, true);
       await incrementSessionVersion(user.openId);
       // Rotaciona (anula) o token de rastreio: mata o acesso do aparelho antigo
       // ao /api/track; no próximo login o app gera um token novo.
       await setDriverTrackingToken(ctx.orgId, input.driverId, null);
-      return { defaultPassword: DRIVER_DEFAULT_PASSWORD } as const;
+      return { defaultPassword: newPassword } as const;
     }),
 
   update: activeOrgProcedure
