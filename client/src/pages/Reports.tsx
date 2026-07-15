@@ -11,7 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Download, FileText, TrendingUp, DollarSign } from "lucide-react";
 import { formatPlaca } from "@/lib/format";
 import { exportTablePDF } from "@/lib/exportPdf";
-import { filtrarLedgerPorMes, resumoAnualPorMes } from "@/lib/financeReport";
+import {
+  filtrarLedgerPorMes,
+  resumoAnualPorMes,
+  totaisLedger,
+} from "@/lib/financeReport";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   LineChart,
@@ -260,19 +264,41 @@ export default function Reports() {
     const ledger = (fin?.ledger ?? []) as any[];
     const brl = (n: number) => n.toFixed(2);
     if (finMode === "detalhado") {
-      const rows = filtrarLedgerPorMes(ledger, finMonth)
+      const doMes = filtrarLedgerPorMes(ledger, finMonth)
         .slice()
-        .sort((a, b) => a.data.localeCompare(b.data))
-        .map(e => ({
-          Data: formatDateBR(e.data),
-          Tipo: e.kind === "receita" ? "Receita" : "Despesa",
-          Categoria: e.categoria,
-          Origem: e.origem,
-          Descricao: e.descricao,
-          Veiculo: e.veiculo ?? "",
-          ValorBRL: brl(e.valor),
-          Realizado: e.realizado ? "Sim" : "Não",
-        }));
+        .sort((a, b) => a.data.localeCompare(b.data));
+      const rows: Record<string, any>[] = doMes.map(e => ({
+        Data: formatDateBR(e.data),
+        Tipo: e.kind === "receita" ? "Receita" : "Despesa",
+        Categoria: e.categoria,
+        Origem: e.origem,
+        Descricao: e.descricao,
+        Veiculo: e.veiculo ?? "",
+        ValorBRL: brl(e.valor),
+        Situacao:
+          e.kind === "despesa"
+            ? "Pago"
+            : e.realizado
+              ? "Recebido"
+              : "A receber",
+      }));
+      // Totais do mês (inclui A RECEBER).
+      const t = totaisLedger(doMes);
+      const totalRow = (desc: string, valor: number) => ({
+        Data: "",
+        Tipo: "",
+        Categoria: "",
+        Origem: "",
+        Descricao: desc,
+        Veiculo: "",
+        ValorBRL: brl(valor),
+        Situacao: "",
+      });
+      rows.push(totalRow("— TOTAIS DO MÊS —", 0));
+      rows.push(totalRow("Recebido", t.recebido));
+      rows.push(totalRow("A receber", t.aReceber));
+      rows.push(totalRow("Despesas", t.despesa));
+      rows.push(totalRow("Saldo (recebido − despesa)", t.recebido - t.despesa));
       return {
         title: `Relatório Financeiro detalhado — ${finMonth}`,
         filename: `financeiro-detalhado-${finMonth}`,
@@ -285,7 +311,8 @@ export default function Reports() {
       filename: `financeiro-geral-${finYear}`,
       rows: resumo.map(m => ({
         Mes: `${m.mes}/${finYear}`,
-        ReceitaBRL: brl(m.receita),
+        RecebidoBRL: brl(m.recebido),
+        AReceberBRL: brl(m.aReceber),
         DespesasBRL: brl(m.despesa),
         LucroBRL: brl(m.lucro),
       })),
