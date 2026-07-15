@@ -82,6 +82,18 @@ export async function getDownloadUrl(
   return getSignedUrl(getClient(), cmd, { expiresIn: 300 });
 }
 
+// URL assinada para VISUALIZAR no navegador (inline, sem baixar). Seguro: o
+// allowlist do upload só aceita pdf/jpg/png/webp — os tipos perigosos
+// (svg/html/js) já são barrados, então renderizar inline não vira XSS.
+export async function getViewUrl(key: string): Promise<string> {
+  const cmd = new GetObjectCommand({
+    Bucket: ENV.r2BucketName,
+    Key: key,
+    ResponseContentDisposition: "inline",
+  });
+  return getSignedUrl(getClient(), cmd, { expiresIn: 300 });
+}
+
 export async function deleteObject(key: string): Promise<void> {
   await getClient().send(
     new DeleteObjectCommand({ Bucket: ENV.r2BucketName, Key: key })

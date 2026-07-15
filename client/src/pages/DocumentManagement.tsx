@@ -25,10 +25,11 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
-import { FileText, Upload, Download, Trash2 } from "lucide-react";
+import { FileText, Upload, Download, Trash2, Eye, Search } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
+import { filtrarDocumentos } from "@/lib/docFilter";
 
 type DocType = "crlv" | "seguro" | "cnh" | "rg" | "cpf" | "outro";
 const TIPO_LABEL: Record<DocType, string> = {
@@ -55,11 +56,15 @@ export default function DocumentManagement() {
 
   const uploadM = trpc.documents.upload.useMutation();
   const downloadM = trpc.documents.downloadUrl.useMutation();
+  const viewM = trpc.documents.viewUrl.useMutation();
   const deleteM = trpc.documents.delete.useMutation();
 
   const [file, setFile] = useState<File | null>(null);
   const [tipo, setTipo] = useState<DocType>("crlv");
   const [descricao, setDescricao] = useState("");
+  const [busca, setBusca] = useState("");
+
+  const docsFiltrados = filtrarDocumentos(docs ?? [], busca);
 
   const configured = status?.configured ?? false;
 
@@ -97,6 +102,18 @@ export default function DocumentManagement() {
       showErrorDialog(
         e instanceof Error ? e.message : "Falha ao baixar",
         "Erro ao baixar"
+      );
+    }
+  };
+
+  const handleView = async (id: number) => {
+    try {
+      const { url } = await viewM.mutateAsync({ id });
+      window.open(url, "_blank");
+    } catch (e) {
+      showErrorDialog(
+        e instanceof Error ? e.message : "Falha ao visualizar",
+        "Erro ao visualizar"
       );
     }
   };
@@ -193,7 +210,20 @@ export default function DocumentManagement() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Documentos enviados</CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle>Documentos enviados</CardTitle>
+            {docs && docs.length > 0 && (
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={busca}
+                  onChange={e => setBusca(e.target.value)}
+                  placeholder="Buscar por tipo ou descrição…"
+                  className="pl-8"
+                />
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -208,8 +238,8 @@ export default function DocumentManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {docs && docs.length > 0 ? (
-                  docs.map(d => (
+                {docsFiltrados.length > 0 ? (
+                  docsFiltrados.map(d => (
                     <TableRow key={d.id}>
                       <TableCell>
                         {TIPO_LABEL[d.tipo as DocType] ?? d.tipo}
@@ -219,6 +249,15 @@ export default function DocumentManagement() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          title="Visualizar"
+                          onClick={() => handleView(d.id)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Baixar"
                           onClick={() => handleDownload(d.id)}
                         >
                           <Download className="w-4 h-4" />
@@ -226,6 +265,7 @@ export default function DocumentManagement() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          title="Excluir"
                           onClick={() => handleDelete(d.id)}
                         >
                           <Trash2 className="w-4 h-4 text-rose-600" />
@@ -239,7 +279,9 @@ export default function DocumentManagement() {
                       colSpan={3}
                       className="text-center text-muted-foreground py-6"
                     >
-                      Nenhum documento enviado ainda.
+                      {docs && docs.length > 0
+                        ? "Nenhum documento corresponde à busca."
+                        : "Nenhum documento enviado ainda."}
                     </TableCell>
                   </TableRow>
                 )}

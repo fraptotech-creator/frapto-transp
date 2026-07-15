@@ -10,6 +10,7 @@ import {
 import {
   putObject,
   getDownloadUrl,
+  getViewUrl,
   deleteObject,
   buildObjectKey,
   ALLOWED_DOC_MIME,
@@ -94,6 +95,20 @@ export const documentsRouter = router({
         doc.descricao ?? undefined
       );
       return { url };
+    }),
+
+  // URL para VISUALIZAR no navegador (inline), sem baixar.
+  viewUrl: activeOrgProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const doc = await getDocumentById(ctx.orgId, input.id);
+      if (!doc?.arquivoKey) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Documento não encontrado.",
+        });
+      }
+      return { url: await getViewUrl(doc.arquivoKey) };
     }),
 
   delete: activeOrgProcedure
