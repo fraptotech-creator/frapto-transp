@@ -8,7 +8,9 @@ import {
   TrendingDown,
   Calendar,
   Trash2,
+  Map as MapIcon,
 } from "lucide-react";
+import { RoutePreviewDialog } from "@/components/RoutePreviewDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -97,6 +99,9 @@ export default function Financial() {
   // Filtro de data (yyyy-mm-dd) — aplicado às listas e aos totais.
   const [dataDe, setDataDe] = useState("");
   const [dataAte, setDataAte] = useState("");
+
+  // Preview rápido de rota (viagem) num dialog.
+  const [rotaTripId, setRotaTripId] = useState<number | null>(null);
 
   const handleCreateExpense = async () => {
     if (!expenseForm.descricao || !expenseForm.valor || !expenseForm.data) {
@@ -492,14 +497,22 @@ export default function Financial() {
                     <TableCell className="capitalize">
                       {item.categoria}
                     </TableCell>
-                    <TableCell>
-                      {item.descricao}
-                      {item.veiculo && (
-                        <span className="text-xs text-muted-foreground">
-                          {" "}
-                          · 🚛 {item.veiculo}
-                        </span>
-                      )}
+                    <TableCell className="max-w-[280px]">
+                      <span
+                        className="block truncate"
+                        title={
+                          item.descricao +
+                          (item.veiculo ? ` · 🚛 ${item.veiculo}` : "")
+                        }
+                      >
+                        {item.descricao}
+                        {item.veiculo && (
+                          <span className="text-xs text-muted-foreground">
+                            {" "}
+                            · 🚛 {item.veiculo}
+                          </span>
+                        )}
+                      </span>
                     </TableCell>
                     <TableCell className="text-rose-600 font-medium">
                       R${" "}
@@ -730,14 +743,22 @@ export default function Financial() {
                     <TableCell className="capitalize">
                       {item.categoria}
                     </TableCell>
-                    <TableCell>
-                      {item.descricao}
-                      {item.veiculo && (
-                        <span className="text-xs text-muted-foreground">
-                          {" "}
-                          · 🚛 {item.veiculo}
-                        </span>
-                      )}
+                    <TableCell className="max-w-[280px]">
+                      <span
+                        className="block truncate"
+                        title={
+                          item.descricao +
+                          (item.veiculo ? ` · 🚛 ${item.veiculo}` : "")
+                        }
+                      >
+                        {item.descricao}
+                        {item.veiculo && (
+                          <span className="text-xs text-muted-foreground">
+                            {" "}
+                            · 🚛 {item.veiculo}
+                          </span>
+                        )}
+                      </span>
                     </TableCell>
                     <TableCell className="text-emerald-600 font-medium">
                       R${" "}
@@ -765,6 +786,16 @@ export default function Financial() {
                         >
                           <Trash2 className="w-4 h-4 text-rose-600" />
                         </Button>
+                      ) : item.origem === "viagem" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setRotaTripId(item.refId)}
+                          title="Ver rota da viagem"
+                        >
+                          <MapIcon className="w-3.5 h-3.5 mr-1" /> Rota
+                        </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">
                           via Viagens
@@ -787,6 +818,12 @@ export default function Financial() {
           </Table>
         </TabsContent>
       </Tabs>
+
+      <RoutePreviewDialog
+        tripId={rotaTripId}
+        open={rotaTripId !== null}
+        onOpenChange={o => !o && setRotaTripId(null)}
+      />
     </div>
   );
 }
