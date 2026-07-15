@@ -36,6 +36,10 @@ jobs:
         working-directory: mobile
         run: npx cap add android
 
+      - name: Endurece o manifesto (sem backup do app → token não sai por adb)
+        working-directory: mobile
+        run: sed -i 's/android:allowBackup="true"/android:allowBackup="false"/' android/app/src/main/AndroidManifest.xml
+
       - name: Gera ícones do app (caminhão)
         working-directory: mobile
         run: npx capacitor-assets generate --android
