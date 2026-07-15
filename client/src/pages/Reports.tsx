@@ -7,9 +7,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Download, FileText, TrendingUp, DollarSign } from "lucide-react";
 import { formatPlaca } from "@/lib/format";
 import { exportTablePDF } from "@/lib/exportPdf";
+import { filtrarLedgerPorMes, resumoAnualPorMes } from "@/lib/financeReport";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   LineChart,
@@ -73,6 +75,15 @@ function downloadCSV(filename: string, rows: Record<string, any>[]) {
 const formatDateBR = (d: any) =>
   d ? new Date(d).toLocaleDateString("pt-BR") : "";
 
+// Data + HORA (partida/chegada de viagem precisam do horário).
+const formatDateTimeBR = (d: any) =>
+  d
+    ? new Date(d).toLocaleString("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+    : "";
+
 export default function Reports() {
   const { data: vehicles } = trpc.vehicles.list.useQuery();
   const { data: drivers } = trpc.drivers.list.useQuery();
@@ -80,6 +91,18 @@ export default function Reports() {
   const { data: maintenances } = trpc.maintenance.list.useQuery();
 
   const [reportPeriod, setReportPeriod] = useState("6months");
+
+  // Relatório financeiro: DETALHADO (por mês) ou GERAL (por ano).
+  const now = new Date();
+  const [finMode, setFinMode] = useState<"detalhado" | "geral">("detalhado");
+  const [finMonth, setFinMonth] = useState(
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  );
+  const [finYear, setFinYear] = useState(now.getFullYear());
+  const anosDisponiveis = Array.from(
+    { length: 5 },
+    (_, i) => now.getFullYear() - i
+  );
 
   // Filtra por período
   const periodMs = (() => {
@@ -190,8 +213,9 @@ export default function Reports() {
             Status: t.status,
             Origem: t.origem,
             Destino: t.destino,
-            DataPartida: formatDateBR(t.dataPartida),
-            DataChegada: formatDateBR(t.dataChegada),
+            Partida: formatDateTimeBR(t.dataPartida),
+            PrevisaoChegada: formatDateTimeBR(t.previsaoChegada),
+            Chegada: formatDateTimeBR(t.dataChegada),
             Veiculo: veh
               ? `${formatPlaca(veh.placa)} (${veh.marca} ${veh.modelo})`
               : "",
@@ -223,19 +247,65 @@ export default function Reports() {
         }),
       };
     }
-    if (reportType === "financeiro") {
+    return null;
+  };
+
+  // Relatório financeiro (fonte: ledger consolidado). Detalhado = lançamentos
+  // do mês; Geral = totais por mês do ano.
+  const buildFinanceReport = (): {
+    title: string;
+    filename: string;
+    rows: Record<string, any>[];
+  } => {
+    const ledger = (fin?.ledger ?? []) as any[];
+    const brl = (n: number) => n.toFixed(2);
+    if (finMode === "detalhado") {
+      const rows = filtrarLedgerPorMes(ledger, finMonth)
+        .slice()
+        .sort((a, b) => a.data.localeCompare(b.data))
+        .map(e => ({
+          Data: formatDateBR(e.data),
+          Tipo: e.kind === "receita" ? "Receita" : "Despesa",
+          Categoria: e.categoria,
+          Origem: e.origem,
+          Descricao: e.descricao,
+          Veiculo: e.veiculo ?? "",
+          ValorBRL: brl(e.valor),
+          Realizado: e.realizado ? "Sim" : "Não",
+        }));
       return {
-        title: "Relatório Financeiro (mensal)",
-        filename: "financeiro",
-        rows: financialData.map((row: any) => ({
-          Mes: row.month,
-          ReceitaBRL: row.receita.toFixed(2),
-          DespesasBRL: row.custos.toFixed(2),
-          LucroBRL: row.lucro.toFixed(2),
-        })),
+        title: `Relatório Financeiro detalhado — ${finMonth}`,
+        filename: `financeiro-detalhado-${finMonth}`,
+        rows,
       };
     }
-    return null;
+    const resumo = resumoAnualPorMes(ledger, finYear);
+    return {
+      title: `Relatório Financeiro geral — ${finYear}`,
+      filename: `financeiro-geral-${finYear}`,
+      rows: resumo.map(m => ({
+        Mes: `${m.mes}/${finYear}`,
+        ReceitaBRL: brl(m.receita),
+        DespesasBRL: brl(m.despesa),
+        LucroBRL: brl(m.lucro),
+      })),
+    };
+  };
+
+  const handleExportFinance = (fmt: "csv" | "pdf") => {
+    const rep = buildFinanceReport();
+    if (rep.rows.length === 0) {
+      toast.error("Não há dados financeiros para o período selecionado.");
+      return;
+    }
+    const today = new Date().toISOString().split("T")[0];
+    if (fmt === "csv") {
+      downloadCSV(`${rep.filename}-${today}.csv`, rep.rows);
+    } else if (
+      exportTablePDF(`${rep.title} — ${formatDateBR(new Date())}`, rep.rows)
+    ) {
+      toast.success("Abrindo PDF para impressão/salvamento…");
+    }
   };
 
   const handleExport = (reportType: string, fmt: "csv" | "pdf") => {
@@ -313,7 +383,6 @@ export default function Reports() {
             { key: "frota", label: "Frota" },
             { key: "viagens", label: "Viagens" },
             { key: "manutencoes", label: "Manutenções" },
-            { key: "financeiro", label: "Financeiro" },
           ].map(cat => (
             <div
               key={cat.key}
@@ -340,6 +409,65 @@ export default function Reports() {
               </Button>
             </div>
           ))}
+
+          {/* Financeiro: detalhado (mês) ou geral (ano) */}
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border px-2 py-1">
+            <span className="text-sm font-medium mr-1">Financeiro</span>
+            <Select
+              value={finMode}
+              onValueChange={v => setFinMode(v as "detalhado" | "geral")}
+            >
+              <SelectTrigger className="h-7 w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="detalhado">Detalhado (mês)</SelectItem>
+                <SelectItem value="geral">Geral (ano)</SelectItem>
+              </SelectContent>
+            </Select>
+            {finMode === "detalhado" ? (
+              <Input
+                type="month"
+                value={finMonth}
+                onChange={e => setFinMonth(e.target.value)}
+                className="h-7 w-[140px]"
+              />
+            ) : (
+              <Select
+                value={String(finYear)}
+                onValueChange={v => setFinYear(Number(v))}
+              >
+                <SelectTrigger className="h-7 w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {anosDisponiveis.map(a => (
+                    <SelectItem key={a} value={String(a)}>
+                      {a}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2"
+              onClick={() => handleExportFinance("csv")}
+            >
+              <Download className="w-3 h-3 mr-1" />
+              CSV
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2"
+              onClick={() => handleExportFinance("pdf")}
+            >
+              <FileText className="w-3 h-3 mr-1" />
+              PDF
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
