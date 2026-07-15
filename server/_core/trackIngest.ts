@@ -45,6 +45,11 @@ function parsePoint(raw: unknown): TrackPoint | null {
   };
 }
 
+// Teto de pontos por requisição: um POST não pode disparar um loop ilimitado
+// de INSERTs no banco (DoS de escrita). O app manda lotes pequenos (maxBatchSize
+// 50); 500 é folga com sobra.
+const MAX_POINTS = 500;
+
 export function normalizeTrackPayload(body: unknown): TrackPayload {
   if (!body || typeof body !== "object") return { token: null, points: [] };
   const o = body as Record<string, unknown>;
@@ -64,7 +69,7 @@ export function normalizeTrackPayload(body: unknown): TrackPayload {
           : [o];
 
   const points: TrackPoint[] = [];
-  for (const rp of rawPoints) {
+  for (const rp of rawPoints.slice(0, MAX_POINTS)) {
     const p = parsePoint(rp);
     if (p) points.push(p);
   }

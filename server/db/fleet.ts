@@ -246,7 +246,7 @@ export async function getDriverByTrackingToken(token: string) {
 export async function setDriverTrackingToken(
   orgId: number,
   driverId: number,
-  token: string
+  token: string | null
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

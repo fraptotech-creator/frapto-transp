@@ -77,6 +77,15 @@ describe("normalizeTrackPayload", () => {
     expect(normalizeTrackPayload({ lat: -20, lng: -40 }).token).toBeNull();
   });
 
+  it("limita o número de pontos por requisição (anti-DoS)", () => {
+    const locations = Array.from({ length: 600 }, () => ({
+      lat: -20,
+      lng: -40,
+    }));
+    const r = normalizeTrackPayload({ token: "t", locations });
+    expect(r.points).toHaveLength(500);
+  });
+
   it("corpo inválido → vazio", () => {
     expect(normalizeTrackPayload(null)).toEqual({ token: null, points: [] });
     expect(normalizeTrackPayload("x")).toEqual({ token: null, points: [] });

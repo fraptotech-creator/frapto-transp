@@ -21,6 +21,7 @@ import {
   setUsername,
   deleteDriverUser,
   incrementSessionVersion,
+  setDriverTrackingToken,
   getTrips,
   getTripById,
   getTripPositions,
@@ -136,12 +137,28 @@ export const vehiclesRouter = router({
 // Senha inicial do motorista; ele é obrigado a trocar no 1º acesso.
 export const DRIVER_DEFAULT_PASSWORD = "123456";
 
+// O trackingToken é uma CREDENCIAL bearer (posta em /api/track sem cookie) —
+// vive só no aparelho do motorista. NUNCA deve ir pro browser da gestão. Strip
+// antes de devolver ao cliente (o app do motorista lê o token por caminho
+// próprio: ensureTrackingToken / /api/track/login).
+function stripDriverSecret<T extends { trackingToken?: string | null }>(
+  d: T
+): Omit<T, "trackingToken"> {
+  const { trackingToken: _omit, ...rest } = d;
+  return rest;
+}
+
 export const driversRouter = router({
-  list: activeOrgProcedure.query(({ ctx }) => getDrivers(ctx.orgId)),
+  list: activeOrgProcedure.query(async ({ ctx }) =>
+    (await getDrivers(ctx.orgId)).map(stripDriverSecret)
+  ),
 
   getById: activeOrgProcedure
     .input(z.object({ id: z.number() }))
-    .query(({ ctx, input }) => getDriverById(ctx.orgId, input.id)),
+    .query(async ({ ctx, input }) => {
+      const d = await getDriverById(ctx.orgId, input.id);
+      return d ? stripDriverSecret(d) : d;
+    }),
 
   create: activeOrgProcedure
     .input(
@@ -203,7 +220,7 @@ export const driversRouter = router({
         await deleteDriver(ctx.orgId, driver.id);
         throw e;
       }
-      return driver;
+      return stripDriverSecret(driver);
     }),
 
   // Informa o usuário (apelido) de login do motorista, se já houver.
@@ -273,6 +290,9 @@ export const driversRouter = router({
       const hash = await bcrypt.hash(DRIVER_DEFAULT_PASSWORD, 10);
       await setUserPassword(user.openId, hash, true);
       await incrementSessionVersion(user.openId);
+      // Rotaciona (anula) o token de rastreio: mata o acesso do aparelho antigo
+      // ao /api/track; no próximo login o app gera um token novo.
+      await setDriverTrackingToken(ctx.orgId, input.driverId, null);
       return { defaultPassword: DRIVER_DEFAULT_PASSWORD } as const;
     }),
 
@@ -295,7 +315,7 @@ export const driversRouter = router({
         observacoes: z.string().optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { id, ...rest } = input;
       const updateData: Partial<InsertDriver> = { ...rest };
       // Normaliza os campos de identidade quando enviados (dígitos apenas).
@@ -304,7 +324,8 @@ export const driversRouter = router({
       if (rest.telefone !== undefined) {
         updateData.telefone = normalizeOptionalPhone(rest.telefone);
       }
-      return updateDriver(ctx.orgId, id, updateData);
+      const d = await updateDriver(ctx.orgId, id, updateData);
+      return d ? stripDriverSecret(d) : d;
     }),
 
   delete: activeOrgProcedure
