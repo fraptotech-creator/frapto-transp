@@ -93,9 +93,11 @@ async function startServer() {
     }
   );
 
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Parser de corpo: 15 MB cobre o upload de documento (10 MB → ~13,3 MB em
+  // base64) com folga; era 50 MB (4× o necessário) — reduz amplificação de DoS
+  // por corpo grande nas rotas públicas. Form urlencoded é minúsculo (100 KB).
+  app.use(express.json({ limit: "15mb" }));
+  app.use(express.urlencoded({ limit: "100kb", extended: true }));
   // Healthcheck do Railway — precisa ficar ACIMA de tudo e sempre 200.
   app.get("/api/ping", (_req, res) => {
     res.status(200).json({ ok: true });
