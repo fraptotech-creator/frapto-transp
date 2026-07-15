@@ -1,15 +1,22 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DriverDialog, DriverActions } from "@/components/DriverForms";
 import { useLocation } from "wouter";
 import { formatCpf, formatPhone } from "@/lib/format";
-import { Users, Phone, CreditCard, User } from "lucide-react";
+import { contemTexto } from "@/lib/searchFilters";
+import { Users, Phone, CreditCard, User, Search } from "lucide-react";
 
 export default function Drivers() {
   const [, setLocation] = useLocation();
   const { data: drivers, isLoading } = trpc.drivers.list.useQuery();
+  const [buscaNome, setBuscaNome] = useState("");
+  const motoristasFiltrados = (drivers ?? []).filter((d: any) =>
+    contemTexto(d.nome, buscaNome)
+  );
 
   const getStatusBadge = (status: string) => {
     const badges: Record<
@@ -63,15 +70,27 @@ export default function Drivers() {
         <DriverDialog />
       </div>
 
+      {drivers && drivers.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={buscaNome}
+            onChange={e => setBuscaNome(e.target.value)}
+            placeholder="Buscar por nome…"
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
             <Skeleton key={i} className="h-56 rounded-2xl" />
           ))}
         </div>
-      ) : drivers && drivers.length > 0 ? (
+      ) : motoristasFiltrados.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {drivers.map((driver: any) => {
+          {motoristasFiltrados.map((driver: any) => {
             const statusInfo = getStatusBadge(driver.status);
             return (
               <Card
@@ -143,10 +162,14 @@ export default function Drivers() {
               </div>
               <div>
                 <p className="text-lg font-semibold text-white">
-                  Nenhum motorista cadastrado
+                  {drivers && drivers.length > 0
+                    ? "Nenhum motorista com esse nome"
+                    : "Nenhum motorista cadastrado"}
                 </p>
                 <p className="text-sm text-gray-400 mt-1">
-                  Comece adicionando seu primeiro motorista
+                  {drivers && drivers.length > 0
+                    ? "Ajuste a busca por nome"
+                    : "Comece adicionando seu primeiro motorista"}
                 </p>
               </div>
             </div>

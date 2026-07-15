@@ -2,8 +2,9 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, CheckCircle, Clock, Wrench } from "lucide-react";
+import { Plus, CheckCircle, Clock, Wrench, Search } from "lucide-react";
 import { formatPlaca } from "@/lib/format";
+import { combinaPlaca } from "@/lib/searchFilters";
 import { computeOilStatus, OIL_LABEL } from "@/lib/oil";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -71,6 +72,22 @@ export default function Maintenance() {
     refetch,
   } = trpc.maintenance.list.useQuery();
   const { data: vehicles } = trpc.vehicles.list.useQuery();
+
+  // Filtros da listagem: placa e mês (data realizada ou prevista).
+  const [buscaPlaca, setBuscaPlaca] = useState("");
+  const [buscaMes, setBuscaMes] = useState(""); // YYYY-MM
+  const placaDoVeiculo = (veiculoId: number): string =>
+    vehicles?.find((v: any) => v.id === veiculoId)?.placa ?? "";
+  const localYM = (d: any): string => {
+    if (!d) return "";
+    const dt = new Date(d);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+  };
+  const maintenancesFiltradas = (maintenances ?? []).filter(
+    (m: any) =>
+      combinaPlaca(placaDoVeiculo(m.veiculoId), buscaPlaca) &&
+      (!buscaMes || localYM(m.dataRealizada || m.dataPrevista) === buscaMes)
+  );
 
   const createMutation = trpc.maintenance.create.useMutation({
     onSuccess: async (created: any) => {
@@ -428,15 +445,48 @@ export default function Maintenance() {
         );
       })()}
 
+      {maintenances && maintenances.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[180px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={buscaPlaca}
+              onChange={e => setBuscaPlaca(e.target.value)}
+              placeholder="Buscar por placa…"
+              className="pl-9"
+            />
+          </div>
+          <Input
+            type="month"
+            value={buscaMes}
+            onChange={e => setBuscaMes(e.target.value)}
+            className="w-[160px]"
+            title="Filtrar por mês"
+          />
+          {(buscaPlaca || buscaMes) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setBuscaPlaca("");
+                setBuscaMes("");
+              }}
+            >
+              Limpar
+            </Button>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
             <Skeleton key={i} className="h-32" />
           ))}
         </div>
-      ) : maintenances && maintenances.length > 0 ? (
+      ) : maintenancesFiltradas.length > 0 ? (
         <div className="space-y-3">
-          {maintenances.map((maintenance: any) => {
+          {maintenancesFiltradas.map((maintenance: any) => {
             const statusInfo = getStatusBadge(maintenance.status);
             const StatusIcon = statusInfo.icon;
 
@@ -504,7 +554,9 @@ export default function Maintenance() {
         </div>
       ) : (
         <p className="text-muted-foreground text-center py-8 text-sm">
-          Nenhuma manutenção cadastrada
+          {maintenances && maintenances.length > 0
+            ? "Nenhuma manutenção para os filtros (placa/mês)"
+            : "Nenhuma manutenção cadastrada"}
         </p>
       )}
 

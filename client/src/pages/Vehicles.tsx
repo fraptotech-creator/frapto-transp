@@ -1,15 +1,22 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VehicleDialog, VehicleActions } from "@/components/VehicleForms";
 import { useLocation } from "wouter";
 import { formatPlaca } from "@/lib/format";
-import { Truck, Calendar, Gauge } from "lucide-react";
+import { combinaPlaca } from "@/lib/searchFilters";
+import { Truck, Calendar, Gauge, Search } from "lucide-react";
 
 export default function Vehicles() {
   const [, setLocation] = useLocation();
   const { data: vehicles, isLoading } = trpc.vehicles.list.useQuery();
+  const [buscaPlaca, setBuscaPlaca] = useState("");
+  const veiculosFiltrados = (vehicles ?? []).filter((v: any) =>
+    combinaPlaca(v.placa, buscaPlaca)
+  );
 
   const getStatusBadge = (status: string) => {
     const badges: Record<
@@ -57,15 +64,27 @@ export default function Vehicles() {
         <VehicleDialog />
       </div>
 
+      {vehicles && vehicles.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={buscaPlaca}
+            onChange={e => setBuscaPlaca(e.target.value)}
+            placeholder="Buscar por placa…"
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
             <Skeleton key={i} className="h-48 rounded-2xl" />
           ))}
         </div>
-      ) : vehicles && vehicles.length > 0 ? (
+      ) : veiculosFiltrados.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {vehicles.map((vehicle: any) => {
+          {veiculosFiltrados.map((vehicle: any) => {
             const statusInfo = getStatusBadge(vehicle.status);
             return (
               <Card
@@ -139,10 +158,14 @@ export default function Vehicles() {
               </div>
               <div>
                 <p className="text-lg font-semibold text-white">
-                  Nenhum veículo cadastrado
+                  {vehicles && vehicles.length > 0
+                    ? "Nenhum veículo com essa placa"
+                    : "Nenhum veículo cadastrado"}
                 </p>
                 <p className="text-sm text-gray-400 mt-1">
-                  Comece adicionando seu primeiro veículo
+                  {vehicles && vehicles.length > 0
+                    ? "Ajuste a busca por placa"
+                    : "Comece adicionando seu primeiro veículo"}
                 </p>
               </div>
             </div>
