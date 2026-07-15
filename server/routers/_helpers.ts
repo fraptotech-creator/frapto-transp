@@ -16,6 +16,21 @@ import {
 } from "../db";
 import { computeFinanceSummary } from "../_core/finance";
 import { computeOilStatus } from "../_core/oil";
+import { allowRequest } from "../_core/rateLimit";
+
+// Rate-limit de login POR DENTRO da procedure (chaveado por IP). Cobre o que o
+// mount por path do authLimiter não pega: rotas de login "órfãs" (loginDriver) e
+// o BYPASS por batching do tRPC (URL do lote não casa o prefixo do path). 15
+// tentativas / 15 min por IP, igual ao authLimiter da borda. Fail-closed.
+export function assertLoginRateLimit(req: { ip?: string }): void {
+  const ip = req.ip ?? "unknown";
+  if (!allowRequest(`login:${ip}`, 15, 15 * 60 * 1000, Date.now())) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Muitas tentativas. Aguarde alguns minutos.",
+    });
+  }
+}
 
 export const parseNumericString = (
   value: string | null | undefined

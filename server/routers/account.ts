@@ -25,6 +25,7 @@ import {
   createPortalSession,
   isStripeConfigured,
 } from "../_core/stripe";
+import { assertLoginRateLimit } from "./_helpers";
 
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }) => {
@@ -44,6 +45,7 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      assertLoginRateLimit(ctx.req);
       const email = input.email.toLowerCase().trim();
       const existing = await getUserByEmail(email);
       if (existing) {
@@ -87,6 +89,7 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      assertLoginRateLimit(ctx.req);
       const email = input.email.toLowerCase().trim();
       const user = await getUserByEmail(email);
       // Mensagem genérica (não revela se o email existe).
@@ -119,6 +122,7 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      assertLoginRateLimit(ctx.req);
       const username = input.username.toLowerCase().trim();
       const user = await getUserByUsername(username);
       const invalid = new TRPCError({
@@ -153,6 +157,7 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      assertLoginRateLimit(ctx.req);
       if (!ctx.user.passwordHash) {
         throw new TRPCError({
           code: "BAD_REQUEST",
