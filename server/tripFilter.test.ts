@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filtrarPorStatus } from "@/lib/tripFilter";
+import { filtrarPorStatus, combinaDataFiltro } from "@/lib/tripFilter";
 
 const trips = [
   { id: 1, status: "planejada" },
@@ -25,5 +25,24 @@ describe("filtrarPorStatus", () => {
     const copia = [...trips];
     filtrarPorStatus(trips, "planejada");
     expect(trips).toEqual(copia);
+  });
+});
+
+describe("combinaDataFiltro", () => {
+  const ymd = "2026-06-15";
+  it("sem filtros → passa", () => {
+    expect(combinaDataFiltro(ymd, "", "")).toBe(true);
+  });
+  it("mês bate / não bate", () => {
+    expect(combinaDataFiltro(ymd, "2026-06", "")).toBe(true);
+    expect(combinaDataFiltro(ymd, "2026-07", "")).toBe(false);
+  });
+  it("data exata bate / não bate", () => {
+    expect(combinaDataFiltro(ymd, "", "2026-06-15")).toBe(true);
+    expect(combinaDataFiltro(ymd, "", "2026-06-16")).toBe(false);
+  });
+  it("mês + data combinados (AND)", () => {
+    expect(combinaDataFiltro(ymd, "2026-06", "2026-06-15")).toBe(true);
+    expect(combinaDataFiltro(ymd, "2026-07", "2026-06-15")).toBe(false);
   });
 });

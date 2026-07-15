@@ -2,6 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -12,7 +13,11 @@ import {
 } from "@/components/ui/select";
 import { TripDialog, TripActions } from "@/components/TripForms";
 import { formatPlaca } from "@/lib/format";
-import { filtrarPorStatus, type TripStatusFilter } from "@/lib/tripFilter";
+import {
+  filtrarPorStatus,
+  combinaDataFiltro,
+  type TripStatusFilter,
+} from "@/lib/tripFilter";
 import {
   MapPin,
   Navigation,
@@ -32,9 +37,23 @@ export default function Trips() {
   const { data: drivers } = trpc.drivers.list.useQuery();
   const [, setLocation] = useLocation();
   const [statusFiltro, setStatusFiltro] = useState<TripStatusFilter>("todas");
+  const [filtroMes, setFiltroMes] = useState(""); // YYYY-MM
+  const [filtroData, setFiltroData] = useState(""); // YYYY-MM-DD
 
-  // Lista aplicando o filtro de status (os cards de contagem seguem no total).
-  const tripsFiltradas = filtrarPorStatus(trips ?? [], statusFiltro);
+  // Data LOCAL da partida como YYYY-MM-DD (bate com o que é exibido).
+  const localYMD = (d: any): string => {
+    if (!d) return "";
+    const dt = new Date(d);
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+  };
+
+  // Lista aplicando status + mês + data (os cards de contagem seguem no total).
+  const tripsFiltradas = filtrarPorStatus(trips ?? [], statusFiltro).filter(
+    (t: any) =>
+      combinaDataFiltro(localYMD(t.dataPartida), filtroMes, filtroData)
+  );
+  const temFiltroData = !!filtroMes || !!filtroData;
 
   const getStatusConfig = (status: string) => {
     const configs: Record<
@@ -132,15 +151,15 @@ export default function Trips() {
         </div>
       )}
 
-      {/* Filtro por status */}
+      {/* Filtros: status + mês + data (por data de partida) */}
       {trips && trips.length > 0 && (
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <span className="text-xs text-muted-foreground">Filtrar:</span>
           <Select
             value={statusFiltro}
             onValueChange={v => setStatusFiltro(v as TripStatusFilter)}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[150px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -151,6 +170,33 @@ export default function Trips() {
               <SelectItem value="cancelada">Cancelada</SelectItem>
             </SelectContent>
           </Select>
+          <Input
+            type="month"
+            value={filtroMes}
+            onChange={e => setFiltroMes(e.target.value)}
+            className="w-[150px]"
+            title="Filtrar por mês (partida)"
+          />
+          <Input
+            type="date"
+            value={filtroData}
+            onChange={e => setFiltroData(e.target.value)}
+            className="w-[150px]"
+            title="Filtrar por data (partida)"
+          />
+          {temFiltroData && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              onClick={() => {
+                setFiltroMes("");
+                setFiltroData("");
+              }}
+            >
+              Limpar datas
+            </Button>
+          )}
         </div>
       )}
 
@@ -330,12 +376,12 @@ export default function Trips() {
           </div>
           <p className="text-white/40 text-sm font-medium">
             {trips && trips.length > 0
-              ? "Nenhuma viagem com esse status"
+              ? "Nenhuma viagem para os filtros"
               : "Nenhuma viagem cadastrada"}
           </p>
           <p className="text-white/20 text-xs">
             {trips && trips.length > 0
-              ? "Troque o filtro para ver outras viagens"
+              ? "Troque o status, o mês ou a data para ver outras viagens"
               : "Crie uma nova viagem para começar o rastreamento"}
           </p>
         </div>
