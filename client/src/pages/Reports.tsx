@@ -262,7 +262,18 @@ export default function Reports() {
     rows: Record<string, any>[];
   } => {
     const ledger = (fin?.ledger ?? []) as any[];
+    const allTrips = (trips ?? []) as any[];
     const brl = (n: number) => n.toFixed(2);
+    const numV = (v: any) => {
+      const n = parseFloat(String(v ?? ""));
+      return Number.isFinite(n) ? n : 0;
+    };
+    // Mês/ano da data no MESMO formato do ledger (toISOString), pra casar.
+    const ymOf = (d: any) => (d ? new Date(d).toISOString().slice(0, 7) : "");
+    const placaOf = (id: number | null | undefined) => {
+      const v = vehicles?.find((x: any) => x.id === id);
+      return v ? formatPlaca(v.placa) : "";
+    };
     if (finMode === "detalhado") {
       const doMes = filtrarLedgerPorMes(ledger, finMonth)
         .slice()
@@ -282,7 +293,25 @@ export default function Reports() {
               ? "Recebido"
               : "A receber",
       }));
-      // Totais do mês (inclui A RECEBER).
+      // Viagens CANCELADAS do mês: constam como REGISTRO (não entram nos totais).
+      allTrips
+        .filter(
+          (t: any) =>
+            t.status === "cancelada" && ymOf(t.dataPartida) === finMonth
+        )
+        .forEach((t: any) =>
+          rows.push({
+            Data: formatDateBR(t.dataPartida),
+            Tipo: "Receita",
+            Categoria: "Viagem",
+            Origem: "viagem",
+            Descricao: `Viagem ${t.numeroViagem}: ${t.origem} → ${t.destino}`,
+            Veiculo: placaOf(t.veiculoId),
+            ValorBRL: brl(numV(t.valor)),
+            Situacao: "Cancelada",
+          })
+        );
+      // Totais do mês (inclui A RECEBER; cancelada NÃO entra).
       const t = totaisLedger(doMes);
       const totalRow = (desc: string, valor: number) => ({
         Data: "",
@@ -306,15 +335,26 @@ export default function Reports() {
       };
     }
     const resumo = resumoAnualPorMes(ledger, finYear);
+    // Canceladas por mês (registro; não entram no lucro).
+    const cancMes = Array.from({ length: 12 }, () => 0);
+    allTrips
+      .filter((t: any) => t.status === "cancelada")
+      .forEach((t: any) => {
+        const ym = ymOf(t.dataPartida);
+        if (ym.slice(0, 4) !== String(finYear)) return;
+        const mi = parseInt(ym.slice(5, 7), 10) - 1;
+        if (mi >= 0 && mi < 12) cancMes[mi] += numV(t.valor);
+      });
     return {
       title: `Relatório Financeiro geral — ${finYear}`,
       filename: `financeiro-geral-${finYear}`,
-      rows: resumo.map(m => ({
+      rows: resumo.map((m, i) => ({
         Mes: `${m.mes}/${finYear}`,
         RecebidoBRL: brl(m.recebido),
         AReceberBRL: brl(m.aReceber),
         DespesasBRL: brl(m.despesa),
         LucroBRL: brl(m.lucro),
+        CanceladasBRL: brl(cancMes[i]),
       })),
     };
   };
