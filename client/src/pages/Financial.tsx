@@ -89,6 +89,20 @@ export default function Financial() {
   const createRevenueMutation = trpc.revenues.create.useMutation();
   const deleteExpenseMutation = trpc.expenses.delete.useMutation();
   const deleteRevenueMutation = trpc.revenues.delete.useMutation();
+  const updateRevenueStatusMutation = trpc.revenues.update.useMutation();
+
+  const handleRevenueStatus = async (
+    id: number,
+    status: "pendente" | "recebido" | "cancelado"
+  ) => {
+    try {
+      await updateRevenueStatusMutation.mutateAsync({ id, status });
+      toast.success("Status atualizado.");
+      refetchFin();
+    } catch (error: any) {
+      showErrorDialog(error?.message || "Erro ao atualizar status", "Erro");
+    }
+  };
 
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [revenueDialogOpen, setRevenueDialogOpen] = useState(false);
@@ -779,13 +793,32 @@ export default function Financial() {
                     </TableCell>
                     <TableCell>
                       {item.editable ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteRevenue(item.refId)}
-                        >
-                          <Trash2 className="w-4 h-4 text-rose-600" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Select
+                            value={item.realizado ? "recebido" : "pendente"}
+                            onValueChange={(v: any) =>
+                              handleRevenueStatus(item.refId, v)
+                            }
+                          >
+                            <SelectTrigger className="h-7 w-[120px] text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pendente">Pendente</SelectItem>
+                              <SelectItem value="recebido">Recebido</SelectItem>
+                              <SelectItem value="cancelado">
+                                Cancelado
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteRevenue(item.refId)}
+                          >
+                            <Trash2 className="w-4 h-4 text-rose-600" />
+                          </Button>
+                        </div>
                       ) : item.origem === "viagem" ? (
                         <Button
                           variant="ghost"
