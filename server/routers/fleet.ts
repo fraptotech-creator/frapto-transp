@@ -370,6 +370,7 @@ export const tripsRouter = router({
         carga: z.string().optional(),
         pesoTotal: z.string().optional(),
         valor: z.string().optional(),
+        pago: z.boolean().optional(),
         observacoes: z.string().optional(),
       })
     )
@@ -391,6 +392,7 @@ export const tripsRouter = router({
         carga: input.carga || null,
         pesoTotal: parseNumericString(input.pesoTotal),
         valor: parseNumericString(input.valor),
+        pago: input.pago ?? false,
         observacoes: input.observacoes || null,
       });
     }),
@@ -414,6 +416,7 @@ export const tripsRouter = router({
         carga: z.string().optional(),
         pesoTotal: z.string().optional(),
         valor: z.string().optional(),
+        pago: z.boolean().optional(),
         observacoes: z.string().optional(),
       })
     )

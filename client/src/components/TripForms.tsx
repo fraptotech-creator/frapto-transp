@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -59,6 +60,7 @@ const tripSchema = z.object({
   carga: z.string().optional(),
   pesoTotal: z.string().optional(),
   valor: z.string().optional(),
+  pago: z.boolean().optional(),
   observacoes: z.string().optional(),
 });
 
@@ -110,6 +112,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
       carga: trip?.carga || "",
       pesoTotal: trip?.pesoTotal?.toString() || "",
       valor: trip?.valor?.toString() || "",
+      pago: trip?.pago ?? false,
       observacoes: trip?.observacoes || "",
     },
   });
@@ -181,6 +184,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
         carga: values.carga || undefined,
         pesoTotal: values.pesoTotal || undefined,
         valor: values.valor || undefined,
+        pago: values.pago,
         observacoes: values.observacoes || undefined,
       };
       updateMutation.mutate(updatePayload);
@@ -199,6 +203,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
         carga: values.carga || undefined,
         pesoTotal: values.pesoTotal || undefined,
         valor: values.valor || undefined,
+        pago: values.pago,
         observacoes: values.observacoes || undefined,
       };
       createMutation.mutate(createPayload);
@@ -412,6 +417,27 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
             )}
           />
         </div>
+        <FormField
+          control={form.control}
+          name="pago"
+          render={({ field }) => (
+            <FormItem className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5 pr-3">
+                <FormLabel>Pagamento recebido</FormLabel>
+                <p className="text-xs text-muted-foreground">
+                  Independe do status — marque quando o cliente pagar (antes ou
+                  depois de concluir a viagem).
+                </p>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={!!field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}

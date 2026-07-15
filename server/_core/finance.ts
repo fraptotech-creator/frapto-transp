@@ -1,15 +1,21 @@
 // Fonte ÚNICA da verdade do financeiro (pura, testável). Consolida as 4 fontes:
-//   Receita  = viagens CONCLUÍDAS + receitas manuais "recebido"
-//   A Receber= viagens em aberto (planejada/andamento) + receitas manuais "pendente"
+//   Receita  = viagens PAGAS + receitas manuais "recebido"
+//   A Receber= viagens NÃO pagas (não canceladas) + receitas manuais "pendente"
 //   Despesa  = lançamentos manuais + custo de manutenção CONCLUÍDA
 //   Saldo    = Receita − Despesa
-// (cancelada/pendente de manutenção não contam). Sem DB → 1ms nos testes.
+// Pagamento da viagem é INDEPENDENTE do status (concluir ≠ pagar) — a flag
+// `pago` é setada/editada à parte. (cancelada/pendente de manutenção não contam.)
 
 type MoneyLike = string | number | null | undefined;
 type DateLike = string | number | Date | null | undefined;
 
 export type FinanceSources = {
-  trips: { status: string; valor: MoneyLike; dataPartida: DateLike }[];
+  trips: {
+    status: string;
+    valor: MoneyLike;
+    dataPartida: DateLike;
+    pago?: boolean;
+  }[];
   maintenances: {
     status: string;
     custo: MoneyLike;
@@ -46,7 +52,10 @@ export function computeFinanceSummary(
   const inPeriod = (d: DateLike) => sinceMs == null || ms(d) >= sinceMs;
 
   const receitaViagens = src.trips
-    .filter(t => t.status === "concluida" && inPeriod(t.dataPartida))
+    .filter(
+      t =>
+        t.pago === true && t.status !== "cancelada" && inPeriod(t.dataPartida)
+    )
     .reduce((s, t) => s + num(t.valor), 0);
   const receitaManual = src.revenues
     .filter(r => r.status === "recebido" && inPeriod(r.data))
@@ -55,8 +64,7 @@ export function computeFinanceSummary(
   const aReceberViagens = src.trips
     .filter(
       t =>
-        (t.status === "planejada" || t.status === "em_andamento") &&
-        inPeriod(t.dataPartida)
+        t.pago !== true && t.status !== "cancelada" && inPeriod(t.dataPartida)
     )
     .reduce((s, t) => s + num(t.valor), 0);
   const aReceberManual = src.revenues
@@ -103,6 +111,7 @@ export type LedgerSources = {
     destino: string;
     dataPartida: DateLike;
     veiculoId?: number | null;
+    pago?: boolean;
   }[];
   maintenances: {
     id: number;
@@ -159,7 +168,7 @@ export function computeFinanceLedger(
     if (t.status === "cancelada") continue;
     const valor = num(t.valor);
     if (valor === 0) continue;
-    const realizado = t.status === "concluida";
+    const realizado = t.pago === true;
     entries.push({
       kind: "receita",
       origem: "viagem",
@@ -260,7 +269,12 @@ export function computeMonthlySeries(
     };
     const receita =
       src.trips
-        .filter(t => t.status === "concluida" && sameMonth(t.dataPartida))
+        .filter(
+          t =>
+            t.pago === true &&
+            t.status !== "cancelada" &&
+            sameMonth(t.dataPartida)
+        )
         .reduce((s, t) => s + num(t.valor), 0) +
       src.revenues
         .filter(r => r.status === "recebido" && sameMonth(r.data))

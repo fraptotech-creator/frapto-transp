@@ -9,10 +9,37 @@ import {
 // concluída (1200), 1 despesa de combustível (500), sem receita manual.
 const src = {
   trips: [
-    { status: "concluida", valor: "2000", dataPartida: "2026-06-15" },
-    { status: "concluida", valor: "3000", dataPartida: "2026-07-07" },
-    { status: "planejada", valor: "800", dataPartida: "2026-07-20" },
-    { status: "cancelada", valor: "999", dataPartida: "2026-07-01" },
+    {
+      status: "concluida",
+      pago: true,
+      valor: "2000",
+      dataPartida: "2026-06-15",
+    },
+    {
+      status: "concluida",
+      pago: true,
+      valor: "3000",
+      dataPartida: "2026-07-07",
+    },
+    // concluída mas NÃO paga → conta como A RECEBER (pagamento é independente)
+    {
+      status: "concluida",
+      pago: false,
+      valor: "500",
+      dataPartida: "2026-07-10",
+    },
+    {
+      status: "planejada",
+      pago: false,
+      valor: "800",
+      dataPartida: "2026-07-20",
+    },
+    {
+      status: "cancelada",
+      pago: true,
+      valor: "999",
+      dataPartida: "2026-07-01",
+    },
   ],
   maintenances: [
     {
@@ -39,14 +66,15 @@ const src = {
 describe("computeFinanceSummary", () => {
   const r = computeFinanceSummary(src);
 
-  it("receita = viagens concluídas + receita manual recebida", () => {
-    expect(r.receitaViagens).toBe(5000);
+  it("receita = viagens PAGAS + receita manual recebida", () => {
+    expect(r.receitaViagens).toBe(5000); // só as 2 pagas (2000+3000)
     expect(r.receitaManual).toBe(100);
     expect(r.receitas).toBe(5100);
   });
 
-  it("a receber = viagens abertas + receita manual pendente (cancelada fora)", () => {
-    expect(r.aReceber).toBe(1000); // 800 viagem planejada + 200 pendente
+  it("a receber = viagens não pagas (inclui concluída não paga) + pendente", () => {
+    // 500 concluída-não-paga + 800 planejada + 200 receita pendente
+    expect(r.aReceber).toBe(1500);
   });
 
   it("despesa = manuais + manutenção CONCLUÍDA (pendente de fora)", () => {
@@ -76,6 +104,7 @@ describe("computeFinanceLedger", () => {
         id: 1,
         numeroViagem: "V1",
         status: "concluida",
+        pago: true,
         valor: "2000",
         origem: "A",
         destino: "B",
@@ -85,6 +114,7 @@ describe("computeFinanceLedger", () => {
         id: 2,
         numeroViagem: "V2",
         status: "planejada",
+        pago: false,
         valor: "800",
         origem: "C",
         destino: "D",
@@ -94,10 +124,21 @@ describe("computeFinanceLedger", () => {
         id: 3,
         numeroViagem: "V3",
         status: "cancelada",
+        pago: false,
         valor: "999",
         origem: "E",
         destino: "F",
         dataPartida: "2026-07-01",
+      },
+      {
+        id: 4,
+        numeroViagem: "V4",
+        status: "concluida",
+        pago: false,
+        valor: "700",
+        origem: "G",
+        destino: "H",
+        dataPartida: "2026-07-11",
       },
     ],
     maintenances: [
@@ -196,11 +237,15 @@ describe("computeFinanceLedger", () => {
     expect(es.find(e => e.refId === 2)!.veiculo).toBeNull();
   });
 
-  it("só os manuais são editáveis; viagem em aberto não é 'realizado'", () => {
+  it("só os manuais são editáveis; realizado = viagem PAGA (não o status)", () => {
     expect(entries.find(e => e.refId === 20)!.editable).toBe(true);
     expect(entries.find(e => e.refId === 10)!.editable).toBe(false);
-    expect(entries.find(e => e.refId === 2)!.realizado).toBe(false);
-    expect(entries.find(e => e.refId === 1)!.realizado).toBe(true);
+    expect(entries.find(e => e.refId === 2)!.realizado).toBe(false); // planejada não paga
+    expect(entries.find(e => e.refId === 1)!.realizado).toBe(true); // paga
+    // concluída mas NÃO paga → NÃO é realizado (a receber)
+    const v4 = entries.find(e => e.refId === 4)!;
+    expect(v4.realizado).toBe(false);
+    expect(v4.status).toBe("A receber");
   });
 });
 

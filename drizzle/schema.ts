@@ -182,6 +182,9 @@ export const trips = mysqlTable(
     carga: text("carga"),
     pesoTotal: decimal("pesoTotal", { precision: 10, scale: 2 }),
     valor: decimal("valor", { precision: 12, scale: 2 }),
+    // Pagamento da viagem — INDEPENDENTE do status (concluir ≠ pagar). Setável
+    // e editável antes ou depois; controla se a receita entra como recebida.
+    pago: boolean("pago").default(false).notNull(),
     // Idempotência: vira true quando a distância já foi somada ao odômetro do
     // veículo (na conclusão da viagem), pra nunca contar em dobro.
     quilometragemAplicada: boolean("quilometragemAplicada")
