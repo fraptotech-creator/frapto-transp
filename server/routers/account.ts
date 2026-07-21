@@ -26,13 +26,23 @@ import {
   isStripeConfigured,
 } from "../_core/stripe";
 import { assertLoginRateLimit } from "./_helpers";
+import { isSuperAdmin } from "../_core/superAdmin";
+import { ENV } from "../_core/env";
 
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }) => {
     if (!ctx.user) return null;
     // Nunca expõe o hash da senha ao browser.
     const { passwordHash: _omit, ...safe } = ctx.user;
-    return safe;
+    // Flag só pra UI decidir se mostra o menu do painel da plataforma. O gate
+    // de verdade é o superAdminProcedure no servidor — isto aqui é cosmético.
+    return {
+      ...safe,
+      isSuperAdmin: isSuperAdmin(ctx.user, {
+        openId: ENV.superAdminOpenId,
+        email: ENV.superAdminEmail,
+      }),
+    };
   }),
 
   signup: publicProcedure

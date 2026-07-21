@@ -21,6 +21,8 @@ import Reports from "./pages/Reports";
 import Financial from "./pages/Financial";
 import TripTracking from "./pages/TripTracking";
 import Settings from "./pages/Settings";
+// Painel do dono da plataforma: raro, lazy pra não pesar o bundle de todo mundo.
+const PlatformAdmin = lazy(() => import("./pages/PlatformAdmin"));
 // Lazy: o Assistente puxa o Streamdown (shiki) — carrega só ao abrir /assistant,
 // mantendo o bundle principal enxuto.
 const Assistant = lazy(() => import("./pages/Assistant"));
@@ -49,6 +51,15 @@ function Router() {
           }
         >
           <Assistant />
+        </Suspense>
+      </Route>
+      <Route path={"/plataforma"}>
+        <Suspense
+          fallback={
+            <div className="p-6 text-muted-foreground">Carregando…</div>
+          }
+        >
+          <PlatformAdmin />
         </Suspense>
       </Route>
       <Route path={"/404"} component={NotFound} />

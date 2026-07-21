@@ -37,6 +37,7 @@ import {
   DollarSign,
   Sparkles,
   Settings,
+  ShieldCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -48,6 +49,8 @@ type MenuItem = {
   label: string;
   path: string;
   adminOnly?: boolean;
+  // Só o DONO da plataforma (super-admin) vê. Gate real é no servidor.
+  superAdminOnly?: boolean;
 };
 
 const menuItems: MenuItem[] = [
@@ -66,6 +69,12 @@ const menuItems: MenuItem[] = [
     label: "Configurações",
     path: "/settings",
     adminOnly: true,
+  },
+  {
+    icon: ShieldCheck,
+    label: "Plataforma",
+    path: "/plataforma",
+    superAdminOnly: true,
   },
 ];
 
@@ -153,12 +162,12 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   // Itens "adminOnly" (ex.: Configurações) aparecem para o DONO da empresa
   // (orgRole owner) ou o admin da plataforma — igual ao gate do backend.
-  const visibleMenuItems = menuItems.filter(
-    item =>
-      !item.adminOnly ||
-      user?.role === "admin" ||
-      user?.orgRole === "owner"
-  );
+  const visibleMenuItems = menuItems.filter(item => {
+    if (item.superAdminOnly) return user?.isSuperAdmin === true;
+    return (
+      !item.adminOnly || user?.role === "admin" || user?.orgRole === "owner"
+    );
+  });
   const activeMenuItem = visibleMenuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 

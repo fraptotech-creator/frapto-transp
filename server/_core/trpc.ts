@@ -4,6 +4,8 @@ import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { getOrganization } from "../db";
 import { friendlyDbErrorMessage } from "./dbErrors";
+import { isSuperAdmin } from "./superAdmin";
+import { ENV } from "./env";
 
 // Mensagem-sentinela: o frontend reconhece e mostra a tela de assinatura.
 export const SUBSCRIPTION_REQUIRED_MSG = "SUBSCRIPTION_REQUIRED";
@@ -64,6 +66,22 @@ export const adminProcedure = t.procedure.use(
     });
   })
 );
+
+// SUPER-ADMIN da plataforma (enxerga TODAS as empresas). Identidade vem do
+// REGISTRO do usuário (openId+email) contra a env — nunca de input do cliente.
+// Fail-closed: env não setada → ninguém passa.
+export const superAdminProcedure = protectedProcedure.use(async opts => {
+  const { ctx, next } = opts;
+  if (
+    !isSuperAdmin(ctx.user, {
+      openId: ENV.superAdminOpenId,
+      email: ENV.superAdminEmail,
+    })
+  ) {
+    throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+  }
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
 
 // Exige usuário autenticado E vinculado a uma organização; injeta ctx.orgId
 // (não-nulo) para o escopo multi-tenant de todas as consultas.

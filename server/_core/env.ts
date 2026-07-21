@@ -11,6 +11,11 @@ export const ENV = {
   appBaseUrl: process.env.APP_BASE_URL ?? "",
   // Primeiro login com este email vira admin.
   ownerEmail: process.env.OWNER_EMAIL ?? "",
+  // SUPER-ADMIN da plataforma (vê todas as empresas). Gate por identidade do
+  // REGISTRO (openId estável + email), nunca por input do cliente. Os DOIS
+  // precisam estar setados e bater — vazio = NINGUÉM é admin (fail-closed).
+  superAdminOpenId: process.env.SUPER_ADMIN_OPEN_ID ?? "",
+  superAdminEmail: process.env.SUPER_ADMIN_EMAIL ?? "",
   // Assistente de IA (Anthropic Claude) — fallback legado.
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   // Padrão de IA do SISTEMA (grátis pra todos): só a chave é obrigatória; o

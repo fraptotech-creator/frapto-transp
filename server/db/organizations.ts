@@ -1,6 +1,57 @@
 import { eq, and, desc, sql } from "drizzle-orm";
-import { organizations, users, InsertOrganization } from "../../drizzle/schema";
+import {
+  organizations,
+  users,
+  vehicles,
+  drivers,
+  trips,
+  InsertOrganization,
+} from "../../drizzle/schema";
 import { getDb } from "./client";
+
+// ⚠️ ÚNICA leitura CROSS-ORG do sistema: painel do SUPER-ADMIN da plataforma.
+// Não recebe orgId de propósito — quem protege é o superAdminProcedure
+// (fail-closed por openId+email da env). NÃO use em nenhum outro lugar.
+export async function listOrgsWithStatsForSuperAdmin() {
+  const db = await getDb();
+  if (!db) return [];
+  const orgs = await db.select().from(organizations).orderBy(organizations.id);
+  const [uCount, vCount, dCount, tCount] = await Promise.all([
+    db
+      .select({ orgId: users.orgId, n: sql<number>`count(*)` })
+      .from(users)
+      .groupBy(users.orgId),
+    db
+      .select({ orgId: vehicles.orgId, n: sql<number>`count(*)` })
+      .from(vehicles)
+      .groupBy(vehicles.orgId),
+    db
+      .select({ orgId: drivers.orgId, n: sql<number>`count(*)` })
+      .from(drivers)
+      .groupBy(drivers.orgId),
+    db
+      .select({ orgId: trips.orgId, n: sql<number>`count(*)` })
+      .from(trips)
+      .groupBy(trips.orgId),
+  ]);
+  const pick = (
+    rows: { orgId: number | null; n: number }[],
+    orgId: number
+  ): number => Number(rows.find(r => r.orgId === orgId)?.n ?? 0);
+  return orgs.map(o => ({
+    id: o.id,
+    name: o.name,
+    subscriptionStatus: o.subscriptionStatus,
+    planName: o.planName,
+    trialEndsAt: o.trialEndsAt,
+    currentPeriodEnd: o.currentPeriodEnd,
+    createdAt: o.createdAt,
+    usuarios: pick(uCount, o.id),
+    veiculos: pick(vCount, o.id),
+    motoristas: pick(dCount, o.id),
+    viagens: pick(tCount, o.id),
+  }));
+}
 
 // ─── Organizações e usuários (auth) ─────────────────────────────────────────
 

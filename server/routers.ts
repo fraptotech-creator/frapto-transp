@@ -13,6 +13,7 @@ import {
 import { expensesRouter, revenuesRouter } from "./routers/finance";
 import { driverAppRouter } from "./routers/driverApp";
 import { geoRouter } from "./routers/geo";
+import { superAdminRouter } from "./routers/superAdmin";
 
 // Composição do roteador tRPC. Cada domínio vive em server/routers/*.
 export const appRouter = router({
@@ -31,6 +32,7 @@ export const appRouter = router({
   revenues: revenuesRouter,
   driverApp: driverAppRouter,
   geo: geoRouter,
+  superAdmin: superAdminRouter,
 });
 
 export type AppRouter = typeof appRouter;
