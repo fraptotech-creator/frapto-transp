@@ -23,6 +23,7 @@ import Landing from "@/components/Landing";
 import Paywall from "@/components/Paywall";
 import { trpc } from "@/lib/trpc";
 import { useIsMobile } from "@/hooks/useMobile";
+import { podeVerItem } from "@/lib/menuAccess";
 import {
   LayoutDashboard,
   LogOut,
@@ -121,12 +122,17 @@ function GatedApp({ children }: { children: React.ReactNode }) {
   }, [sidebarWidth]);
 
   const { data: billing, isLoading } = trpc.billing.getStatus.useQuery();
+  const { user } = useAuth();
 
   if (isLoading) {
     return <DashboardLayoutSkeleton />;
   }
 
-  if (!billing?.active) {
+  // O DONO DA PLATAFORMA não é cliente: passa pelo paywall, mas só enxerga a
+  // área da plataforma (o resto do sistema exige assinatura no servidor).
+  const somentePlataforma = !billing?.active && user?.isSuperAdmin === true;
+
+  if (!billing?.active && !somentePlataforma) {
     return <Paywall />;
   }
 
@@ -138,7 +144,10 @@ function GatedApp({ children }: { children: React.ReactNode }) {
         } as CSSProperties
       }
     >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+      <DashboardLayoutContent
+        setSidebarWidth={setSidebarWidth}
+        somentePlataforma={somentePlataforma}
+      >
         {children}
       </DashboardLayoutContent>
     </SidebarProvider>
@@ -148,11 +157,13 @@ function GatedApp({ children }: { children: React.ReactNode }) {
 type DashboardLayoutContentProps = {
   children: React.ReactNode;
   setSidebarWidth: (width: number) => void;
+  somentePlataforma?: boolean;
 };
 
 function DashboardLayoutContent({
   children,
   setSidebarWidth,
+  somentePlataforma,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
@@ -160,16 +171,25 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  // Itens "adminOnly" (ex.: Configurações) aparecem para o DONO da empresa
-  // (orgRole owner) ou o admin da plataforma — igual ao gate do backend.
-  const visibleMenuItems = menuItems.filter(item => {
-    if (item.superAdminOnly) return user?.isSuperAdmin === true;
-    return (
-      !item.adminOnly || user?.role === "admin" || user?.orgRole === "owner"
-    );
-  });
+  // Regra pura e testada em menuAccess.ts — espelha o gate do backend.
+  const visibleMenuItems = menuItems.filter(item =>
+    podeVerItem(item, {
+      isSuperAdmin: user?.isSuperAdmin,
+      orgRole: user?.orgRole,
+      role: user?.role,
+      somentePlataforma,
+    })
+  );
   const activeMenuItem = visibleMenuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+
+  // Dono da plataforma sem assinatura: qualquer outra rota exigiria assinatura
+  // no servidor, então manda direto pro painel da plataforma.
+  useEffect(() => {
+    if (somentePlataforma && location !== "/plataforma") {
+      setLocation("/plataforma");
+    }
+  }, [somentePlataforma, location, setLocation]);
 
   useEffect(() => {
     if (isCollapsed) {
