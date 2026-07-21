@@ -21,7 +21,7 @@ export type SessionPayload = {
 
 /**
  * SDKServer — sessão própria via JWT (HS256), sem intermediário Manus.
- * O login em si (Google OAuth) fica em server/googleAuthLogin.ts, que chama
+ * O login em si (email/senha) fica em server/routers/account.ts, que chama
  * createSessionToken() para emitir o cookie de sessão.
  */
 class SDKServer {

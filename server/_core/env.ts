@@ -3,14 +3,11 @@ export const ENV = {
   appId: process.env.VITE_APP_ID ?? "frapto-transp",
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.DATABASE_URL ?? "",
-  // Fail-closed: só é "development" quando NODE_ENV é EXATAMENTE "development".
-  // Gates de rotas inseguras devem usar isDevelopment, não !isProduction (NODE_ENV
-  // undefined cairia no ramo inseguro de !isProduction).
+  // Fail-closed: comparação EXATA com "production". Se algum gate de rota
+  // insegura for adicionado, teste `NODE_ENV === "development"` explicitamente —
+  // com `!isProduction`, NODE_ENV indefinido cairia no ramo INSEGURO.
   isProduction: process.env.NODE_ENV === "production",
-  isDevelopment: process.env.NODE_ENV === "development",
   appBaseUrl: process.env.APP_BASE_URL ?? "",
-  // Primeiro login com este email vira admin.
-  ownerEmail: process.env.OWNER_EMAIL ?? "",
   // SUPER-ADMIN da plataforma (vê todas as empresas). Gate por identidade do
   // REGISTRO (openId estável + email), nunca por input do cliente. Os DOIS
   // precisam estar setados e bater — vazio = NINGUÉM é admin (fail-closed).

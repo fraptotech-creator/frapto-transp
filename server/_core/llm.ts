@@ -19,12 +19,6 @@ export type AiRuntimeConfig = {
   baseUrl?: string | null;
 };
 
-export const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
-  anthropic: "Claude (Anthropic)",
-  openai: "GPT (OpenAI)",
-  openai_compatible: "Compatível com OpenAI (custom)",
-};
-
 export const DEFAULT_MODELS: Record<AiProvider, string> = {
   anthropic: "claude-haiku-4-5",
   openai: "gpt-4o-mini",
