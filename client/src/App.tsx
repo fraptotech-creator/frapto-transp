@@ -21,6 +21,8 @@ import Reports from "./pages/Reports";
 import Financial from "./pages/Financial";
 import TripTracking from "./pages/TripTracking";
 import Settings from "./pages/Settings";
+import Termos from "./pages/Termos";
+import Privacidade from "./pages/Privacidade";
 // Painel do dono da plataforma: raro, lazy pra não pesar o bundle de todo mundo.
 const PlatformAdmin = lazy(() => import("./pages/PlatformAdmin"));
 // Lazy: o Assistente puxa o Streamdown (shiki) — carrega só ao abrir /assistant,
@@ -79,6 +81,10 @@ function App() {
           <Switch>
             {/* Área do motorista: login e chrome próprios, fora do dashboard. */}
             <Route path="/motorista" component={DriverApp} />
+            {/* Páginas legais: PÚBLICAS de propósito (sem login). A Stripe e os
+                visitantes precisam abri-las direto, antes de ter conta. */}
+            <Route path="/termos" component={Termos} />
+            <Route path="/privacidade" component={Privacidade} />
             <Route>
               <DashboardLayout>
                 <Router />

@@ -340,6 +340,14 @@ export default function Landing() {
             <span className="font-semibold text-slate-300">Frapto Transp</span>
           </div>
           Gestão de Frotas • {new Date().getFullYear()}
+          <div className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-1">
+            <a href="/termos" className="hover:text-slate-300">
+              Termos de Serviço
+            </a>
+            <a href="/privacidade" className="hover:text-slate-300">
+              Política de Privacidade
+            </a>
+          </div>
         </footer>
       </div>
     </div>
