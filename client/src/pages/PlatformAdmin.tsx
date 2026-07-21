@@ -8,9 +8,29 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, Truck, Users, MapPin, ShieldAlert } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import {
+  Building2,
+  Truck,
+  Users,
+  MapPin,
+  ShieldAlert,
+  Check,
+  Ban,
+} from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { contemTexto } from "@/lib/searchFilters";
 import { rotuloAssinatura, corAssinatura } from "@/lib/subscriptionLabel";
 
@@ -21,9 +41,34 @@ function formatDate(d: Date | string | null | undefined) {
   return dt.toLocaleDateString("pt-BR");
 }
 
+// Mesma regra do paywall no servidor: só active/trialing dão acesso.
+function liberada(status: string | null | undefined) {
+  return status === "active" || status === "trialing";
+}
+
 export default function PlatformAdmin() {
   const [busca, setBusca] = useState("");
+  const [confirmando, setConfirmando] = useState<{
+    orgId: number;
+    nome: string;
+    acao: "liberar" | "bloquear";
+  } | null>(null);
+  const utils = trpc.useUtils();
   const { data, isLoading, error } = trpc.superAdmin.overview.useQuery();
+
+  const setAccess = trpc.superAdmin.setAccess.useMutation({
+    onSuccess: res => {
+      toast.success(
+        res.acao === "liberar"
+          ? "Acesso liberado. A empresa já pode usar o sistema."
+          : "Acesso bloqueado."
+      );
+      utils.superAdmin.overview.invalidate();
+      setConfirmando(null);
+    },
+    // Erro mais provável: empresa que assina pelo Stripe (recusado no servidor).
+    onError: e => toast.error(e.message),
+  });
 
   if (error) {
     return (
@@ -113,6 +158,7 @@ export default function PlatformAdmin() {
                   <th className="py-2 pr-4 text-right">Motoristas</th>
                   <th className="py-2 pr-4 text-right">Viagens</th>
                   <th className="py-2 pr-4">Cadastro</th>
+                  <th className="py-2 text-right">Acesso</th>
                 </tr>
               </thead>
               <tbody>
@@ -130,12 +176,44 @@ export default function PlatformAdmin() {
                     <td className="py-2 pr-4 text-right">{o.motoristas}</td>
                     <td className="py-2 pr-4 text-right">{o.viagens}</td>
                     <td className="py-2 pr-4">{formatDate(o.createdAt)}</td>
+                    <td className="py-2 text-right whitespace-nowrap">
+                      {liberada(o.subscriptionStatus) ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setConfirmando({
+                              orgId: o.id,
+                              nome: o.name,
+                              acao: "bloquear",
+                            })
+                          }
+                        >
+                          <Ban className="h-4 w-4 mr-1" />
+                          Bloquear
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            setConfirmando({
+                              orgId: o.id,
+                              nome: o.name,
+                              acao: "liberar",
+                            })
+                          }
+                        >
+                          <Check className="h-4 w-4 mr-1" />
+                          Liberar
+                        </Button>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {orgs.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="py-6 text-center text-muted-foreground"
                     >
                       Nenhuma empresa encontrada.
@@ -147,6 +225,44 @@ export default function PlatformAdmin() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={confirmando !== null}
+        onOpenChange={aberto => !aberto && setConfirmando(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmando?.acao === "liberar"
+                ? `Liberar ${confirmando?.nome}?`
+                : `Bloquear ${confirmando?.nome}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmando?.acao === "liberar"
+                ? "A empresa passa a usar o sistema sem pagar pelo Stripe — use para quem pagou direto a você. Fica marcada como liberação manual."
+                : "A empresa perde o acesso ao sistema imediatamente. Os dados dela não são apagados e você pode liberar de novo depois."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={setAccess.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={setAccess.isPending}
+              onClick={e => {
+                e.preventDefault(); // fecha só depois do sucesso
+                if (confirmando) setAccess.mutate(confirmando);
+              }}
+            >
+              {setAccess.isPending
+                ? "Aplicando..."
+                : confirmando?.acao === "liberar"
+                  ? "Liberar"
+                  : "Bloquear"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
