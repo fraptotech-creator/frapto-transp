@@ -16,7 +16,13 @@ export async function listOrgsWithStatsForSuperAdmin() {
   const db = await getDb();
   if (!db) return [];
   const orgs = await db.select().from(organizations).orderBy(organizations.id);
-  const [uCount, vCount, dCount, tCount] = await Promise.all([
+  const [donos, uCount, vCount, dCount, tCount] = await Promise.all([
+    // Email do DONO de cada empresa — é por ele que o super-admin identifica
+    // quem é o cliente (e para quem cobrar por fora do Stripe).
+    db
+      .select({ orgId: users.orgId, email: users.email })
+      .from(users)
+      .where(eq(users.orgRole, "owner")),
     db
       .select({ orgId: users.orgId, n: sql<number>`count(*)` })
       .from(users)
@@ -41,6 +47,7 @@ export async function listOrgsWithStatsForSuperAdmin() {
   return orgs.map(o => ({
     id: o.id,
     name: o.name,
+    email: donos.find(d => d.orgId === o.id)?.email ?? null,
     subscriptionStatus: o.subscriptionStatus,
     planName: o.planName,
     trialEndsAt: o.trialEndsAt,

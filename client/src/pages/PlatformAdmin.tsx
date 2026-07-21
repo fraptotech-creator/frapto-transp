@@ -97,7 +97,10 @@ export default function PlatformAdmin() {
     );
   }
 
-  const orgs = data.orgs.filter(o => contemTexto(o.name, busca));
+  // Busca pelo nome OU pelo email do dono — normalmente você lembra de um só.
+  const orgs = data.orgs.filter(
+    o => contemTexto(o.name, busca) || contemTexto(o.email ?? "", busca)
+  );
 
   const cards = [
     { label: "Empresas", valor: data.totais.empresas, icon: Building2 },
@@ -139,7 +142,7 @@ export default function PlatformAdmin() {
             assinatura ativa
           </CardDescription>
           <Input
-            placeholder="Buscar empresa pelo nome..."
+            placeholder="Buscar por nome da empresa ou e-mail..."
             value={busca}
             onChange={e => setBusca(e.target.value)}
             className="max-w-sm mt-2"
@@ -151,6 +154,7 @@ export default function PlatformAdmin() {
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="py-2 pr-4">Empresa</th>
+                  <th className="py-2 pr-4">E-mail</th>
                   <th className="py-2 pr-4">Assinatura</th>
                   <th className="py-2 pr-4">Plano</th>
                   <th className="py-2 pr-4 text-right">Usuários</th>
@@ -165,6 +169,12 @@ export default function PlatformAdmin() {
                 {orgs.map(o => (
                   <tr key={o.id} className="border-b last:border-0">
                     <td className="py-2 pr-4 font-medium">{o.name}</td>
+                    <td
+                      className="py-2 pr-4 text-muted-foreground max-w-[220px] truncate"
+                      title={o.email ?? undefined}
+                    >
+                      {o.email ?? "—"}
+                    </td>
                     <td className="py-2 pr-4">
                       <Badge variant={corAssinatura(o.subscriptionStatus)}>
                         {rotuloAssinatura(o.subscriptionStatus)}
@@ -213,7 +223,7 @@ export default function PlatformAdmin() {
                 {orgs.length === 0 && (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="py-6 text-center text-muted-foreground"
                     >
                       Nenhuma empresa encontrada.
