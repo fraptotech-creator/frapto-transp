@@ -33,8 +33,13 @@ export default function AssinaturaCard() {
 
   if (!data) return null;
 
-  const renovaEm = formatDate(data.currentPeriodEnd);
   const podeGerenciar = podeAbrirPortal(data);
+  // Data de renovação só faz sentido quando existe cobrança no Stripe. Sem
+  // isso ela é resíduo (ex.: empresa liberada na mão pelo admin, ou vinda de
+  // uma assinatura antiga) e contradiz o texto "sem cobrança automática".
+  const renovaEm = podeGerenciar ? formatDate(data.currentPeriodEnd) : null;
+  // Ativa SEM cliente Stripe = acesso concedido pelo admin da plataforma.
+  const liberadaSemCobranca = data.active && !podeGerenciar;
 
   return (
     <Card>
@@ -52,7 +57,9 @@ export default function AssinaturaCard() {
           <Badge variant={corAssinatura(data.status)}>
             {rotuloAssinatura(data.status)}
           </Badge>
-          <span className="text-muted-foreground">{data.priceLabel}</span>
+          {!liberadaSemCobranca && (
+            <span className="text-muted-foreground">{data.priceLabel}</span>
+          )}
           {renovaEm && (
             <span className="text-muted-foreground">
               {data.active ? "Renova em" : "Válido até"} {renovaEm}
@@ -75,6 +82,11 @@ export default function AssinaturaCard() {
               faturas ou cancela o plano.
             </p>
           </>
+        ) : liberadaSemCobranca ? (
+          <p className="text-sm text-muted-foreground">
+            Acesso liberado pelo administrador da plataforma, sem cobrança
+            automática. Fale com o suporte para dúvidas sobre o plano.
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">
             Nenhuma cobrança ativa nesta empresa.
