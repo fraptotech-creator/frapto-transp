@@ -97,7 +97,13 @@ export default function DocumentManagement() {
   const handleDownload = async (id: number) => {
     try {
       const { url } = await downloadM.mutateAsync({ id });
-      window.open(url, "_blank");
+      // NÃO usar window.open aqui. A URL vem com Content-Disposition:
+      // attachment, e o Safari do iPhone abre a aba nova, entende que é
+      // anexo, não renderiza nada e trava em branco — o arquivo nunca baixa.
+      // Navegando na própria aba o navegador reconhece o anexo e baixa sem
+      // sair da página (comportamento igual no desktop).
+      // O Visualizar segue com window.open porque é inline e já funciona.
+      window.location.href = url;
     } catch (e) {
       showErrorDialog(
         e instanceof Error ? e.message : "Falha ao baixar",
