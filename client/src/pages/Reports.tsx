@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Download, FileText, TrendingUp, DollarSign } from "lucide-react";
-import { formatPlaca } from "@/lib/format";
+import { formatPlaca, formatCpf, formatPhone } from "@/lib/format";
 import { exportTablePDF } from "@/lib/exportPdf";
 import {
   filtrarLedgerPorMes,
@@ -201,6 +201,30 @@ export default function Reports() {
           CapacidadeCargaKg: v.capacidadeCarga ?? "",
           VencimentoCRLV: formatDateBR(v.crlvVencimento),
           VencimentoSeguro: formatDateBR(v.seguroVencimento),
+        })),
+      };
+    }
+    if (reportType === "motoristas") {
+      // Portabilidade (LGPD): é o cadastro com os dados pessoais. O
+      // trackingToken NÃO entra — o servidor já o remove em drivers.list
+      // (stripDriverSecret), e ele não deve sair do sistema de forma alguma.
+      return {
+        title: "Relatório de Motoristas",
+        filename: "motoristas",
+        rows: drivers.map((d: any) => ({
+          ID: d.id,
+          Nome: d.nome,
+          CPF: formatCpf(d.cpf),
+          CNH: d.cnh,
+          CategoriaCNH: d.cnhCategoria,
+          VencimentoCNH: formatDateBR(d.cnhVencimento),
+          Telefone: formatPhone(d.telefone),
+          Email: d.email ?? "",
+          Endereco: d.endereco ?? "",
+          Status: d.status,
+          Disponivel: d.disponibilidade ? "Sim" : "Não",
+          DataAdmissao: formatDateBR(d.dataAdmissao),
+          Observacoes: d.observacoes ?? "",
         })),
       };
     }
@@ -448,6 +472,7 @@ export default function Reports() {
         <CardContent className="flex flex-wrap gap-3">
           {[
             { key: "frota", label: "Frota" },
+            { key: "motoristas", label: "Motoristas" },
             { key: "viagens", label: "Viagens" },
             { key: "manutencoes", label: "Manutenções" },
           ].map(cat => (
