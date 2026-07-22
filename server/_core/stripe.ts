@@ -20,8 +20,18 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
+/**
+ * Cobrança só é considerada configurada com os TRÊS segredos.
+ *
+ * O webhook entra na conta de propósito: sem ele o checkout abre, o cartão é
+ * cobrado e NINGUÉM é liberado — o dinheiro entra e o cliente fica de fora,
+ * sem sinal nenhum no produto. Aconteceu de verdade nesta implantação. É
+ * melhor o paywall dizer "pagamento não configurado" do que cobrar sem entregar.
+ */
 export function isStripeConfigured(): boolean {
-  return Boolean(ENV.stripeSecretKey && ENV.stripePriceId);
+  return Boolean(
+    ENV.stripeSecretKey && ENV.stripePriceId && ENV.stripeWebhookSecret
+  );
 }
 
 // Garante um Stripe Customer para a organização (cria e persiste se faltar).

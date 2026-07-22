@@ -225,7 +225,9 @@ export const driversRouter = router({
         await deleteDriver(ctx.orgId, driver.id);
         throw e;
       }
-      return { ...stripDriverSecret(driver), initialPassword };
+      // `username` volta junto: o gestor precisa dos DOIS (usuário e senha)
+      // para passar ao motorista, e ele pode ter sido gerado aqui.
+      return { ...stripDriverSecret(driver), initialPassword, username };
     }),
 
   // Informa o usuário (apelido) de login do motorista, se já houver.

@@ -1,3 +1,4 @@
+import AcessoMotoristaDialog from "@/components/AcessoMotoristaDialog";
 import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -66,26 +67,33 @@ interface DriverFormProps {
 const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
   const { data: info, refetch } = trpc.drivers.loginInfo.useQuery({ driverId });
   const [username, setUsername] = React.useState("");
+  // Credenciais recém-geradas: vão para um aviso persistente, não para um
+  // toast que some antes do gestor conseguir anotar.
+  const [acesso, setAcesso] = React.useState<{
+    usuario: string;
+    senha: string;
+  } | null>(null);
   React.useEffect(() => {
     if (info?.username) setUsername(info.username);
   }, [info?.username]);
 
   const setLogin = trpc.drivers.setLogin.useMutation({
     onSuccess: r => {
-      toast.success(
-        r.created
-          ? `Acesso criado! Usuário salvo. Senha inicial: ${r.defaultPassword}`
-          : "Usuário atualizado."
-      );
+      if (r.created && r.defaultPassword) {
+        setAcesso({ usuario: username.trim(), senha: r.defaultPassword });
+      } else {
+        toast.success("Usuário atualizado.");
+      }
       refetch();
     },
     onError: (e: any) => showErrorDialog(e.message, "Erro no acesso"),
   });
   const reset = trpc.drivers.resetPassword.useMutation({
     onSuccess: r =>
-      toast.success(
-        `Senha resetada para "${r.defaultPassword}". Troca obrigatória no próximo acesso.`
-      ),
+      setAcesso({
+        usuario: info?.username ?? username.trim(),
+        senha: r.defaultPassword,
+      }),
     onError: (e: any) => showErrorDialog(e.message, "Erro ao resetar senha"),
   });
 
@@ -141,6 +149,13 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
           </Button>
         )}
       </div>
+
+      <AcessoMotoristaDialog
+        aberto={acesso !== null}
+        onFechar={() => setAcesso(null)}
+        usuario={acesso?.usuario ?? ""}
+        senha={acesso?.senha ?? ""}
+      />
     </div>
   );
 };
@@ -148,6 +163,10 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
 const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
   const queryClient = useQueryClient();
   const isEdit = !!driver;
+  const [acessoNovo, setAcessoNovo] = React.useState<{
+    usuario: string;
+    senha: string;
+  } | null>(null);
 
   const form = useForm<DriverFormValues>({
     resolver: zodResolver(driverSchema),
@@ -169,12 +188,13 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
 
   const createMutation = trpc.drivers.create.useMutation({
     onSuccess: r => {
-      toast.success(
-        `Motorista cadastrado! Senha inicial: ${r.initialPassword} — anote e passe ao motorista (troca no 1º acesso).`,
-        { duration: 15000 }
-      );
       queryClient.invalidateQueries({ queryKey: [["drivers", "list"]] });
-      onSuccess();
+      // Só fecha o formulário DEPOIS que o gestor anotar o acesso — antes,
+      // a senha ia num toast que sumia e o endereço do app nem era mostrado.
+      setAcessoNovo({
+        usuario: r.username ?? form.getValues("username") ?? "",
+        senha: r.initialPassword,
+      });
     },
     onError: (error: any) => {
       showErrorDialog(error.message, "Erro ao cadastrar motorista");
@@ -372,6 +392,16 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
         >
           {isEdit ? "Salvar Alterações" : "Cadastrar Motorista"}
         </Button>
+
+        <AcessoMotoristaDialog
+          aberto={acessoNovo !== null}
+          onFechar={() => {
+            setAcessoNovo(null);
+            onSuccess();
+          }}
+          usuario={acessoNovo?.usuario ?? ""}
+          senha={acessoNovo?.senha ?? ""}
+        />
       </form>
     </Form>
   );

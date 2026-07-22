@@ -1,9 +1,11 @@
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Check, Truck, LogOut } from "lucide-react";
+import { Check, Truck, LogOut, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEffect, useState } from "react";
 import { acaoPaywall, podeAbrirPortal } from "@/lib/billingAction";
+import { voltouDoCheckout, estadoRetorno } from "@/lib/checkoutRetorno";
 
 const FEATURES = [
   "Cadastro de veículos, motoristas e viagens",
@@ -20,7 +22,28 @@ const FEATURES = [
  */
 export default function Paywall() {
   const { user, logout } = useAuth();
-  const { data: status } = trpc.billing.getStatus.useQuery();
+
+  // Voltou do checkout? Então acabou de pagar e o webhook ainda pode não ter
+  // chegado. Enquanto isso, consulta o status a cada 3s para liberar sozinho.
+  const [voltou] = useState(() => voltouDoCheckout(window.location.search));
+  const [inicio] = useState(() => Date.now());
+  const [agora, setAgora] = useState(() => Date.now());
+
+  const { data: status } = trpc.billing.getStatus.useQuery(undefined, {
+    refetchInterval: voltou ? 3000 : false,
+  });
+
+  useEffect(() => {
+    if (!voltou) return;
+    const t = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [voltou]);
+
+  const estado = estadoRetorno({
+    voltouDoCheckout: voltou,
+    assinaturaAtiva: Boolean(status?.active),
+    msDesdeRetorno: agora - inicio,
+  });
   const checkout = trpc.billing.createCheckout.useMutation({
     onSuccess: ({ url }) => {
       window.location.href = url;
@@ -78,6 +101,37 @@ export default function Paywall() {
             <p className="rounded-lg bg-amber-500/10 p-3 text-center text-sm text-amber-300">
               Pagamento ainda não configurado pelo administrador do sistema.
             </p>
+          ) : estado === "aguardando" ? (
+            // Pagou agora: NENHUM botão de assinar aqui, ou ele cria uma
+            // segunda assinatura enquanto a primeira já está cobrando.
+            <div className="rounded-lg bg-emerald-500/10 p-4 text-center">
+              <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-emerald-400" />
+              <p className="text-sm text-emerald-300">
+                Pagamento recebido! Estamos confirmando com o banco — isso leva
+                alguns segundos e a tela libera sozinha.
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Não feche esta página nem pague de novo.
+              </p>
+            </div>
+          ) : estado === "demorou" ? (
+            <div className="rounded-lg bg-amber-500/10 p-4 text-center">
+              <p className="text-sm text-amber-300">
+                A confirmação está demorando mais que o normal. Seu pagamento
+                não foi perdido.
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Recarregue a página em alguns minutos. Se continuar assim, fale
+                com o suporte —{" "}
+                <a
+                  href="mailto:fraptotech@gmail.com"
+                  className="underline underline-offset-4"
+                >
+                  fraptotech@gmail.com
+                </a>
+                . <strong>Não pague novamente.</strong>
+              </p>
+            </div>
           ) : acao === "gerenciar" ? (
             <>
               <p className="mb-3 rounded-lg bg-amber-500/10 p-3 text-center text-sm text-amber-300">
@@ -108,7 +162,7 @@ export default function Paywall() {
 
           {/* Quem já é cliente no Stripe sempre alcança o portal — inclusive
               para cancelar sem precisar falar com o suporte. */}
-          {temPortal && acao !== "gerenciar" && (
+          {temPortal && acao !== "gerenciar" && estado === "normal" && (
             <button
               onClick={() => portal.mutate()}
               disabled={portal.isPending}
