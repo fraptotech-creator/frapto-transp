@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Check, Truck, LogOut } from "lucide-react";
 import { toast } from "sonner";
+import { acaoPaywall, podeAbrirPortal } from "@/lib/billingAction";
 
 const FEATURES = [
   "Cadastro de veículos, motoristas e viagens",
@@ -26,8 +27,19 @@ export default function Paywall() {
     },
     onError: e => toast.error(e.message || "Falha ao iniciar o pagamento"),
   });
+  const portal = trpc.billing.createPortal.useMutation({
+    onSuccess: ({ url }) => {
+      window.location.href = url;
+    },
+    onError: e =>
+      toast.error(e.message || "Não foi possível abrir o gerenciamento."),
+  });
 
   const notConfigured = status && !status.configured;
+  // Cartão vencido NÃO deve abrir checkout novo — geraria uma segunda
+  // assinatura enquanto a primeira segue cobrando. Regra em billingAction.ts.
+  const acao = status ? acaoPaywall(status) : "assinar";
+  const temPortal = status ? podeAbrirPortal(status) : false;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
@@ -66,6 +78,23 @@ export default function Paywall() {
             <p className="rounded-lg bg-amber-500/10 p-3 text-center text-sm text-amber-300">
               Pagamento ainda não configurado pelo administrador do sistema.
             </p>
+          ) : acao === "gerenciar" ? (
+            <>
+              <p className="mb-3 rounded-lg bg-amber-500/10 p-3 text-center text-sm text-amber-300">
+                Não conseguimos processar o último pagamento. Atualize a forma
+                de pagamento para reativar o acesso.
+              </p>
+              <Button
+                className="w-full"
+                size="lg"
+                disabled={portal.isPending}
+                onClick={() => portal.mutate()}
+              >
+                {portal.isPending
+                  ? "Redirecionando…"
+                  : "Atualizar forma de pagamento"}
+              </Button>
+            </>
           ) : (
             <Button
               className="w-full"
@@ -75,6 +104,18 @@ export default function Paywall() {
             >
               {checkout.isPending ? "Redirecionando…" : "Assinar por R$ 57/mês"}
             </Button>
+          )}
+
+          {/* Quem já é cliente no Stripe sempre alcança o portal — inclusive
+              para cancelar sem precisar falar com o suporte. */}
+          {temPortal && acao !== "gerenciar" && (
+            <button
+              onClick={() => portal.mutate()}
+              disabled={portal.isPending}
+              className="mt-3 w-full text-center text-sm text-slate-400 underline-offset-4 hover:text-slate-200 hover:underline disabled:opacity-50"
+            >
+              Gerenciar assinatura ou trocar cartão
+            </button>
           )}
 
           <p className="mt-3 text-center text-xs text-slate-500">

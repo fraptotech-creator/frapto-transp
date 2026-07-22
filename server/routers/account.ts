@@ -224,6 +224,10 @@ export const billingRouter = router({
       active: status === "active" || status === "trialing",
       currentPeriodEnd: org?.currentPeriodEnd ?? null,
       configured: isStripeConfigured(),
+      // Só existe portal do Stripe se a empresa já virou cliente lá. Sem isso,
+      // createPortal lançaria "Organização sem cliente Stripe" — o botão não
+      // pode aparecer. É só um booleano; nenhum ID vaza pro browser.
+      hasBilling: Boolean(org?.stripeCustomerId),
       priceLabel: "R$ 57,00/mês",
     };
   }),

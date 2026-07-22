@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import AssinaturaCard from "@/components/AssinaturaCard";
 import {
   Card,
   CardContent,
@@ -193,6 +194,8 @@ export default function Settings() {
           </Button>
         </CardContent>
       </Card>
+
+      <AssinaturaCard />
     </div>
   );
 }
