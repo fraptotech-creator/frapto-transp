@@ -67,6 +67,10 @@ export const users = mysqlTable("users", {
   // Revogação de sessão: o token embute este número; logout incrementa,
   // invalidando todos os cookies antigos (mesmo o roubado).
   sessionVersion: int("sessionVersion").default(0).notNull(),
+  // Recuperação de senha. Guardamos o HASH do token, nunca o valor: quem
+  // conseguir ler o banco não consegue usar o link para trocar a senha.
+  resetTokenHash: varchar("resetTokenHash", { length: 64 }),
+  resetTokenExpiraEm: timestamp("resetTokenExpiraEm"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

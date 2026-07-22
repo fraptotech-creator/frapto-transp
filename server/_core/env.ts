@@ -13,6 +13,11 @@ export const ENV = {
   // precisam estar setados e bater — vazio = NINGUÉM é admin (fail-closed).
   superAdminOpenId: process.env.SUPER_ADMIN_OPEN_ID ?? "",
   superAdminEmail: process.env.SUPER_ADMIN_EMAIL ?? "",
+  // E-mail transacional (Resend) — hoje só recuperação de senha.
+  resendApiKey: process.env.RESEND_API_KEY ?? "",
+  // Remetente. Precisa ser do domínio verificado no Resend, senão ele recusa.
+  emailRemetente:
+    process.env.EMAIL_REMETENTE ?? "nao-responda@fraptotransp.com.br",
   // Assistente de IA (Anthropic Claude) — fallback legado.
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   // Padrão de IA do SISTEMA (grátis pra todos): só a chave é obrigatória; o

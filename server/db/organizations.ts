@@ -220,6 +220,33 @@ export async function incrementSessionVersion(openId: string) {
     .where(eq(users.openId, openId));
 }
 
+// ─── Recuperação de senha ────────────────────────────────────────────────────
+
+export async function setResetToken(
+  openId: string,
+  hash: string | null,
+  expiraEm: Date | null
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(users)
+    .set({ resetTokenHash: hash, resetTokenExpiraEm: expiraEm })
+    .where(eq(users.openId, openId));
+}
+
+// Busca pelo HASH do token — o valor cru nunca é gravado nem consultado.
+export async function getUserByResetTokenHash(hash: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.resetTokenHash, hash))
+    .limit(1);
+  return result[0];
+}
+
 export async function getOrganization(orgId: number) {
   const db = await getDb();
   if (!db) return undefined;

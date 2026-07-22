@@ -23,6 +23,7 @@ import TripTracking from "./pages/TripTracking";
 import Settings from "./pages/Settings";
 import Termos from "./pages/Termos";
 import Privacidade from "./pages/Privacidade";
+import RedefinirSenha from "./pages/RedefinirSenha";
 // Painel do dono da plataforma: raro, lazy pra não pesar o bundle de todo mundo.
 const PlatformAdmin = lazy(() => import("./pages/PlatformAdmin"));
 // Lazy: o Assistente puxa o Streamdown (shiki) — carrega só ao abrir /assistant,
@@ -85,6 +86,8 @@ function App() {
                 visitantes precisam abri-las direto, antes de ter conta. */}
             <Route path="/termos" component={Termos} />
             <Route path="/privacidade" component={Privacidade} />
+            {/* Também pública: quem chega aqui não consegue logar. */}
+            <Route path="/redefinir-senha" component={RedefinirSenha} />
             <Route>
               <DashboardLayout>
                 <Router />

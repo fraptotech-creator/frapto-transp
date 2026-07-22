@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Truck, ArrowLeft } from "lucide-react";
 import { useState } from "react";
+import EsqueciSenhaDialog from "@/components/EsqueciSenhaDialog";
 import { toast } from "sonner";
 
 type Mode = "login" | "signup";
@@ -26,6 +27,7 @@ export default function AuthScreen({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [esqueci, setEsqueci] = useState(false);
 
   const onAuthed = async () => {
     await utils.auth.me.invalidate();
@@ -155,9 +157,21 @@ export default function AuthScreen({
                   ? "Entrar"
                   : "Criar conta"}
             </Button>
+
+            {mode === "login" && (
+              <button
+                type="button"
+                onClick={() => setEsqueci(true)}
+                className="w-full text-center text-sm text-slate-400 underline-offset-4 hover:text-slate-200 hover:underline"
+              >
+                Esqueci minha senha
+              </button>
+            )}
           </form>
         </div>
       </div>
+
+      <EsqueciSenhaDialog aberto={esqueci} onFechar={() => setEsqueci(false)} />
     </div>
   );
 }

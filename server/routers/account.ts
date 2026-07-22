@@ -26,6 +26,17 @@ import {
   isStripeConfigured,
 } from "../_core/stripe";
 import { assertLoginRateLimit } from "./_helpers";
+import {
+  gerarTokenReset,
+  hashToken,
+  podeRedefinir,
+  expiraEm,
+  linkReset,
+  VALIDADE_MS,
+} from "../_core/passwordReset";
+import { enviarEmail } from "../_core/email";
+import { emailRecuperacaoSenha } from "../_core/emailTemplates";
+import { setResetToken, getUserByResetTokenHash } from "../db";
 import { isSuperAdmin } from "../_core/superAdmin";
 import { ENV } from "../_core/env";
 
@@ -200,6 +211,95 @@ export const authRouter = router({
         maxAge: ONE_YEAR_MS,
       });
       return { success: true } as const;
+    }),
+
+  /**
+   * Pede o link de recuperação.
+   *
+   * SEMPRE responde igual, exista o e-mail ou não. Diferenciar transformaria
+   * este endpoint num oráculo para descobrir quem é cliente do sistema — e a
+   * lista de clientes de um SaaS é informação de valor.
+   */
+  forgotPassword: publicProcedure
+    .input(z.object({ email: z.string().email("E-mail inválido.") }))
+    .mutation(async ({ ctx, input }) => {
+      assertLoginRateLimit(ctx.req);
+      const generico = { ok: true as const } as const;
+
+      const email = input.email.trim().toLowerCase();
+      const user = await getUserByEmail(email);
+      // Motorista entra por usuário, não por e-mail: não tem o que recuperar
+      // por aqui, e responder diferente entregaria o papel dele.
+      if (!user?.email || user.orgRole === "driver") return generico;
+
+      const { token, hash } = gerarTokenReset();
+      const agora = new Date();
+      await setResetToken(user.openId, hash, expiraEm(agora));
+
+      const conteudo = emailRecuperacaoSenha({
+        link: linkReset(ENV.appBaseUrl, token),
+        validadeHoras: Math.round(VALIDADE_MS / 3_600_000),
+      });
+      try {
+        await enviarEmail({
+          para: user.email,
+          assunto: conteudo.assunto,
+          html: conteudo.html,
+          texto: conteudo.texto,
+        });
+      } catch (e) {
+        // Não vaza o motivo pro usuário (viraria oráculo), mas registra com
+        // contexto — envio quebrado em silêncio deixa cliente sem conta.
+        console.error(
+          "[Reset] Falha ao enviar e-mail de recuperação:",
+          e instanceof Error ? e.message : e
+        );
+        // Token pendente sem e-mail entregue é lixo: limpa para não ficar
+        // uma janela de 1h aberta que ninguém pediu.
+        await setResetToken(user.openId, null, null);
+      }
+      return generico;
+    }),
+
+  /** Redefine a senha usando o token do e-mail. */
+  resetPassword: publicProcedure
+    .input(
+      z.object({
+        token: z.string().min(1),
+        password: z
+          .string()
+          .min(8, "A senha precisa ter ao menos 8 caracteres."),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      assertLoginRateLimit(ctx.req);
+      const invalido = new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Link inválido ou expirado. Peça um novo.",
+      });
+
+      const user = await getUserByResetTokenHash(hashToken(input.token));
+      if (!user) throw invalido;
+
+      const decisao = podeRedefinir({
+        hashGuardado: user.resetTokenHash,
+        expiraEm: user.resetTokenExpiraEm,
+        tokenRecebido: input.token,
+        agora: new Date(),
+      });
+      if (!decisao.ok) {
+        console.warn(`[Reset] Recusado (${decisao.motivo}) p/ user ${user.id}`);
+        throw invalido;
+      }
+
+      const passwordHash = await bcrypt.hash(input.password, 10);
+      await setUserPassword(user.openId, passwordHash, false);
+      // Uso único: queima o token ANTES de responder.
+      await setResetToken(user.openId, null, null);
+      // Trocou a senha → derruba todas as sessões antigas, em qualquer
+      // aparelho. Se a conta foi tomada, isso expulsa o invasor.
+      await incrementSessionVersion(user.openId);
+      return { ok: true as const };
     }),
 
   logout: publicProcedure.mutation(async ({ ctx }) => {
