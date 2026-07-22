@@ -1,6 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { ENV } from "./env";
+import {
+  trpcErrorBody,
+  isTrpcRequest,
+  type TrpcErrorKey,
+} from "./trpcErrorBody";
 
 // Headers de segurança (1º middleware). Sem CSP por ora (evita quebrar o bundle
 // e o redirect do Stripe); os demais fecham clickjacking e MIME-sniffing.
@@ -26,13 +31,39 @@ export function securityHeaders(
   next();
 }
 
+// Resposta de limite estourado. Em /api/trpc precisa sair no envelope do tRPC,
+// senão o cliente não desserializa e o usuário vê um erro de framework em vez
+// do motivo real.
+function limiteExcedido(
+  req: Request,
+  res: Response,
+  code: TrpcErrorKey,
+  httpStatus: number,
+  message: string
+) {
+  res
+    .status(httpStatus)
+    .json(
+      isTrpcRequest(req.path)
+        ? trpcErrorBody(code, httpStatus, message)
+        : { error: message }
+    );
+}
+
 // Rate-limit geral da API (por IP). Generoso — só barra abuso/DoS.
 export const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 300,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { error: "Muitas requisições. Tente novamente em instantes." },
+  handler: (req, res) =>
+    limiteExcedido(
+      req,
+      res,
+      "TOO_MANY_REQUESTS",
+      429,
+      "Muitas requisições. Tente novamente em instantes."
+    ),
 });
 
 // Rate-limit do rastreio (/api/track). Chaveado pelo TOKEN do motorista, não
@@ -68,7 +99,14 @@ export const authLimiter = rateLimit({
   limit: 15,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { error: "Muitas tentativas. Aguarde alguns minutos." },
+  handler: (req, res) =>
+    limiteExcedido(
+      req,
+      res,
+      "TOO_MANY_REQUESTS",
+      429,
+      "Muitas tentativas. Aguarde alguns minutos."
+    ),
 });
 
 // CSRF (defesa em profundidade, além do sameSite=lax): se vier Origin e não
@@ -77,7 +115,14 @@ export const authLimiter = rateLimit({
 export function originCheck(req: Request, res: Response, next: NextFunction) {
   const origin = req.headers.origin;
   if (origin && ENV.appBaseUrl && origin !== ENV.appBaseUrl) {
-    res.status(403).json({ error: "Origin não permitido." });
+    const msg = "Origem da requisição não permitida.";
+    res
+      .status(403)
+      .json(
+        isTrpcRequest(req.path)
+          ? trpcErrorBody("FORBIDDEN", 403, msg)
+          : { error: msg }
+      );
     return;
   }
   next();
