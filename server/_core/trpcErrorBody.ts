@@ -34,9 +34,15 @@ export function trpcErrorBody(
 // O envelope só serve para chamadas do cliente tRPC. Fora de /api/trpc
 // (webhook do Stripe, /api/track do app nativo) o formato simples é o certo.
 //
+// ⚠️ Passe `req.originalUrl`, NÃO `req.path`. Estes middlewares são montados
+// com prefixo (app.use("/api/trpc", ...)), e nesse caso o Express entrega o
+// req.path SEM o prefixo ("/documents.downloadUrl") — a comparação daria
+// falso sempre. Descoberto validando ao vivo; os testes não pegam porque
+// chamam a função direto.
+//
 // Aceita undefined de propósito: isto roda dentro do middleware de CSRF, que
 // não pode estourar por um campo ausente. Sem caminho conhecido, devolve o
 // formato simples — o mesmo de antes desta mudança.
-export function isTrpcRequest(path: string | undefined): boolean {
-  return typeof path === "string" && path.startsWith("/api/trpc");
+export function isTrpcRequest(urlOriginal: string | undefined): boolean {
+  return typeof urlOriginal === "string" && urlOriginal.startsWith("/api/trpc");
 }

@@ -44,7 +44,7 @@ function limiteExcedido(
   res
     .status(httpStatus)
     .json(
-      isTrpcRequest(req.path)
+      isTrpcRequest(req.originalUrl)
         ? trpcErrorBody(code, httpStatus, message)
         : { error: message }
     );
@@ -119,7 +119,7 @@ export function originCheck(req: Request, res: Response, next: NextFunction) {
     res
       .status(403)
       .json(
-        isTrpcRequest(req.path)
+        isTrpcRequest(req.originalUrl)
           ? trpcErrorBody("FORBIDDEN", 403, msg)
           : { error: msg }
       );

@@ -43,6 +43,14 @@ describe("isTrpcRequest", () => {
     expect(isTrpcRequest("/api/ping")).toBe(false);
   });
 
+  it("req.path (sem prefixo) NÃO é aceito como tRPC — use originalUrl", () => {
+    // Trava do bug encontrado ao vivo: com app.use("/api/trpc", ...) o Express
+    // entrega req.path já sem o prefixo, então passar req.path daria falso
+    // sempre e o envelope nunca sairia.
+    expect(isTrpcRequest("/documents.downloadUrl")).toBe(false);
+    expect(isTrpcRequest("/api/trpc/documents.downloadUrl?batch=1")).toBe(true);
+  });
+
   it("caminho ausente não derruba o middleware de CSRF", () => {
     // Trava de regressão: a 1ª versão chamava .startsWith em undefined e
     // estourava dentro do originCheck — que é justamente a barreira que
