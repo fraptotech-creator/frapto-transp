@@ -3,7 +3,10 @@ import BackgroundGeolocation from "@transistorsoft/capacitor-background-geolocat
 import { FraptoDeviceAdmin } from "frapto-device-admin";
 
 // Servidor de produção do Frapto Transp.
-const BASE = "https://frapto-transp-production.up.railway.app";
+// Domínio PRÓPRIO, não o *.up.railway.app: assim o app não quebra se o
+// subdomínio interno do Railway mudar. O APK carrega esta URL compilada, então
+// trocar aqui exige gerar um novo APK e reinstalar nos aparelhos.
+const BASE = "https://www.fraptotransp.com.br";
 const TOKEN_KEY = "frapto_track_token";
 const NAME_KEY = "frapto_track_name";
 const CONSENT_KEY = "frapto_track_consent";
