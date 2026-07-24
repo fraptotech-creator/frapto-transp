@@ -153,6 +153,12 @@ export const drivers = mysqlTable(
     // Telefone é opcional; MySQL permite múltiplos NULL, então motoristas sem
     // telefone não conflitam — só bloqueia quando o mesmo número se repete.
     telefonePorOrg: unique("drivers_telefone_por_org").on(t.orgId, t.telefone),
+    // trackingToken é uma CREDENCIAL bearer global (lookup sem orgId em
+    // getDriverByTrackingToken). O índice único garante 1 motorista por token
+    // e torna o lookup indexado. NULL múltiplo é permitido (motorista sem app).
+    trackingTokenUnico: unique("drivers_tracking_token_unico").on(
+      t.trackingToken
+    ),
   })
 );
 

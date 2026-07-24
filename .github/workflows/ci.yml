@@ -12,10 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # NÃO fixar 'version' aqui: o package.json já define packageManager
+      # (pnpm@10.4.1+sha...) e o action-setup@v4 ERRA se as duas fontes existem
+      # ("Multiple versions of pnpm specified"). Deixa ler do packageManager.
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -34,3 +35,16 @@ jobs:
 
       - name: Tests (vitest)
         run: pnpm test
+
+      # Garante que TODA mudança de schema veio com sua migração versionada.
+      # `generate` só lê o schema (DATABASE_URL dummy, não conecta); se o schema
+      # divergir das migrações commitadas, ele cria um arquivo novo e o
+      # git diff falha — impedindo drift entre schema.ts e drizzle/migrations.
+      - name: Migrações em sincronia com o schema
+        run: |
+          DATABASE_URL="mysql://u:p@localhost:3306/db" pnpm exec drizzle-kit generate --name=ci_drift_check
+          if ! git diff --quiet -- drizzle/migrations; then
+            echo "::error::schema.ts mudou sem migração. Rode 'pnpm db:generate' e commite o SQL."
+            git --no-pager diff --stat -- drizzle/migrations
+            exit 1
+          fi

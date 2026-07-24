@@ -1,0 +1,1 @@
+ALTER TABLE `drivers` ADD CONSTRAINT `drivers_tracking_token_unico` UNIQUE(`trackingToken`);

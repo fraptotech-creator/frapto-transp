@@ -15,7 +15,9 @@ const needsTls =
 
 export default defineConfig({
   schema: "./drizzle/schema.ts",
-  out: "./drizzle",
+  // Migrações VERSIONADAS ficam aqui (SQL + meta/snapshot). Fluxo em produção:
+  // `db:generate` (revisa o SQL no PR) → `db:migrate`. Nunca `db:push` em prod.
+  out: "./drizzle/migrations",
   dialect: "mysql",
   dbCredentials: {
     host: url.hostname,

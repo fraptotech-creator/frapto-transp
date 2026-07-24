@@ -20,6 +20,12 @@ pnpm-lock.yaml
 *.sqlite
 *.sqlite3
 
+# Migrações drizzle (SQL e snapshots são GERADOS — não formatar à mão)
+drizzle/migrations/
+
+# App nativo gerado pelo Capacitor (não versionado; recriado no build do APK)
+mobile/android/
+
 # Logs
 *.log
 
