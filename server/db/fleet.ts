@@ -181,7 +181,16 @@ export async function updateTrip(
 export async function deleteTrip(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(trips).where(and(eq(trips.orgId, orgId), eq(trips.id, id)));
+  // Apagar a viagem tem de apagar TAMBÉM suas posições GPS. Sem isto, os pontos
+  // ficavam órfãos para sempre: crescimento ilimitado E retenção da localização
+  // (PII) do motorista mesmo depois de a viagem sumir. Transação: ou os dois
+  // somem juntos, ou nenhum (não há FK com ON DELETE CASCADE — isso vem no #16).
+  await db.transaction(async tx => {
+    await tx
+      .delete(tripPositions)
+      .where(and(eq(tripPositions.orgId, orgId), eq(tripPositions.tripId, id)));
+    await tx.delete(trips).where(and(eq(trips.orgId, orgId), eq(trips.id, id)));
+  });
   return { success: true };
 }
 
