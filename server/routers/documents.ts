@@ -17,6 +17,7 @@ import {
   MAX_DOC_BYTES,
   isStorageConfigured,
 } from "../_core/storage";
+import { detectDocMime } from "../_core/fileType";
 import { assertRefsOwned } from "./_helpers";
 
 // Documentos (upload em R2), isolado por organização.
@@ -66,8 +67,19 @@ export const documentsRouter = router({
           message: "Arquivo vazio ou maior que 10 MB.",
         });
       }
+      // Confere o conteúdo REAL pelos magic bytes — o contentType declarado
+      // pelo cliente não é confiável (HTML/SVG rotulado como png viraria XSS
+      // servido inline). Grava com o tipo DETECTADO, não com o declarado.
+      const realMime = detectDocMime(buffer);
+      if (!realMime) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "O conteúdo do arquivo não corresponde a um PDF, JPG, PNG ou WEBP válido.",
+        });
+      }
       const key = buildObjectKey(ctx.orgId, input.fileName);
-      await putObject(key, buffer, input.contentType);
+      await putObject(key, buffer, realMime);
       return createDocument(ctx.orgId, {
         tipo: input.tipo,
         descricao: input.descricao ?? input.fileName.slice(0, 150),
