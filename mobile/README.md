@@ -41,3 +41,16 @@ npx cap open android   # abre no Android Studio
 - Plugin de GPS: `@transistorsoft/capacitor-background-geolocation` (Android
   gratuito). Ele roda um serviço de primeiro plano com notificação persistente
   ("Rastreamento ativo") — isso é exigência do Android para GPS em background.
+
+## Segurança
+
+- O diretório `android/` é **gerado** (está no `.gitignore`); o manifesto é
+  recriado a cada build. Por isso o endurecimento é aplicado **no workflow**
+  (`.github/workflows/build-apk.yml`, passo "Endurece o manifesto"), não por
+  edição manual — uma edição local se perde no próximo `cap add android`.
+- Endurecimentos no APK: `allowBackup=false` (o token de rastreio, guardado no
+  `localStorage` do WebView, não sai por `adb backup`) e `usesCleartextTraffic
+=false` (nenhuma requisição em HTTP puro; o servidor é sempre https).
+- **Backlog de robustez:** migrar o token de rastreio de `localStorage` para
+  armazenamento seguro nativo (Android Keystore). Fecha o vetor de leitura em
+  aparelho com root; o `allowBackup=false` já fecha o vetor de backup.

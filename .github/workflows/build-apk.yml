@@ -36,9 +36,18 @@ jobs:
         working-directory: mobile
         run: npx cap add android
 
-      - name: Endurece o manifesto (sem backup do app → token não sai por adb)
+      - name: Endurece o manifesto (sem backup do app e sem cleartext HTTP)
         working-directory: mobile
-        run: sed -i 's/android:allowBackup="true"/android:allowBackup="false"/' android/app/src/main/AndroidManifest.xml
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          # allowBackup=false: o data-dir (localStorage com o token de rastreio)
+          # não entra no backup do Android → token não sai por `adb backup`.
+          sed -i 's/android:allowBackup="true"/android:allowBackup="false"/' "$M"
+          # usesCleartextTraffic=false: garante que nenhuma requisição caia em
+          # HTTP puro (o BASE já é https). Idempotente.
+          grep -q 'usesCleartextTraffic' "$M" || \
+            sed -i 's#android:allowBackup="false"#android:allowBackup="false"\n        android:usesCleartextTraffic="false"#' "$M"
+          echo "--- manifesto endurecido ---"; grep -nE 'allowBackup|usesCleartextTraffic' "$M"
 
       - name: Gera ícones do app (caminhão)
         working-directory: mobile
