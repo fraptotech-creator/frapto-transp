@@ -1,5 +1,5 @@
 import { eq, and, desc, sql } from "drizzle-orm";
-import { tripKmToAccrue } from "../_core/odometer";
+import { tripKmToAccrue, accrueOdometerCore } from "../_core/odometer";
 import {
   vehicles,
   drivers,
@@ -195,14 +195,38 @@ export async function accrueTripKm(orgId: number, tripId: number) {
   if (!trip) return;
   const km = tripKmToAccrue(trip);
   if (km <= 0) return;
-  await db
-    .update(vehicles)
-    .set({ quilometragem: sql`${vehicles.quilometragem} + ${km}` })
-    .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, trip.veiculoId)));
-  await db
-    .update(trips)
-    .set({ quilometragemAplicada: true })
-    .where(and(eq(trips.orgId, orgId), eq(trips.id, tripId)));
+  const veiculoId = trip.veiculoId;
+
+  // Transação: a reivindicação da flag e a soma no veículo são atômicas. Se a
+  // soma falhar, o rollback desfaz a reivindicação e a conclusão pode ser
+  // reprocessada. A idempotência vem do UPDATE condicional (só 1 chamador
+  // vira false->true), não de ler-depois-gravar.
+  await db.transaction(async tx => {
+    await accrueOdometerCore(
+      {
+        async claim() {
+          const res = await tx
+            .update(trips)
+            .set({ quilometragemAplicada: true })
+            .where(
+              and(
+                eq(trips.orgId, orgId),
+                eq(trips.id, tripId),
+                eq(trips.quilometragemAplicada, false)
+              )
+            );
+          return res[0].affectedRows === 1;
+        },
+        async addKm(kmToAdd) {
+          await tx
+            .update(vehicles)
+            .set({ quilometragem: sql`${vehicles.quilometragem} + ${kmToAdd}` })
+            .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, veiculoId)));
+        },
+      },
+      km
+    );
+  });
 }
 
 // Registra que a troca de óleo foi feita AGORA: grava o odômetro atual do

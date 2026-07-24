@@ -19,3 +19,25 @@ export function tripKmToAccrue(trip: TripOdometerState): number {
   if (!Number.isFinite(dist) || dist <= 0) return 0;
   return dist;
 }
+
+// Efeito idempotente de somar km ao odômetro. `claim()` reivindica a viagem
+// atomicamente (no banco real: UPDATE ... SET aplicada=true WHERE aplicada=false,
+// que trava a linha e só afeta 1 linha para UM chamador). Só quem reivindicou
+// soma o km — duas conclusões simultâneas nunca somam duas vezes.
+export interface OdometerAccrual {
+  claim(): Promise<boolean>;
+  addKm(km: number): Promise<void>;
+}
+
+export type AccrualResult = "aplicado" | "ja-aplicado" | "sem-km";
+
+export async function accrueOdometerCore(
+  exec: OdometerAccrual,
+  km: number
+): Promise<AccrualResult> {
+  if (km <= 0) return "sem-km";
+  const reivindicou = await exec.claim();
+  if (!reivindicou) return "ja-aplicado";
+  await exec.addKm(km);
+  return "aplicado";
+}
