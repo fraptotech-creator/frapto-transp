@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   organizations,
   users,
@@ -88,32 +88,71 @@ export async function getUserByEmail(email: string) {
  * Cadastro: cria a organização e o usuário DONO dela, numa tacada.
  * Retorna o usuário criado (com orgId).
  */
-export async function createOrgAndOwner(params: {
+export interface CreateOrgAndOwnerParams {
   orgName: string;
   openId: string;
   email: string;
   passwordHash: string;
   name: string | null;
-}) {
+}
+
+// Executor mínimo que a orquestração precisa. Existe para tornar a lógica
+// testável sem banco real (ver server/createOrgAndOwner.test.ts) e para deixar
+// explícito o contrato: o ID do dono SAI do insert da org, nunca de um
+// "último registro".
+export interface OrgOwnerExecutor {
+  insertOrg(name: string): Promise<number>;
+  insertOwner(orgId: number, params: CreateOrgAndOwnerParams): Promise<void>;
+}
+
+/**
+ * Orquestração PURA do cadastro. Usa o ID retornado pelo insert da org — o bug
+ * antigo lia `ORDER BY id DESC LIMIT 1`, o que sob concorrência ligava o dono à
+ * organização de OUTRO cadastro simultâneo (vazamento cross-tenant). Aqui cada
+ * dono só pode receber o ID que o próprio insert devolveu.
+ */
+export async function createOrgAndOwnerCore(
+  exec: OrgOwnerExecutor,
+  params: CreateOrgAndOwnerParams
+): Promise<number> {
+  const orgId = await exec.insertOrg(params.orgName);
+  // Se este passo falhar, a transação que envolve o executor real faz rollback
+  // do insert da org — nada de empresa órfã.
+  await exec.insertOwner(orgId, params);
+  return orgId;
+}
+
+export async function createOrgAndOwner(params: CreateOrgAndOwnerParams) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  await db.insert(organizations).values({ name: params.orgName });
-  const [org] = await db
-    .select()
-    .from(organizations)
-    .orderBy(desc(organizations.id))
-    .limit(1);
-
-  await db.insert(users).values({
-    openId: params.openId,
-    orgId: org.id,
-    email: params.email,
-    passwordHash: params.passwordHash,
-    name: params.name,
-    loginMethod: "password",
-    orgRole: "owner",
-    lastSignedIn: new Date(),
+  // Transação: org + dono nascem juntos ou nenhum dos dois. Falha na criação
+  // do usuário (ex.: corrida de e-mail duplicado) desfaz a organização.
+  await db.transaction(async tx => {
+    await createOrgAndOwnerCore(
+      {
+        async insertOrg(name) {
+          const [row] = await tx
+            .insert(organizations)
+            .values({ name })
+            .$returningId();
+          return row.id;
+        },
+        async insertOwner(orgId, p) {
+          await tx.insert(users).values({
+            openId: p.openId,
+            orgId,
+            email: p.email,
+            passwordHash: p.passwordHash,
+            name: p.name,
+            loginMethod: "password",
+            orgRole: "owner",
+            lastSignedIn: new Date(),
+          });
+        },
+      },
+      params
+    );
   });
 
   return getUserByOpenId(params.openId);
