@@ -124,10 +124,14 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          // max-h + overflow: formulário mais alto que a tela (ex.: cadastro de
-          // motorista no celular) rola DENTRO do diálogo em vez de vazar o topo
-          // e a base para fora do viewport, sem como alcançar.
-          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+          // Centralização por `inset-0 m-auto`, NÃO por translate. O padrão
+          // com `translate-x/y-[-50%]` cria um elemento fixed + transform, e o
+          // Safari do iPhone TEM UM BUG conhecido: overflow:auto dentro de um
+          // fixed+transform não rola por toque — o formulário alto ficava com
+          // topo e base cortados, sem como alcançar os botões. Auto-margem
+          // centraliza igual, sem transform, e a rolagem volta a funcionar.
+          // `h-fit` + `max-h` dão a altura do conteúdo, limitada à tela.
+          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] gap-4 overflow-y-auto rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
           className
         )}
         onEscapeKeyDown={handleEscapeKeyDown}
