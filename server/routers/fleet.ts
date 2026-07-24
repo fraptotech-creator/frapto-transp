@@ -58,6 +58,34 @@ import {
   normalizePlaca,
   normalizeOptionalPhone,
 } from "../_core/normalize";
+import { transicaoValida, type TripStatus } from "../_core/tripState";
+
+// Carrega a viagem e valida a transição de status pedida. Fail-closed:
+// viagem inexistente → NOT_FOUND; transição ilícita (pulo/reversão/terminal)
+// → BAD_REQUEST. Devolve a viagem atual (evita um segundo getTripById).
+async function assertTripTransition(
+  orgId: number,
+  tripId: number,
+  novoStatus: TripStatus | undefined
+) {
+  const trip = await getTripById(orgId, tripId);
+  if (!trip) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Viagem não encontrada.",
+    });
+  }
+  if (
+    novoStatus !== undefined &&
+    !transicaoValida(trip.status as TripStatus, novoStatus)
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Transição de status inválida: ${trip.status} → ${novoStatus}.`,
+    });
+  }
+  return trip;
+}
 
 export const vehiclesRouter = router({
   list: activeOrgProcedure.query(({ ctx }) => getVehicles(ctx.orgId)),
@@ -444,6 +472,8 @@ export const tripsRouter = router({
         veiculoId: input.veiculoId,
         motoristaId: input.motoristaId,
       });
+      // Máquina de estados: bloqueia pulo/reversão/mexer em viagem terminal.
+      await assertTripTransition(ctx.orgId, input.id, input.status);
       const { id, distancia, pesoTotal, valor, ...rest } = input;
       const updateData: Partial<InsertTrip> = { ...rest };
       if (distancia !== undefined)
@@ -470,6 +500,8 @@ export const tripsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Mesma máquina de estados do trips.update.
+      await assertTripTransition(ctx.orgId, input.id, input.status);
       const updateData: Partial<InsertTrip> = { status: input.status };
       if (input.dataChegada) updateData.dataChegada = input.dataChegada;
       const trip = await updateTrip(ctx.orgId, input.id, updateData);
