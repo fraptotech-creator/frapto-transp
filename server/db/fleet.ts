@@ -361,17 +361,17 @@ export async function createMaintenance(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(maintenance).values({ ...data, orgId });
+  // Lê pelo ID deste insert. Antes buscava "última manutenção do veículo"
+  // (ORDER BY id DESC) — duas criações simultâneas para o MESMO veículo
+  // devolviam a linha errada. Manutenção não tem chave natural única.
+  const [ins] = await db
+    .insert(maintenance)
+    .values({ ...data, orgId })
+    .$returningId();
   const inserted = await db
     .select()
     .from(maintenance)
-    .where(
-      and(
-        eq(maintenance.orgId, orgId),
-        eq(maintenance.veiculoId, data.veiculoId)
-      )
-    )
-    .orderBy(desc(maintenance.id))
+    .where(and(eq(maintenance.orgId, orgId), eq(maintenance.id, ins.id)))
     .limit(1);
   return inserted[0];
 }

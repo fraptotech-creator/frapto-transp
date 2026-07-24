@@ -36,12 +36,16 @@ export async function createExpense(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(expenses).values({ ...data, orgId });
+  // Lê pelo ID que ESTE insert devolveu — não por "último id da org", que sob
+  // concorrência devolvia a linha de outro create simultâneo (mesmo #1 da org).
+  const [ins] = await db
+    .insert(expenses)
+    .values({ ...data, orgId })
+    .$returningId();
   const result = await db
     .select()
     .from(expenses)
-    .where(eq(expenses.orgId, orgId))
-    .orderBy(desc(expenses.id))
+    .where(and(eq(expenses.orgId, orgId), eq(expenses.id, ins.id)))
     .limit(1);
   return result[0];
 }
@@ -98,12 +102,14 @@ export async function createRevenue(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(revenues).values({ ...data, orgId });
+  const [ins] = await db
+    .insert(revenues)
+    .values({ ...data, orgId })
+    .$returningId();
   const result = await db
     .select()
     .from(revenues)
-    .where(eq(revenues.orgId, orgId))
-    .orderBy(desc(revenues.id))
+    .where(and(eq(revenues.orgId, orgId), eq(revenues.id, ins.id)))
     .limit(1);
   return result[0];
 }

@@ -36,12 +36,16 @@ export async function createDocument(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(documents).values({ ...data, orgId });
+  // Lê pelo ID deste insert (não "último doc da org", que sob concorrência
+  // devolvia o documento de outro upload simultâneo). Sem chave natural única.
+  const [ins] = await db
+    .insert(documents)
+    .values({ ...data, orgId })
+    .$returningId();
   const result = await db
     .select()
     .from(documents)
-    .where(eq(documents.orgId, orgId))
-    .orderBy(desc(documents.id))
+    .where(and(eq(documents.orgId, orgId), eq(documents.id, ins.id)))
     .limit(1);
   return result[0];
 }
