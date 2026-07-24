@@ -12,7 +12,7 @@ const db = vi.hoisted(() => ({
   getDriverByTrackingToken: vi.fn(),
   getTrips: vi.fn(),
   getTripById: vi.fn(),
-  addTripPosition: vi.fn(),
+  addTripPositions: vi.fn(),
 }));
 vi.mock("./db", () => db);
 vi.mock("bcryptjs", () => ({
@@ -95,14 +95,16 @@ describe("/api/track — gate de assinatura na ingestão", () => {
     const { res, r } = fakeRes();
     await handleTrackIngest(req(ponto), res);
     expect(r.code).toBe(402);
-    expect(db.addTripPosition).not.toHaveBeenCalled();
+    expect(db.addTripPositions).not.toHaveBeenCalled();
   });
 
-  it("grava posição quando a assinatura está ativa", async () => {
+  it("grava posição EM LOTE quando a assinatura está ativa", async () => {
     db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
     const { res, r } = fakeRes();
     await handleTrackIngest(req(ponto), res);
     expect(r.code).toBe(200);
-    expect(db.addTripPosition).toHaveBeenCalledOnce();
+    // Um único INSERT em lote (não um por ponto).
+    expect(db.addTripPositions).toHaveBeenCalledOnce();
+    expect(r.body).toEqual({ recorded: 1 });
   });
 });

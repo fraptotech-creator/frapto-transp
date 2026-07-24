@@ -253,6 +253,19 @@ export async function addTripPosition(
   await db.insert(tripPositions).values({ ...data, orgId });
 }
 
+// Insere VÁRIAS posições num único INSERT. O app nativo manda lotes (batchSync
+// do plugin de GPS); gravar uma a uma era N round-trips ao banco por POST.
+// Sem linhas, não toca no banco.
+export async function addTripPositions(
+  orgId: number,
+  rows: Omit<InsertTripPosition, "orgId">[]
+) {
+  if (rows.length === 0) return;
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(tripPositions).values(rows.map(r => ({ ...r, orgId })));
+}
+
 // Busca o motorista pelo token de rastreio (usado pelo /api/track — o app
 // nativo em background não tem cookie de sessão). Token é global; a org e o
 // driverId saem do REGISTRO, nunca de input do cliente (fail-closed).

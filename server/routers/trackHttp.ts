@@ -2,7 +2,11 @@ import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { normalizeTrackPayload } from "../_core/trackIngest";
-import { canRecordPosition } from "../_core/tracking";
+import {
+  planTrackInserts,
+  distinctTripIds,
+  type TripRef,
+} from "../_core/tracking";
 import { assinaturaAtiva } from "../_core/subscription";
 import {
   getDriverByTrackingToken,
@@ -11,7 +15,7 @@ import {
   setDriverTrackingToken,
   getTripById,
   getTrips,
-  addTripPosition,
+  addTripPositions,
   getOrganization,
 } from "../db";
 
@@ -99,33 +103,33 @@ export async function handleTrackIngest(req: Request, res: Response) {
     }
 
     // Viagem ativa do motorista (fallback quando o ponto não traz tripId).
-    let activeTripId: number | undefined;
-    const resolveActive = async (): Promise<number> => {
-      if (activeTripId !== undefined) return activeTripId;
+    // Só busca se ALGUM ponto depender do fallback.
+    const precisaAtiva = points.some(p => p.tripId == null);
+    let activeTripId = -1;
+    if (precisaAtiva) {
       const trips = await getTrips(driver.orgId);
       const active = trips.find(
         t => t.motoristaId === driver.id && t.status === "em_andamento"
       );
       activeTripId = active ? active.id : -1;
-      return activeTripId;
-    };
-
-    let recorded = 0;
-    for (const p of points) {
-      const tripId = p.tripId ?? (await resolveActive());
-      if (tripId < 0) continue;
-      const trip = await getTripById(driver.orgId, tripId);
-      if (!trip || !canRecordPosition(trip, driver.id)) continue;
-      await addTripPosition(driver.orgId, {
-        tripId: trip.id,
-        veiculoId: trip.veiculoId,
-        lat: String(p.lat),
-        lng: String(p.lng),
-        velocidade: p.speed != null ? String(p.speed) : null,
-      });
-      recorded++;
     }
-    res.status(200).json({ recorded });
+
+    // Carrega cada viagem DISTINTA uma única vez (antes: um getTripById por
+    // ponto). O planejamento (dono + em_andamento + clamp de velocidade) é
+    // puro; aqui só resolvemos I/O e inserimos em lote.
+    const tripsById = new Map<number, TripRef | null | undefined>();
+    for (const id of distinctTripIds(points, activeTripId)) {
+      tripsById.set(id, await getTripById(driver.orgId, id));
+    }
+
+    const rows = planTrackInserts({
+      points,
+      activeTripId,
+      tripsById,
+      driverId: driver.id,
+    });
+    await addTripPositions(driver.orgId, rows);
+    res.status(200).json({ recorded: rows.length });
   } catch (err) {
     console.error(
       "[track] ingest error",
