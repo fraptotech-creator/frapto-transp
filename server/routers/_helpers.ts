@@ -32,16 +32,31 @@ export function assertLoginRateLimit(req: { ip?: string }): void {
   }
 }
 
+// Teto de sanidade: valores (R$), distância (km), peso, custo e capacidade
+// não são negativos nem chegam perto disto. 1e12 é folga com sobra e barra
+// overflow/lixo ("1e999" vira Infinity no parseFloat).
+export const MAX_NUMERIC = 1e12;
+
+// Distingue AUSENTE (→ null, ok para campo opcional) de PRESENTE-E-INVÁLIDO
+// (→ erro VISÍVEL). Antes, negativo/Infinity/NaN passava: -100 virava "-100"
+// e "1e999" virava "Infinity" — gravava lixo no banco em silêncio. Agora
+// qualquer valor não-finito, negativo ou acima do teto é rejeitado.
 export const parseNumericString = (
   value: string | null | undefined
 ): string | null => {
-  if (!value) return null;
+  if (value == null || value === "") return null;
   const parsed = parseFloat(value);
-  return isNaN(parsed) ? null : String(parsed);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > MAX_NUMERIC) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Valor numérico inválido (informe um número entre 0 e 1e12).",
+    });
+  }
+  return String(parsed);
 };
 
-// Campos numéricos OBRIGATÓRIOS (notNull no schema). Falha fechado: entrada
-// não-numérica vira erro de validação, em vez de null que estouraria no banco.
+// Campos numéricos OBRIGATÓRIOS (notNull no schema). Falha fechado: ausente ou
+// inválido vira erro de validação, em vez de null que estouraria no banco.
 export const parseRequiredNumericString = (value: string): string => {
   const parsed = parseNumericString(value);
   if (parsed === null) {
