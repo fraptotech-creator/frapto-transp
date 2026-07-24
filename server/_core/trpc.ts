@@ -6,6 +6,7 @@ import { getOrganization } from "../db";
 import { friendlyDbErrorMessage } from "./dbErrors";
 import { isSuperAdmin } from "./superAdmin";
 import { exigeTrocaDeSenha } from "./passwordPolicy";
+import { assinaturaAtiva } from "./subscription";
 import { ENV } from "./env";
 
 // Mensagem-sentinela: o frontend reconhece e mostra a tela de assinatura.
@@ -128,8 +129,7 @@ export const driverProcedure = protectedProcedure.use(async opts => {
     });
   }
   const org = await getOrganization(ctx.user.orgId);
-  const status = org?.subscriptionStatus;
-  if (!(status === "active" || status === "trialing")) {
+  if (!assinaturaAtiva(org?.subscriptionStatus)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: SUBSCRIPTION_REQUIRED_MSG,
@@ -159,9 +159,7 @@ export const orgOwnerProcedure = orgProcedure.use(async opts => {
 export const activeOrgProcedure = orgProcedure.use(async opts => {
   const { ctx, next } = opts;
   const org = await getOrganization(ctx.orgId);
-  const status = org?.subscriptionStatus;
-  const active = status === "active" || status === "trialing";
-  if (!active) {
+  if (!assinaturaAtiva(org?.subscriptionStatus)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: SUBSCRIPTION_REQUIRED_MSG,
