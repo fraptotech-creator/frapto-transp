@@ -89,7 +89,15 @@ export const expensesRouter = router({
         observacoes: z.string().optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Revalida posse na EDIÇÃO também: sem isto, um PATCH podia apontar a
+      // despesa para veículo/motorista/viagem de OUTRA org (referência órfã
+      // cross-tenant). O create já valida; o update precisava do mesmo gate.
+      await assertRefsOwned(ctx.orgId, {
+        veiculoId: input.veiculoId,
+        motoristaId: input.motoristId,
+        viagemId: input.viagemId,
+      });
       const { id, valor, ...rest } = input;
       const updateData: Partial<InsertExpense> = { ...rest };
       if (valor !== undefined)
@@ -156,7 +164,10 @@ export const revenuesRouter = router({
         observacoes: z.string().optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Revalida posse da viagem na EDIÇÃO (mesmo motivo do expense.update):
+      // impede repontar a receita para uma viagem de outra org.
+      await assertRefsOwned(ctx.orgId, { viagemId: input.viagemId });
       const { id, valor, ...rest } = input;
       const updateData: Partial<InsertRevenue> = { ...rest };
       if (valor !== undefined)

@@ -19,8 +19,23 @@ vi.mock("./db", async importOriginal => {
       id: 1,
       ...(data as object),
     })),
+    updateExpense: vi.fn(async () => ({ id: 1 })),
+    updateRevenue: vi.fn(async () => ({ id: 1 })),
+    // Modela POSSE por org: só o id "próprio" existe; qualquer outro id
+    // (de outra empresa) resolve para undefined → assertRefsOwned rejeita.
+    getVehicleById: vi.fn(async (_orgId: number, id: number) =>
+      id === 10 ? { id: 10 } : undefined
+    ),
+    getDriverById: vi.fn(async (_orgId: number, id: number) =>
+      id === 11 ? { id: 11 } : undefined
+    ),
+    getTripById: vi.fn(async (_orgId: number, id: number) =>
+      id === 20 ? { id: 20 } : undefined
+    ),
   };
 });
+
+import * as db from "./db";
 
 const createAuthContext = (): TrpcContext => ({
   user: {
@@ -78,5 +93,45 @@ describe("Finance Router — valor obrigatório", () => {
         data: new Date(),
       })
     ).rejects.toThrow(/Valor numérico inválido/);
+  });
+});
+
+describe("Finance Router — posse cross-tenant na EDIÇÃO (P1 #8)", () => {
+  let caller: ReturnType<typeof appRouter.createCaller>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    caller = appRouter.createCaller(createAuthContext());
+  });
+
+  it("expense.update REJEITA veículo de outra org e NÃO grava", async () => {
+    await expect(
+      caller.expenses.update({ id: 1, veiculoId: 999 })
+    ).rejects.toThrow(/inválido/i);
+    expect(db.updateExpense).not.toHaveBeenCalled();
+  });
+
+  it("expense.update REJEITA viagem de outra org e NÃO grava", async () => {
+    await expect(
+      caller.expenses.update({ id: 1, viagemId: 999 })
+    ).rejects.toThrow(/inválid/i);
+    expect(db.updateExpense).not.toHaveBeenCalled();
+  });
+
+  it("expense.update aceita referência da PRÓPRIA org", async () => {
+    await caller.expenses.update({ id: 1, veiculoId: 10, motoristId: 11 });
+    expect(db.updateExpense).toHaveBeenCalledOnce();
+  });
+
+  it("revenue.update REJEITA viagem de outra org e NÃO grava", async () => {
+    await expect(
+      caller.revenues.update({ id: 1, viagemId: 999 })
+    ).rejects.toThrow(/inválid/i);
+    expect(db.updateRevenue).not.toHaveBeenCalled();
+  });
+
+  it("revenue.update aceita viagem da PRÓPRIA org", async () => {
+    await caller.revenues.update({ id: 1, viagemId: 20 });
+    expect(db.updateRevenue).toHaveBeenCalledOnce();
   });
 });
