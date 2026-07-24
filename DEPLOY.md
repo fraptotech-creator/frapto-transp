@@ -14,11 +14,11 @@ migrado do Manus para hospedagem própria no Railway — mesmo padrão de frapto
 
 Copie de `.env.example`. Críticas (o boot falha em produção sem elas):
 
-| Var                                         | Descrição                                                                  |
-| ------------------------------------------- | -------------------------------------------------------------------------- |
-| `DATABASE_URL`                              | `mysql://user:pass@host:port/frapto_transp`                                |
-| `JWT_SECRET`                                | ≥32 chars. Gere: `openssl rand -base64 32`                                 |
-| `APP_BASE_URL`                              | URL pública, sem barra final (ex.: `https://frapto-transp.up.railway.app`) |
+| Var                                         | Descrição                                                                                                            |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                              | `mysql://user:pass@host:port/frapto_transp`                                                                          |
+| `JWT_SECRET`                                | ≥32 chars. Gere: `openssl rand -base64 32`                                                                           |
+| `APP_BASE_URL`                              | URL pública, sem barra final (ex.: `https://frapto-transp.up.railway.app`)                                           |
 | `SUPER_ADMIN_OPEN_ID` / `SUPER_ADMIN_EMAIL` | Dono da PLATAFORMA (painel `/plataforma`). Os DOIS precisam bater com o registro do usuário; vazio = ninguém é admin |
 
 ⚠️ `NODE_ENV=production` precisa ser setado **no painel do Railway**. O bloco

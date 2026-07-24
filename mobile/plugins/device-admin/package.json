@@ -6,7 +6,11 @@
   "main": "plugin.js",
   "module": "plugin.js",
   "types": "definitions.d.ts",
-  "files": ["plugin.js", "definitions.d.ts", "android/"],
+  "files": [
+    "plugin.js",
+    "definitions.d.ts",
+    "android/"
+  ],
   "capacitor": {
     "android": {
       "src": "android"
