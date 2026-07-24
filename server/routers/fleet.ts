@@ -59,6 +59,7 @@ import {
   normalizeOptionalPhone,
 } from "../_core/normalize";
 import { transicaoValida, type TripStatus } from "../_core/tripState";
+import { downsampleEvenly } from "../_core/tracking";
 
 // Carrega a viagem e valida a transição de status pedida. Fail-closed:
 // viagem inexistente → NOT_FOUND; transição ilícita (pulo/reversão/terminal)
@@ -399,9 +400,15 @@ export const tripsRouter = router({
     .query(({ ctx, input }) => getTripById(ctx.orgId, input.id)),
 
   // Trajeto rastreado (posições GPS enviadas pelo celular do motorista).
+  // Reamostra para no máximo WIRE_MAX pontos: o traçado no mapa fica idêntico
+  // e o payload não explode em viagens longas (o banco já capa em 20k linhas).
   positions: activeOrgProcedure
     .input(z.object({ tripId: z.number() }))
-    .query(({ ctx, input }) => getTripPositions(ctx.orgId, input.tripId)),
+    .query(async ({ ctx, input }) => {
+      const WIRE_MAX = 2000;
+      const rows = await getTripPositions(ctx.orgId, input.tripId);
+      return downsampleEvenly(rows, WIRE_MAX);
+    }),
 
   create: activeOrgProcedure
     .input(

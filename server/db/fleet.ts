@@ -293,16 +293,28 @@ export async function setDriverTrackingToken(
     .where(and(eq(drivers.orgId, orgId), eq(drivers.id, driverId)));
 }
 
-export async function getTripPositions(orgId: number, tripId: number) {
+// Teto DURO de linhas puxadas do banco: uma viagem muito longa não pode
+// carregar dezenas de milhares de pontos em memória. Ordena DESC + limit para
+// manter os MAIS RECENTES (o marcador ao vivo importa), e reverte para ordem
+// crescente (o mapa desenha o traçado do início ao fim).
+export const MAX_TRIP_POSITIONS = 20000;
+
+export async function getTripPositions(
+  orgId: number,
+  tripId: number,
+  limit: number = MAX_TRIP_POSITIONS
+) {
   const db = await getDb();
   if (!db) return [];
-  return db
+  const rows = await db
     .select()
     .from(tripPositions)
     .where(
       and(eq(tripPositions.orgId, orgId), eq(tripPositions.tripId, tripId))
     )
-    .orderBy(tripPositions.capturedAt);
+    .orderBy(desc(tripPositions.capturedAt))
+    .limit(Math.max(1, Math.min(limit, MAX_TRIP_POSITIONS)));
+  return rows.reverse();
 }
 
 // ─── Manutenção ──────────────────────────────────────────────────────────────

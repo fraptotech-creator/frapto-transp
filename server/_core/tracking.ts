@@ -22,6 +22,20 @@ export function sanitizeSpeed(speed: number | null): string | null {
   return String(speed);
 }
 
+// Reamostra um array grande para no máximo `max` itens, ESPAÇADOS por igual e
+// SEMPRE preservando o primeiro e o último. Para o mapa de trajeto, exibir
+// milhares de pontos crus é desperdício de payload/memória e o traçado fica
+// idêntico com uma amostra uniforme. Puro e testável.
+export function downsampleEvenly<T>(arr: T[], max: number): T[] {
+  if (max <= 0) return [];
+  if (arr.length <= max) return arr;
+  if (max === 1) return [arr[arr.length - 1]];
+  const out: T[] = [];
+  const step = (arr.length - 1) / (max - 1);
+  for (let i = 0; i < max; i++) out.push(arr[Math.round(i * step)]);
+  return out;
+}
+
 export interface TripRef {
   id: number;
   motoristaId: number | null;
