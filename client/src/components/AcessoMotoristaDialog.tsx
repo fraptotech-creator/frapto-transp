@@ -10,30 +10,28 @@ import { Button } from "@/components/ui/button";
 import { Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { urlAppMotorista, mensagemAcessoMotorista } from "@/lib/driverAccess";
+import { linkAtivacao, mensagemAtivacao } from "@/lib/driverAccess";
 
 /**
- * Mostra o acesso do motorista de forma PERSISTENTE.
- *
- * Antes isto era um toast: sumia em segundos, não dizia o ENDEREÇO do app do
- * motorista (que não aparecia em lugar nenhum do sistema) e, se o gestor
- * piscasse, a senha se perdia. O motorista que recebesse o link principal
- * cairia na tela de e-mail — mas o login dele é por usuário.
+ * Mostra o ACESSO do motorista de forma PERSISTENTE — agora com link de
+ * ativação, não senha em texto. O gestor compartilha o link (uso único); o
+ * motorista cria a própria senha e cai direto no app. Nenhuma credencial
+ * trafega por WhatsApp.
  */
 export default function AcessoMotoristaDialog({
   aberto,
   onFechar,
   usuario,
-  senha,
+  token,
 }: {
   aberto: boolean;
   onFechar: () => void;
   usuario: string;
-  senha: string;
+  token: string;
 }) {
   const [copiado, setCopiado] = useState(false);
-  const url = urlAppMotorista(window.location.origin);
-  const mensagem = mensagemAcessoMotorista({ url, usuario, senha });
+  const link = linkAtivacao(window.location.origin, token);
+  const mensagem = mensagemAtivacao({ usuario, link });
 
   const copiar = async () => {
     try {
@@ -56,29 +54,24 @@ export default function AcessoMotoristaDialog({
         <DialogHeader>
           <DialogTitle>Acesso do motorista</DialogTitle>
           <DialogDescription>
-            Anote ou envie agora. A senha não será exibida de novo — depois só
-            gerando uma nova.
+            Envie o link abaixo ao motorista. Ele cria a própria senha (uso
+            único, vale 7 dias). O link não será exibido de novo — depois é só
+            gerar um novo em "Resetar senha".
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 text-sm">
           <div>
-            <span className="text-muted-foreground">Endereço do app</span>
-            <p className="font-mono break-all">{url}</p>
+            <span className="text-muted-foreground">Usuário</span>
+            <p className="font-mono">{usuario}</p>
           </div>
-          <div className="flex gap-6">
-            <div>
-              <span className="text-muted-foreground">Usuário</span>
-              <p className="font-mono">{usuario}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Senha inicial</span>
-              <p className="font-mono">{senha}</p>
-            </div>
+          <div>
+            <span className="text-muted-foreground">Link de ativação</span>
+            <p className="font-mono break-all">{link}</p>
           </div>
           <p className="text-xs text-muted-foreground">
-            O motorista entra por <strong>usuário e senha</strong>, não por
-            e-mail — por isso o endereço acima é diferente do seu.
+            Não enviamos senha por mensagem: o motorista define a dele pelo
+            link. Depois, ele entra por <strong>usuário e senha</strong>.
           </p>
         </div>
 

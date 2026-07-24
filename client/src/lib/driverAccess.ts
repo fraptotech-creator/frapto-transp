@@ -8,20 +8,23 @@ export function urlAppMotorista(origem: string): string {
   return `${origem.replace(/\/+$/, "")}/motorista`;
 }
 
-// Texto pronto para colar no WhatsApp. Formato pensado para o motorista ler no
-// celular: endereço primeiro, credenciais depois, aviso da troca no fim.
-export function mensagemAcessoMotorista(p: {
-  url: string;
-  usuario: string;
-  senha: string;
-}): string {
+// Link de ATIVAÇÃO de uso único: o motorista abre, cria a própria senha e cai
+// direto no app (?next=/motorista). Reaproveita a página /redefinir-senha.
+// Substitui o envio de senha em texto — nada de credencial trafegando.
+export function linkAtivacao(origem: string, token: string): string {
+  const base = origem.replace(/\/+$/, "");
+  return `${base}/redefinir-senha?token=${encodeURIComponent(token)}&next=/motorista`;
+}
+
+// Texto pronto para colar no WhatsApp. Manda o LINK e o usuário — sem senha.
+export function mensagemAtivacao(p: { usuario: string; link: string }): string {
   return [
     "Seu acesso ao Frapto Transp:",
     "",
-    `Endereço: ${p.url}`,
     `Usuário: ${p.usuario}`,
-    `Senha: ${p.senha}`,
+    `Crie sua senha por este link (uso único, vale 7 dias):`,
+    p.link,
     "",
-    "Você vai trocar a senha no primeiro acesso.",
+    "Depois é só entrar com seu usuário e a senha que você criar.",
   ].join("\n");
 }

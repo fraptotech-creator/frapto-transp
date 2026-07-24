@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   urlAppMotorista,
-  mensagemAcessoMotorista,
+  linkAtivacao,
+  mensagemAtivacao,
 } from "../client/src/lib/driverAccess";
 
 describe("urlAppMotorista", () => {
@@ -17,23 +18,41 @@ describe("urlAppMotorista", () => {
   });
 });
 
-describe("mensagemAcessoMotorista", () => {
-  const msg = mensagemAcessoMotorista({
-    url: "https://x.com/motorista",
+describe("linkAtivacao", () => {
+  it("aponta para /redefinir-senha com token e next=/motorista", () => {
+    const link = linkAtivacao("https://x.com", "abc123");
+    expect(link).toBe(
+      "https://x.com/redefinir-senha?token=abc123&next=/motorista"
+    );
+  });
+
+  it("escapa o token (uso único vindo do servidor)", () => {
+    // Um token com caracteres especiais não pode quebrar a querystring.
+    const link = linkAtivacao("https://x.com/", "a b&c=d");
+    expect(link).toContain("token=a%20b%26c%3Dd");
+    expect(link).not.toContain("token=a b&c=d");
+  });
+});
+
+describe("mensagemAtivacao", () => {
+  const msg = mensagemAtivacao({
     usuario: "joao",
-    senha: "a1b2c3d4",
+    link: "https://x.com/redefinir-senha?token=abc123&next=/motorista",
   });
 
-  it("traz endereço, usuário e senha — os três são necessários", () => {
-    // Sem QUALQUER um deles o motorista não consegue entrar: o endereço
-    // porque a rota dele é separada, e as credenciais porque o login é por
-    // usuário, não por e-mail.
-    expect(msg).toContain("https://x.com/motorista");
+  it("traz usuário e o LINK de ativação", () => {
     expect(msg).toContain("joao");
-    expect(msg).toContain("a1b2c3d4");
+    expect(msg).toContain(
+      "https://x.com/redefinir-senha?token=abc123&next=/motorista"
+    );
   });
 
-  it("avisa da troca de senha no primeiro acesso", () => {
-    expect(msg.toLowerCase()).toContain("primeiro acesso");
+  it("NÃO envia senha em texto — essa é a correção (P1 #5)", () => {
+    // Trava anti-regressão: nenhuma senha pode voltar a trafegar na mensagem.
+    // Antes a mensagem continha uma "senha inicial" em texto puro; agora é só
+    // o link de uso único, e o motorista cria a própria senha.
+    expect(msg.toLowerCase()).not.toContain("senha inicial");
+    expect(msg.toLowerCase()).toContain("crie sua senha");
+    expect(msg.toLowerCase()).toContain("uso único");
   });
 });

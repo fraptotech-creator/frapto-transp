@@ -67,11 +67,11 @@ interface DriverFormProps {
 const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
   const { data: info, refetch } = trpc.drivers.loginInfo.useQuery({ driverId });
   const [username, setUsername] = React.useState("");
-  // Credenciais recém-geradas: vão para um aviso persistente, não para um
-  // toast que some antes do gestor conseguir anotar.
+  // Link de ativação recém-gerado: vai para um aviso persistente, não para um
+  // toast que some antes do gestor conseguir repassar. Nunca há senha aqui.
   const [acesso, setAcesso] = React.useState<{
     usuario: string;
-    senha: string;
+    token: string;
   } | null>(null);
   React.useEffect(() => {
     if (info?.username) setUsername(info.username);
@@ -79,8 +79,8 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
 
   const setLogin = trpc.drivers.setLogin.useMutation({
     onSuccess: r => {
-      if (r.created && r.defaultPassword) {
-        setAcesso({ usuario: username.trim(), senha: r.defaultPassword });
+      if (r.created && r.activationToken) {
+        setAcesso({ usuario: username.trim(), token: r.activationToken });
       } else {
         toast.success("Usuário atualizado.");
       }
@@ -92,7 +92,7 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
     onSuccess: r =>
       setAcesso({
         usuario: info?.username ?? username.trim(),
-        senha: r.defaultPassword,
+        token: r.activationToken,
       }),
     onError: (e: any) => showErrorDialog(e.message, "Erro ao resetar senha"),
   });
@@ -111,7 +111,7 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
         <p className="text-xs text-muted-foreground">
           {info?.hasLogin
             ? "Este motorista já tem acesso. Você pode trocar o usuário."
-            : "Defina um usuário para CRIAR o acesso (uma senha inicial é gerada e mostrada ao salvar; troca no 1º acesso)."}
+            : "Defina um usuário para CRIAR o acesso (um link de ativação é gerado ao salvar; o motorista cria a própria senha)."}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -138,7 +138,7 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
             onClick={() => {
               if (
                 confirm(
-                  "Resetar a senha deste motorista? Uma nova senha será gerada e mostrada."
+                  "Resetar o acesso deste motorista? Um novo link de ativação será gerado (o link anterior deixa de valer)."
                 )
               ) {
                 reset.mutate({ driverId });
@@ -154,7 +154,7 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
         aberto={acesso !== null}
         onFechar={() => setAcesso(null)}
         usuario={acesso?.usuario ?? ""}
-        senha={acesso?.senha ?? ""}
+        token={acesso?.token ?? ""}
       />
     </div>
   );
@@ -165,7 +165,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
   const isEdit = !!driver;
   const [acessoNovo, setAcessoNovo] = React.useState<{
     usuario: string;
-    senha: string;
+    token: string;
   } | null>(null);
 
   const form = useForm<DriverFormValues>({
@@ -189,11 +189,11 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
   const createMutation = trpc.drivers.create.useMutation({
     onSuccess: r => {
       queryClient.invalidateQueries({ queryKey: [["drivers", "list"]] });
-      // Só fecha o formulário DEPOIS que o gestor anotar o acesso — antes,
-      // a senha ia num toast que sumia e o endereço do app nem era mostrado.
+      // Só fecha o formulário DEPOIS que o gestor repassar o acesso — antes,
+      // a senha ia num toast que sumia. Agora vai o LINK de ativação.
       setAcessoNovo({
         usuario: r.username ?? form.getValues("username") ?? "",
-        senha: r.initialPassword,
+        token: r.activationToken,
       });
     },
     onError: (error: any) => {
@@ -400,7 +400,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
             onSuccess();
           }}
           usuario={acessoNovo?.usuario ?? ""}
-          senha={acessoNovo?.senha ?? ""}
+          token={acessoNovo?.token ?? ""}
         />
       </form>
     </Form>

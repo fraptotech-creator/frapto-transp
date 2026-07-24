@@ -9,7 +9,13 @@ import { toast } from "sonner";
 // Página PÚBLICA: quem chega aqui não consegue logar, então não pode exigir
 // sessão. O token da URL é a credencial.
 export default function RedefinirSenha() {
-  const token = new URLSearchParams(window.location.search).get("token") ?? "";
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token") ?? "";
+  // Para onde levar após criar a senha. O motorista chega com ?next=/motorista
+  // e deve cair no app dele, não na tela de e-mail. Só aceitamos caminho
+  // interno (começa com "/") — nunca uma URL externa vinda da querystring.
+  const nextParam = params.get("next") ?? "";
+  const next = nextParam.startsWith("/") ? nextParam : "/";
   const [senha, setSenha] = useState("");
   const [confirma, setConfirma] = useState("");
   const [pronto, setPronto] = useState(false);
@@ -39,7 +45,7 @@ export default function RedefinirSenha() {
         <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-xl backdrop-blur">
           {!token ? (
             <p className="text-center text-sm text-amber-300">
-              Link incompleto. Abra o link do e-mail exatamente como recebeu.
+              Link incompleto. Abra o link exatamente como recebeu.
             </p>
           ) : pronto ? (
             <div className="space-y-4 text-center">
@@ -50,7 +56,7 @@ export default function RedefinirSenha() {
               </p>
               <Button
                 className="w-full"
-                onClick={() => (window.location.href = "/")}
+                onClick={() => (window.location.href = next)}
               >
                 Entrar
               </Button>
@@ -98,7 +104,7 @@ export default function RedefinirSenha() {
         </div>
 
         <p className="text-center text-xs text-slate-500">
-          O link do e-mail vale por 1 hora e só pode ser usado uma vez.
+          Este link é de uso único e tem validade limitada.
         </p>
       </div>
     </div>

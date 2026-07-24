@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { activeOrgProcedure, router } from "../_core/trpc";
+import { gerarTokenReset, expiraEmAtivacao } from "../_core/passwordReset";
 import {
   getVehicles,
   getVehicleById,
@@ -22,6 +23,7 @@ import {
   deleteDriverUser,
   incrementSessionVersion,
   setDriverTrackingToken,
+  setResetToken,
   getTrips,
   getTripById,
   getTripPositions,
@@ -137,8 +139,21 @@ export const vehiclesRouter = router({
 // Senha inicial do motorista: ALEATÓRIA por motorista (não mais a constante
 // "123456" compartilhada — que era previsível e igual p/ todos). Mostrada UMA
 // vez ao admin no cadastro/reset; troca obrigatória no 1º acesso.
-function genInitialPassword(): string {
-  return randomBytes(4).toString("hex"); // 8 chars hex, fácil de digitar
+// Senha interna aleatória e DESCARTÁVEL: a conta nasce sem senha utilizável e
+// travada (mustChangePassword). Não é mostrada a ninguém — o motorista define a
+// própria senha pelo link de ativação. Substitui o antigo fluxo que devolvia a
+// senha em texto para o gestor colar no WhatsApp.
+function genThrowawayPassword(): string {
+  return randomBytes(24).toString("hex");
+}
+
+// Emite um token de ativação de USO ÚNICO (hash no banco) para o motorista
+// definir a própria senha via /redefinir-senha. Devolve o token (não-secreto o
+// suficiente para virar link; expira em 7 dias e é revogável).
+async function emitirTokenAtivacao(openId: string): Promise<string> {
+  const { token, hash } = gerarTokenReset();
+  await setResetToken(openId, hash, expiraEmAtivacao(new Date()));
+  return token;
 }
 
 // O trackingToken é uma CREDENCIAL bearer (posta em /api/track sem cookie) —
@@ -209,13 +224,13 @@ export const driversRouter = router({
           message: "Falha ao cadastrar motorista.",
         });
       }
-      const initialPassword = genInitialPassword();
+      const openId = `driver_${randomBytes(16).toString("hex")}`;
       try {
-        const passwordHash = await bcrypt.hash(initialPassword, 10);
+        const passwordHash = await bcrypt.hash(genThrowawayPassword(), 10);
         await createDriverUser({
           orgId: ctx.orgId,
           driverId: driver.id,
-          openId: `driver_${randomBytes(16).toString("hex")}`,
+          openId,
           username,
           passwordHash,
           name: input.nome,
@@ -225,9 +240,10 @@ export const driversRouter = router({
         await deleteDriver(ctx.orgId, driver.id);
         throw e;
       }
-      // `username` volta junto: o gestor precisa dos DOIS (usuário e senha)
-      // para passar ao motorista, e ele pode ter sido gerado aqui.
-      return { ...stripDriverSecret(driver), initialPassword, username };
+      // Devolve o TOKEN de ativação (não a senha): o gestor compartilha um link
+      // de uso único para o motorista criar a própria senha.
+      const activationToken = await emitirTokenAtivacao(openId);
+      return { ...stripDriverSecret(driver), username, activationToken };
     }),
 
   // Informa o usuário (apelido) de login do motorista, se já houver.
@@ -267,20 +283,18 @@ export const driversRouter = router({
         await setUsername(current.openId, username);
         return { created: false } as const;
       }
-      const initialPassword = genInitialPassword();
-      const passwordHash = await bcrypt.hash(initialPassword, 10);
+      const openId = `driver_${randomBytes(16).toString("hex")}`;
+      const passwordHash = await bcrypt.hash(genThrowawayPassword(), 10);
       await createDriverUser({
         orgId: ctx.orgId,
         driverId: input.driverId,
-        openId: `driver_${randomBytes(16).toString("hex")}`,
+        openId,
         username,
         passwordHash,
         name: driver.nome,
       });
-      return {
-        created: true,
-        defaultPassword: initialPassword,
-      } as const;
+      const activationToken = await emitirTokenAtivacao(openId);
+      return { created: true, activationToken } as const;
     }),
 
   // Admin reseta a senha do motorista para a padrão (e o obriga a trocar);
@@ -295,14 +309,17 @@ export const driversRouter = router({
           message: "Este motorista não tem login.",
         });
       }
-      const newPassword = genInitialPassword();
-      const hash = await bcrypt.hash(newPassword, 10);
+      // Zera a senha para um valor descartável + trava a conta, e emite um
+      // token de ativação. O motorista define a nova senha pelo link; nada em
+      // texto trafega.
+      const hash = await bcrypt.hash(genThrowawayPassword(), 10);
       await setUserPassword(user.openId, hash, true);
       await incrementSessionVersion(user.openId);
       // Rotaciona (anula) o token de rastreio: mata o acesso do aparelho antigo
       // ao /api/track; no próximo login o app gera um token novo.
       await setDriverTrackingToken(ctx.orgId, input.driverId, null);
-      return { defaultPassword: newPassword } as const;
+      const activationToken = await emitirTokenAtivacao(user.openId);
+      return { activationToken } as const;
     }),
 
   update: activeOrgProcedure

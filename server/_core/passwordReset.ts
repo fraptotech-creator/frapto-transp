@@ -3,7 +3,10 @@ import { createHash, randomBytes, timingSafeEqual } from "crypto";
 // Recuperação de senha. As decisões ficam aqui, puras e testáveis; o efeito
 // (banco, e-mail) fica na borda, no router.
 
-export const VALIDADE_MS = 60 * 60 * 1000; // 1 hora
+export const VALIDADE_MS = 60 * 60 * 1000; // 1 hora (recuperação do gestor)
+// Ativação do MOTORISTA: o gestor pode não repassar o link na hora, então a
+// janela é maior. Ainda é de uso único e revogável (rotaciona ao resetar).
+export const VALIDADE_ATIVACAO_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
 
 /**
  * Gera o par (token que vai no e-mail, hash que vai no banco).
@@ -61,6 +64,10 @@ export function podeRedefinir(params: {
 
 export function expiraEm(agora: Date): Date {
   return new Date(agora.getTime() + VALIDADE_MS);
+}
+
+export function expiraEmAtivacao(agora: Date): Date {
+  return new Date(agora.getTime() + VALIDADE_ATIVACAO_MS);
 }
 
 // URL que vai no e-mail. O token viaja na querystring porque precisa chegar
