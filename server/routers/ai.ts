@@ -123,9 +123,11 @@ export const settingsRouter = router({
         baseUrl: input.baseUrl?.trim() || null,
         enabled: input.enabled,
       };
-      // Anti-SSRF: a Base URL custom (openai_compatible) não pode apontar para
-      // endereço interno/loopback/metadata.
-      if (input.provider === "openai_compatible" && data.baseUrl) {
+      // Anti-SSRF: QUALQUER baseUrl salva é validada, não só a do
+      // openai_compatible. O runtime (invokeOpenAI) usa baseUrl também para o
+      // provider "openai", então um baseUrl interno em "openai" seria um vetor
+      // SSRF não validado (metadata/loopback). Valida sempre que houver baseUrl.
+      if (data.baseUrl) {
         try {
           await assertSafeBaseUrl(data.baseUrl);
         } catch (e) {

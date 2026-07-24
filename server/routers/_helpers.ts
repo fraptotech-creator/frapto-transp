@@ -304,14 +304,11 @@ export async function resolveAiConfig(
   orgId: number
 ): Promise<AiRuntimeConfig | null> {
   const cfg = await getAiConfig(orgId);
-  // Anti-SSRF: a Base URL custom (openai_compatible da EMPRESA) é revalidada a
-  // CADA chamada, não só ao salvar — barra DNS-rebind para host interno/metadata.
-  if (
-    cfg?.enabled &&
-    cfg.apiKey &&
-    cfg.provider === "openai_compatible" &&
-    cfg.baseUrl
-  ) {
+  // Anti-SSRF: QUALQUER baseUrl da empresa é revalidada a CADA chamada (não só
+  // openai_compatible), pois o runtime usa baseUrl também no provider "openai".
+  // Revalidar por request reduz a janela de DNS-rebind (o registro pode mudar
+  // entre o save e o uso).
+  if (cfg?.enabled && cfg.apiKey && cfg.baseUrl) {
     try {
       await assertSafeBaseUrl(cfg.baseUrl);
     } catch {
