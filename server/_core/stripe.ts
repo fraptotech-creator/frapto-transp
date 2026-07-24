@@ -28,10 +28,22 @@ export function getStripe(): Stripe {
  * sem sinal nenhum no produto. Aconteceu de verdade nesta implantação. É
  * melhor o paywall dizer "pagamento não configurado" do que cobrar sem entregar.
  */
+// Decisão PURA de "cobrança completa": os TRÊS segredos presentes. O webhook
+// entra de propósito — sem ele o checkout cobra e ninguém é liberado.
+export function stripeConfigCompleta(cfg: {
+  secretKey: string;
+  priceId: string;
+  webhookSecret: string;
+}): boolean {
+  return Boolean(cfg.secretKey && cfg.priceId && cfg.webhookSecret);
+}
+
 export function isStripeConfigured(): boolean {
-  return Boolean(
-    ENV.stripeSecretKey && ENV.stripePriceId && ENV.stripeWebhookSecret
-  );
+  return stripeConfigCompleta({
+    secretKey: ENV.stripeSecretKey,
+    priceId: ENV.stripePriceId,
+    webhookSecret: ENV.stripeWebhookSecret,
+  });
 }
 
 // Garante um Stripe Customer para a organização (cria e persiste se faltar).
@@ -58,8 +70,14 @@ export async function createCheckoutSession(params: {
   orgId: number;
   email: string;
 }): Promise<string> {
-  if (!ENV.stripePriceId) {
-    throw new Error("STRIPE_PRICE_ID não configurado");
+  // Fail-closed: só abre checkout se a cobrança estiver COMPLETA — incluindo o
+  // webhook. Sem webhook, o pagamento seria cobrado e ninguém liberado (dinheiro
+  // entra, cliente trancado). A trava fica aqui, na raiz, para valer mesmo se
+  // outro chamador esquecer de checar — não depende da tela.
+  if (!isStripeConfigured()) {
+    throw new Error(
+      "Cobrança não está totalmente configurada (chave, preço e webhook)."
+    );
   }
   const org = await getOrganization(params.orgId);
   if (!org) throw new Error("Organização não encontrada");
