@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { normalizeTrackPayload } from "../_core/trackIngest";
 import { canRecordPosition } from "../_core/tracking";
+import { assinaturaAtiva } from "../_core/subscription";
 import {
   getDriverByTrackingToken,
   getUserByUsername,
@@ -11,6 +12,7 @@ import {
   getTripById,
   getTrips,
   addTripPosition,
+  getOrganization,
 } from "../db";
 
 // Login REST do app NATIVO de rastreio (sem tRPC/superjson). Valida
@@ -49,6 +51,13 @@ export async function handleTrackLogin(req: Request, res: Response) {
       res.status(401).json({ error: "motorista não encontrado" });
       return;
     }
+    // Gate de assinatura: sem pagamento em dia, nem emite token de rastreio.
+    // Sem isto o app nativo era um bypass do paywall (grava GPS de graça).
+    const org = await getOrganization(user.orgId);
+    if (!assinaturaAtiva(org?.subscriptionStatus)) {
+      res.status(402).json({ error: "assinatura inativa" });
+      return;
+    }
     let token = driver.trackingToken;
     if (!token) {
       token = randomBytes(24).toString("hex");
@@ -78,6 +87,14 @@ export async function handleTrackIngest(req: Request, res: Response) {
     const driver = await getDriverByTrackingToken(token);
     if (!driver) {
       res.status(401).json({ error: "token inválido" });
+      return;
+    }
+    // Mesmo com token válido, uma frota inadimplente não grava GPS: o gate de
+    // assinatura vale para TODA borda, não só o tRPC. A org sai do registro do
+    // token (fail-closed), nunca do cliente.
+    const org = await getOrganization(driver.orgId);
+    if (!assinaturaAtiva(org?.subscriptionStatus)) {
+      res.status(402).json({ error: "assinatura inativa" });
       return;
     }
 
