@@ -5,10 +5,13 @@ import type { TrpcContext } from "./context";
 import { getOrganization } from "../db";
 import { friendlyDbErrorMessage } from "./dbErrors";
 import { isSuperAdmin } from "./superAdmin";
+import { exigeTrocaDeSenha } from "./passwordPolicy";
 import { ENV } from "./env";
 
 // Mensagem-sentinela: o frontend reconhece e mostra a tela de assinatura.
 export const SUBSCRIPTION_REQUIRED_MSG = "SUBSCRIPTION_REQUIRED";
+// Sentinela: motorista precisa trocar a senha antes de usar o app.
+export const PASSWORD_CHANGE_REQUIRED_MSG = "PASSWORD_CHANGE_REQUIRED";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -113,6 +116,15 @@ export const driverProcedure = protectedProcedure.use(async opts => {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Acesso restrito ao motorista.",
+    });
+  }
+  // Senha temporária: bloqueia TODO driverApp.* no servidor até a troca. O
+  // motorista ainda consegue trocar a senha (changePassword é protectedProcedure)
+  // e sair (logout é publicProcedure). Não depende da tela.
+  if (exigeTrocaDeSenha(ctx.user)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: PASSWORD_CHANGE_REQUIRED_MSG,
     });
   }
   const org = await getOrganization(ctx.user.orgId);

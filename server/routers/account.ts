@@ -38,6 +38,7 @@ import { enviarEmail } from "../_core/email";
 import { emailRecuperacaoSenha } from "../_core/emailTemplates";
 import { setResetToken, getUserByResetTokenHash } from "../db";
 import { isSuperAdmin } from "../_core/superAdmin";
+import { SENHA_MIN } from "../_core/passwordPolicy";
 import { ENV } from "../_core/env";
 
 export const authRouter = router({
@@ -62,7 +63,12 @@ export const authRouter = router({
         orgName: z.string().min(1, "Nome da empresa é obrigatório"),
         name: z.string().optional(),
         email: z.string().email("Email inválido"),
-        password: z.string().min(8, "A senha precisa de ao menos 8 caracteres"),
+        password: z
+          .string()
+          .min(
+            SENHA_MIN,
+            `A senha precisa de ao menos ${SENHA_MIN} caracteres.`
+          ),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -174,7 +180,10 @@ export const authRouter = router({
         currentPassword: z.string().min(1, "Informe a senha atual"),
         newPassword: z
           .string()
-          .min(6, "A nova senha precisa de ao menos 6 caracteres"),
+          .min(
+            SENHA_MIN,
+            `A nova senha precisa de ao menos ${SENHA_MIN} caracteres.`
+          ),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -268,7 +277,10 @@ export const authRouter = router({
         token: z.string().min(1),
         password: z
           .string()
-          .min(8, "A senha precisa ter ao menos 8 caracteres."),
+          .min(
+            SENHA_MIN,
+            `A senha precisa ter ao menos ${SENHA_MIN} caracteres.`
+          ),
       })
     )
     .mutation(async ({ ctx, input }) => {
