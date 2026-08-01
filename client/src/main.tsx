@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
+import { httpLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -29,7 +29,10 @@ queryClient.getMutationCache().subscribe(event => {
 
 const trpcClient = trpc.createClient({
   links: [
-    httpBatchLink({
+    // httpLink (NÃO httpBatchLink): sem batching, cada chamada é 1 request. O
+    // batch permitia amplificar N operações num único POST — o servidor também
+    // recusa batch (allowBatching:false). Contenção fail-closed.
+    httpLink({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {

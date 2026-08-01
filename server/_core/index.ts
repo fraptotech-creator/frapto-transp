@@ -137,6 +137,10 @@ async function startServer() {
     createExpressMiddleware({
       router: appRouter,
       createContext,
+      // Sem batching no servidor: um POST não pode carregar N operações (o
+      // rate-limit HTTP conta requests, não efeitos — batch furava esse teto).
+      // O cliente usa httpLink; aqui é o enforce fail-closed.
+      allowBatching: false,
       // O cliente recebe a mensagem já saneada (ver errorFormatter); aqui
       // logamos o erro REAL para diagnóstico, sem perdê-lo.
       onError({ error, path }) {
