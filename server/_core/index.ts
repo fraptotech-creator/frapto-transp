@@ -23,6 +23,7 @@ import {
   stripeWebhookLimiter,
 } from "./security";
 import { toSafeLogError } from "./safeLog";
+import { isTrpcUploadPath } from "./trpcBody";
 
 // Fail-closed: em produção, o app NÃO sobe sem os segredos essenciais.
 // Erro visível no boot > sessão insegura silenciosa (JWT fraco / login quebrado).
@@ -167,24 +168,36 @@ async function startServer() {
     handleTrackRevoke
   );
 
-  // Parser de corpo: 15 MB cobre o upload de documento (10 MB → ~13,3 MB em
-  // base64) com folga; era 50 MB (4× o necessário) — reduz amplificação de DoS
-  // por corpo grande nas rotas públicas. Form urlencoded é minúsculo (100 KB).
-  app.use(express.json({ limit: "15mb" }));
+  // Form urlencoded minúsculo (nada no app posta form; só defesa). NÃO há mais
+  // parser JSON GLOBAL: cada rota tem o seu, com o limite certo, DEPOIS do
+  // rate-limit — um corpo grande não é lido em memória antes do limiter.
   app.use(express.urlencoded({ limit: "100kb", extended: true }));
   // Healthcheck do Railway — precisa ficar ACIMA de tudo e sempre 200.
   app.get("/api/ping", (_req, res) => {
     res.status(200).json({ ok: true });
   });
 
+  // Parsers do /api/trpc: PEQUENO (128 KB) por padrão; GRANDE só no upload de
+  // documento. Rodam DEPOIS de apiLimiter + originCheck — nunca antes.
+  const trpcSmallJson = express.json({ limit: "128kb" });
+  const trpcUploadJson = express.json({ limit: "15mb" });
+  const trpcBodyParser: express.RequestHandler = (req, res, next) =>
+    (isTrpcUploadPath(req.path) ? trpcUploadJson : trpcSmallJson)(
+      req,
+      res,
+      next
+    );
+
   // Login (email+senha) é via tRPC (auth.signup / auth.login).
   // Rate-limit ESTRITO no login/cadastro (anti brute-force), antes do geral.
   app.use(["/api/trpc/auth.login", "/api/trpc/auth.signup"], authLimiter);
-  // tRPC API: rate-limit geral + checagem de Origin (CSRF).
+  // tRPC API: rate-limit geral + checagem de Origin (CSRF) ANTES do parser do
+  // corpo; só então o parser (pequeno, ou grande no upload) e o handler.
   app.use(
     "/api/trpc",
     apiLimiter,
     originCheck,
+    trpcBodyParser,
     createExpressMiddleware({
       router: appRouter,
       createContext,
