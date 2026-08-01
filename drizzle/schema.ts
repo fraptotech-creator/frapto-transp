@@ -143,7 +143,18 @@ export const drivers = mysqlTable(
     // Segredo por motorista usado pelo app nativo (serviço de GPS em segundo
     // plano) para enviar posição direto ao /api/track quando o app está
     // fechado — o cookie da sessão não existe nesse contexto.
+    // LEGADO: valor em claro. Está sendo migrado para trackingTokenHash (só o
+    // hash é guardado). Mantido durante a transição (dual-read).
     trackingToken: varchar("trackingToken", { length: 64 }),
+    // Novo: SHA-256 (hex, 64) do token — o valor cru nunca é persistido. Dump
+    // do banco não expõe credencial utilizável.
+    trackingTokenHash: varchar("trackingTokenHash", { length: 64 }),
+    // Expiração do token (renovada no login do app). NULL = legado sem prazo.
+    trackingTokenExpiresAt: timestamp("trackingTokenExpiresAt"),
+    // Última rotação (novo login emite token novo → 1 aparelho por vez).
+    trackingTokenRotatedAt: timestamp("trackingTokenRotatedAt"),
+    // Revogação explícita (logout do app / reset). Se setado, o token não vale.
+    trackingTokenRevokedAt: timestamp("trackingTokenRevokedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -158,6 +169,11 @@ export const drivers = mysqlTable(
     // e torna o lookup indexado. NULL múltiplo é permitido (motorista sem app).
     trackingTokenUnico: unique("drivers_tracking_token_unico").on(
       t.trackingToken
+    ),
+    // Lookup do /api/track passa a ser pelo HASH — único e indexado. NULL
+    // múltiplo permitido (motoristas sem app / ainda não migrados).
+    trackingTokenHashUnico: unique("drivers_tracking_token_hash_unico").on(
+      t.trackingTokenHash
     ),
   })
 );

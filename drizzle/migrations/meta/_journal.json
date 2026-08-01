@@ -15,6 +15,13 @@
       "when": 1784921009979,
       "tag": "0001_driver_tracking_token_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1785610392298,
+      "tag": "0002_driver_tracking_token_hash",
+      "breakpoints": true
     }
   ]
 }
