@@ -8,6 +8,10 @@ export const ENV = {
   // com `!isProduction`, NODE_ENV indefinido cairia no ramo INSEGURO.
   isProduction: process.env.NODE_ENV === "production",
   appBaseUrl: process.env.APP_BASE_URL ?? "",
+  // Sinal CONFIÁVEL de que estamos no Railway (injetado pela plataforma em toda
+  // réplica). Usado pelo boot-guard: no Railway, NODE_ENV ausente/errado NEGA o
+  // boot (senão os gates `=== "production"` cairiam no ramo inseguro).
+  railwayEnvironmentId: process.env.RAILWAY_ENVIRONMENT_ID ?? "",
   // SUPER-ADMIN da plataforma (vê todas as empresas). Gate por identidade do
   // REGISTRO (openId estável + email), nunca por input do cliente. Os DOIS
   // precisam estar setados e bater — vazio = NINGUÉM é admin (fail-closed).

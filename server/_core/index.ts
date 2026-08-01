@@ -24,37 +24,36 @@ import {
 } from "./security";
 import { toSafeLogError } from "./safeLog";
 import { isTrpcUploadPath } from "./trpcBody";
+import { decideBoot } from "./bootGuard";
 
-// Fail-closed: em produção, o app NÃO sobe sem os segredos essenciais.
-// Erro visível no boot > sessão insegura silenciosa (JWT fraco / login quebrado).
-function assertProductionSecrets() {
-  if (!ENV.isProduction) return;
-  const problems: string[] = [];
-  if (ENV.cookieSecret.length < 32) {
-    problems.push("JWT_SECRET ausente ou com menos de 32 caracteres");
+// Bytes decodificados da chave de cifragem (0 se ausente/base64 inválido).
+function aiKeyByteLen(raw: string): number {
+  if (!raw) return 0;
+  try {
+    return Buffer.from(raw, "base64").length;
+  } catch {
+    return 0;
   }
-  if (!ENV.databaseUrl) {
-    problems.push("DATABASE_URL ausente");
-  }
-  if (!ENV.appBaseUrl) {
-    problems.push("APP_BASE_URL ausente");
-  }
-  // Cifragem das chaves de IA em repouso: sem a chave, não dá para cifrar. Já
-  // confirmado SET no Railway antes deste guard (não derruba a prod).
-  if (!ENV.aiConfigEncryptionKey) {
-    problems.push("AI_CONFIG_ENCRYPTION_KEY ausente");
-  } else {
-    try {
-      if (Buffer.from(ENV.aiConfigEncryptionKey, "base64").length !== 32) {
-        problems.push("AI_CONFIG_ENCRYPTION_KEY inválida (esperado 32 bytes)");
-      }
-    } catch {
-      problems.push("AI_CONFIG_ENCRYPTION_KEY inválida (base64)");
-    }
-  }
-  if (problems.length > 0) {
+}
+
+// Fail-closed: em produção (Railway OU NODE_ENV=production) o app NÃO sobe sem
+// NODE_ENV="production" exato e todos os segredos. No Railway, NODE_ENV
+// ausente/errado NEGA o boot (senão os gates `=== "production"` cairiam abertos).
+// Dev local (sem sinais de produção) sobe normalmente. Decisão pura em decideBoot.
+function assertBootConfig() {
+  const decision = decideBoot({
+    nodeEnv: process.env.NODE_ENV,
+    onRailway: Boolean(ENV.railwayEnvironmentId),
+    jwtSecretLen: ENV.cookieSecret.length,
+    hasDatabaseUrl: Boolean(ENV.databaseUrl),
+    hasAppBaseUrl: Boolean(ENV.appBaseUrl),
+    aiKeyBytes: aiKeyByteLen(ENV.aiConfigEncryptionKey),
+  });
+  if (!decision.ok) {
     throw new Error(
-      `[Boot] Configuração de produção inválida:\n- ${problems.join("\n- ")}`
+      `[Boot] Configuração de produção inválida:\n- ${decision.problems.join(
+        "\n- "
+      )}`
     );
   }
 }
@@ -79,7 +78,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
-  assertProductionSecrets();
+  assertBootConfig();
   const app = express();
   const server = createServer(app);
 
