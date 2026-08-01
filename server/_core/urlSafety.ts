@@ -1,6 +1,30 @@
 import { lookup } from "dns/promises";
 import net from "net";
 
+// Allowlist de HOSTS de provedor de IA. Contenção primária do SSRF: o tenant só
+// pode apontar o baseUrl para um provedor conhecido — não para um host próprio
+// que redirecione/rebinde para a rede interna. Provedores extras podem ser
+// liberados pelo admin via AI_HOST_ALLOWLIST (CSV), sem deploy.
+const AI_HOST_ALLOWLIST_DEFAULT = [
+  "api.openai.com",
+  "api.groq.com",
+  "api.anthropic.com",
+];
+
+export function aiHostAllowlist(): string[] {
+  const extra = (process.env.AI_HOST_ALLOWLIST ?? "")
+    .split(",")
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean);
+  return [...AI_HOST_ALLOWLIST_DEFAULT, ...extra];
+}
+
+// Match EXATO de host (case-insensitive) — sem curinga de subdomínio, que
+// abriria evil-openai.com.attacker.com. Fail-closed.
+export function hostNaAllowlist(host: string, allow: string[]): boolean {
+  return allow.includes(host.toLowerCase());
+}
+
 // Bloqueia IPs internos (loopback, privados, link-local, metadata de cloud,
 // CGNAT, broadcast, multicast e reservados). Fail-closed: IP não reconhecível
 // como público é tratado como não-permitido pelo chamador.
@@ -66,10 +90,21 @@ export function classifyBaseUrl(
  * SSRF: exige https, bloqueia localhost e resolve o host — se cair em IP
  * interno, nega. Lança Error com mensagem amigável.
  */
-export async function assertSafeBaseUrl(raw: string): Promise<void> {
+export async function assertSafeBaseUrl(
+  raw: string,
+  allow: string[] = aiHostAllowlist()
+): Promise<void> {
   const c = classifyBaseUrl(raw);
   if (c.bloqueado) throw new Error(c.motivo);
-  // Já é IP literal público → classifyBaseUrl já aprovou.
+  // Allowlist ANTES do DNS: um host fora da lista (inclui IP literal público)
+  // é negado sem sequer resolver. É a contenção que remove a escolha do host
+  // pelo atacante — fecha redirect/rebind na origem.
+  if (!hostNaAllowlist(c.host, allow)) {
+    throw new Error(
+      "Host do provedor de IA não permitido. Use OpenAI, Groq ou Anthropic (ou peça ao suporte para liberar o host)."
+    );
+  }
+  // Já é IP literal público E na allowlist → aprovado.
   if (net.isIP(c.host)) return;
   // Hostname: resolve TODOS os IPs (all:true) e nega se QUALQUER um for interno
   // — um host malicioso pode devolver vários registros (um público + um interno).

@@ -3,6 +3,8 @@ import {
   isPrivateIp,
   assertSafeBaseUrl,
   classifyBaseUrl,
+  hostNaAllowlist,
+  aiHostAllowlist,
 } from "./_core/urlSafety";
 
 describe("isPrivateIp", () => {
@@ -96,9 +98,51 @@ describe("assertSafeBaseUrl (SSRF)", () => {
       /permitido/
     );
   });
-  it("aceita IP público literal", async () => {
+  it("REJEITA IP público literal fora da allowlist (contenção Lote 4A)", async () => {
+    await expect(assertSafeBaseUrl("https://8.8.8.8/v1")).rejects.toThrow(
+      /permitido/
+    );
+  });
+  it("aceita IP literal SE estiver numa allowlist explícita", async () => {
     await expect(
-      assertSafeBaseUrl("https://8.8.8.8/v1")
+      assertSafeBaseUrl("https://8.8.8.8/v1", ["8.8.8.8"])
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("Allowlist de hosts de IA (Lote 4A)", () => {
+  it("hostNaAllowlist: match exato, case-insensitive, sem curinga", () => {
+    const allow = ["api.openai.com", "api.groq.com"];
+    expect(hostNaAllowlist("api.openai.com", allow)).toBe(true);
+    expect(hostNaAllowlist("API.OpenAI.com", allow)).toBe(true);
+    expect(hostNaAllowlist("api.openai.com.attacker.com", allow)).toBe(false);
+    expect(hostNaAllowlist("evil.com", allow)).toBe(false);
+  });
+
+  it("aiHostAllowlist inclui os provedores padrão", () => {
+    const l = aiHostAllowlist();
+    expect(l).toContain("api.openai.com");
+    expect(l).toContain("api.groq.com");
+    expect(l).toContain("api.anthropic.com");
+  });
+
+  it("aiHostAllowlist lê extras de AI_HOST_ALLOWLIST (CSV)", () => {
+    const antes = process.env.AI_HOST_ALLOWLIST;
+    process.env.AI_HOST_ALLOWLIST = "meu-proxy.exemplo.com, outro.com";
+    try {
+      const l = aiHostAllowlist();
+      expect(l).toContain("meu-proxy.exemplo.com");
+      expect(l).toContain("outro.com");
+    } finally {
+      if (antes === undefined) delete process.env.AI_HOST_ALLOWLIST;
+      else process.env.AI_HOST_ALLOWLIST = antes;
+    }
+  });
+
+  it("host fora da allowlist é negado ANTES do DNS (sem rede)", async () => {
+    // allowlist explícita sem o host → rejeita na allowlist, não resolve DNS.
+    await expect(
+      assertSafeBaseUrl("https://evil.example.com/v1", ["api.openai.com"])
+    ).rejects.toThrow(/permitido/);
   });
 });
