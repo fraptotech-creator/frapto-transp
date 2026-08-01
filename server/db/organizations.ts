@@ -9,6 +9,7 @@ import {
   InsertOrganization,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
+import { isDupError, podeReivindicar } from "../_core/stripeEventState";
 
 // ⚠️ ÚNICA leitura CROSS-ORG do sistema: painel do SUPER-ADMIN da plataforma.
 // Não recebe orgId de propósito — quem protege é o superAdminProcedure
@@ -358,19 +359,84 @@ export async function updateOrganization(
 // é NOVO (processar), false se já foi visto (retry → descartar sem reaplicar).
 // Erro de chave duplicada = já processado; qualquer outro erro PROPAGA (não
 // engole — o webhook devolve 400 e o Stripe reenvia).
-export async function recordStripeEvent(
+export type StripeClaim = "claimed" | "processed" | "busy";
+
+// Reivindica o evento para processar, ATOMICAMENTE:
+// - INSERT novo (status 'processing') → "claimed";
+// - se já existe: 'processed' → "processed" (efeito já aplicado, no-op);
+//   'failed' ou 'processing' STALE → UPDATE condicional reivindica → "claimed";
+//   'processing' recente (outro worker) → "busy".
+// A duplicata é detectada percorrendo a cadeia de cause (Drizzle embrulha).
+export async function claimStripeEvent(
   id: string,
-  eventType: string
-): Promise<boolean> {
+  eventType: string,
+  staleMs: number,
+  now: Date
+): Promise<StripeClaim> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   try {
-    await db.insert(stripeEvents).values({ id, eventType });
-    return true;
+    await db
+      .insert(stripeEvents)
+      .values({ id, eventType, status: "processing", attempts: 1 });
+    return "claimed";
   } catch (e) {
-    if ((e as { code?: string })?.code === "ER_DUP_ENTRY") return false;
-    throw e;
+    if (!isDupError(e)) throw e; // erro real propaga (não engole)
   }
+  // Já existe: decide pela linha atual.
+  const rows = await db
+    .select()
+    .from(stripeEvents)
+    .where(eq(stripeEvents.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return "busy"; // sumiu numa corrida — trata como ocupado (retry)
+  if (row.status === "processed") return "processed";
+  if (!podeReivindicar(row, now, staleMs)) return "busy";
+  // Reivindica de forma condicional: só vence quem casar o estado esperado.
+  const staleCutoff = new Date(now.getTime() - staleMs);
+  const res = await db
+    .update(stripeEvents)
+    .set({
+      status: "processing",
+      attempts: (row.attempts ?? 0) + 1,
+      lastError: null,
+    })
+    .where(
+      and(
+        eq(stripeEvents.id, id),
+        or(
+          eq(stripeEvents.status, "failed"),
+          and(
+            eq(stripeEvents.status, "processing"),
+            lte(stripeEvents.updatedAt, staleCutoff)
+          )
+        )
+      )
+    );
+  const afetadas = (res[0] as { affectedRows?: number })?.affectedRows ?? 0;
+  return afetadas >= 1 ? "claimed" : "busy";
+}
+
+export async function markStripeEventProcessed(id: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(stripeEvents)
+    .set({ status: "processed", lastError: null })
+    .where(eq(stripeEvents.id, id));
+}
+
+export async function markStripeEventFailed(
+  id: string,
+  safeError: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(stripeEvents)
+    .set({ status: "failed", lastError: safeError.slice(0, 200) })
+    .where(eq(stripeEvents.id, id));
 }
 
 // Aplica a assinatura SÓ se o evento for igual ou mais novo que o último já

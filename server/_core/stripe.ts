@@ -4,10 +4,17 @@ import {
   getOrganization,
   getOrgByStripeCustomerId,
   updateOrganization,
-  recordStripeEvent,
+  claimStripeEvent,
+  markStripeEventProcessed,
+  markStripeEventFailed,
   updateOrgSubscriptionIfNewer,
 } from "../db";
+import { toSafeLogError } from "./safeLog";
 import type { Organization } from "../../drizzle/schema";
+
+// Um evento 'processing' sem conclusão por mais que isto = worker abandonado
+// (crash/deploy no meio) → pode ser reivindicado por outro retry.
+const STRIPE_EVENT_STALE_MS = 5 * 60 * 1000;
 
 let _stripe: Stripe | null = null;
 
@@ -196,46 +203,82 @@ export async function handleWebhookEvent(
     signature,
     ENV.stripeWebhookSecret
   );
+  await processStripeEvent(event, stripe);
+}
 
-  // Idempotência: um retry do MESMO evento é descartado sem reaplicar efeito.
-  const novo = await recordStripeEvent(event.id, event.type);
-  if (!novo) {
-    console.warn(`[Stripe] webhook duplicado ignorado (${event.type})`);
+/**
+ * Processa um evento JÁ verificado (HMAC feito por handleWebhookEvent). Separado
+ * para ser testável sem assinatura real. `stripe` é injetado (re-consulta a API).
+ */
+export async function processStripeEvent(
+  event: Stripe.Event,
+  stripe: Stripe
+): Promise<void> {
+  // Lifecycle idempotente + retry-safe: reivindica o evento ('processing'),
+  // aplica o efeito, e SÓ ENTÃO marca 'processed'. Se o efeito falhar, marca
+  // 'failed' e relança → o Stripe faz retry e um novo claim reprocessa. Um
+  // 'processing' abandonado (worker morto) é reivindicado após STALE_MS.
+  const claim = await claimStripeEvent(
+    event.id,
+    event.type,
+    STRIPE_EVENT_STALE_MS,
+    new Date()
+  );
+  if (claim === "processed") {
+    console.warn(`[Stripe] webhook já processado, ignorado (${event.type})`);
     return;
+  }
+  if (claim === "busy") {
+    // Outro worker está processando este mesmo evento. Não confirmamos o efeito
+    // → devolve erro para o Stripe reenviar (o outro worker conclui e o próximo
+    // retry vê 'processed'). Nunca retorna sucesso sem o efeito comprovado.
+    throw new Error("Evento Stripe em processamento concorrente");
   }
 
   const eventCreatedAt = new Date(event.created * 1000);
-
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object;
-      if (session.subscription) {
-        const subId =
-          typeof session.subscription === "string"
-            ? session.subscription
-            : session.subscription.id;
-        // Re-consulta o estado ATUAL no Stripe (não confia no payload).
-        const sub = await stripe.subscriptions.retrieve(subId);
-        await applySubscription(sub, eventCreatedAt);
+  try {
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        if (session.subscription) {
+          const subId =
+            typeof session.subscription === "string"
+              ? session.subscription
+              : session.subscription.id;
+          // Re-consulta o estado ATUAL no Stripe (não confia no payload).
+          const sub = await stripe.subscriptions.retrieve(subId);
+          await applySubscription(sub, eventCreatedAt);
+        }
+        break;
       }
-      break;
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        // Re-consulta a assinatura ANTES de liberar acesso — o payload pode
+        // estar desatualizado/fora de ordem; a fonte da verdade é a API.
+        const fresh = await stripe.subscriptions.retrieve(event.data.object.id);
+        await applySubscription(fresh, eventCreatedAt);
+        break;
+      }
+      case "customer.subscription.deleted": {
+        // Estado terminal: usa o objeto do evento (mapeia p/ canceled). A ordem
+        // monotônica no UPDATE impede um updated atrasado de reabrir.
+        await applySubscription(event.data.object, eventCreatedAt);
+        break;
+      }
+      default:
+        // Outros eventos ignorados de propósito.
+        break;
     }
-    case "customer.subscription.created":
-    case "customer.subscription.updated": {
-      // Re-consulta a assinatura ANTES de liberar acesso — o payload pode estar
-      // desatualizado/fora de ordem; a fonte da verdade é a API.
-      const fresh = await stripe.subscriptions.retrieve(event.data.object.id);
-      await applySubscription(fresh, eventCreatedAt);
-      break;
-    }
-    case "customer.subscription.deleted": {
-      // Estado terminal: usa o objeto do evento (mapeia p/ canceled). A ordem
-      // monotônica no UPDATE impede um updated atrasado de reabrir.
-      await applySubscription(event.data.object, eventCreatedAt);
-      break;
-    }
-    default:
-      // Outros eventos ignorados de propósito.
-      break;
+    // Efeito aplicado (ou tipo ignorado de propósito) → marca concluído.
+    await markStripeEventProcessed(event.id);
+  } catch (e) {
+    // Efeito FALHOU: marca 'failed' (permite retry) e relança para o Stripe
+    // reenviar. O erro é sanitizado (não vaza SQL/PII no banco).
+    const safe = toSafeLogError(e);
+    await markStripeEventFailed(
+      event.id,
+      `${safe.name}${safe.code ? ":" + safe.code : ""}`
+    );
+    throw e;
   }
 }

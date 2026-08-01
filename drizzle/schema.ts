@@ -49,7 +49,16 @@ export type InsertOrganization = typeof organizations.$inferInsert;
 export const stripeEvents = mysqlTable("stripe_events", {
   id: varchar("id", { length: 255 }).primaryKey(),
   eventType: varchar("eventType", { length: 100 }),
+  // Lifecycle explícito: só 'processed' garante que o efeito foi aplicado. Um
+  // evento 'failed' (ou 'processing' abandonado/stale) PODE ser reprocessado —
+  // antes, marcar o id cedo fazia um retry pular o efeito para sempre.
+  status: mysqlEnum("status", ["processing", "processed", "failed"])
+    .default("processing")
+    .notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  lastError: varchar("lastError", { length: 200 }),
   receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 /**

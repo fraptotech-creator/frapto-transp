@@ -36,6 +36,13 @@
       "when": 1785613710671,
       "tag": "0004_document_size_bytes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1785625044297,
+      "tag": "0005_stripe_event_lifecycle",
+      "breakpoints": true
     }
   ]
 }
