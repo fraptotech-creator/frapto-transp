@@ -83,10 +83,24 @@ async function startServer() {
   const server = createServer(app);
 
   // Atrás do proxy do Railway: confia no 1º hop pra pegar o IP real (rate-limit).
+  // Verificado (pentest): com trust proxy=1 o XFF forjado pelo cliente é
+  // ignorado — req.ip é o IP que o edge do Railway anexa, não spoofável.
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
   // Headers de segurança como 1º middleware.
   app.use(securityHeaders);
+
+  // Canonicalização: quem chegar pelo apex (fraptotransp.com.br) é redirecionado
+  // 301 para o www (host canônico do cookie/CORS). Só dispara no apex exato —
+  // o www e o healthcheck (domínio interno do Railway) não casam, sem loop.
+  // Requer o apex apontado ao Railway no DNS (passo de infra do usuário).
+  app.use((req, res, next) => {
+    if (req.hostname === "fraptotransp.com.br") {
+      res.redirect(301, `https://www.fraptotransp.com.br${req.originalUrl}`);
+      return;
+    }
+    next();
+  });
 
   // Webhook do Stripe ANTES do parser JSON: precisa do corpo CRU pra validar a
   // assinatura HMAC (fail-closed). Limiter próprio ALTO (compatível com os

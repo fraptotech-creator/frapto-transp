@@ -10,9 +10,5 @@
     "restartPolicyMaxRetries": 5,
     "healthcheckPath": "/api/ping",
     "healthcheckTimeout": 30
-  },
-  "environmentVariables": {
-    "NODE_ENV": "production",
-    "PORT": "3000"
   }
 }

@@ -68,3 +68,19 @@ e Cloudflare R2, respectivamente.)
   (`node dist/index.js`) servindo `/api/ping` e o HTML, e fail-closed abortando com `JWT_SECRET` fraco.
 - O build da imagem Docker **não** foi executado localmente (Docker indisponível na máquina de dev);
   o `Dockerfile` replica exatamente os passos já validados, com `pnpm@10.4.1` pinado.
+
+## Segurança de infra (DNS / proxy) — passos do usuário
+
+- **Env do Railway é a fonte da verdade.** O bloco `environmentVariables` do `railway.json` é
+  **ignorado** pela Railway (foi removido para não enganar) — as variáveis valem só via painel/CLI/API.
+  Os boot-guards falham fechado (o app não sobe sem `JWT_SECRET`/`DATABASE_URL`/`APP_BASE_URL`/
+  `AI_CONFIG_ENCRYPTION_KEY`). Confirme `NODE_ENV=production` no painel (já setado).
+- **IP real:** `trust proxy=1` — o XFF forjado pelo cliente é ignorado (verificado em pentest). Se um
+  dia houver **múltiplas réplicas**, migrar rate-limit/semáforo de memória para store compartilhado.
+- **Apex → www:** apontar `fraptotransp.com.br` (apex) ao serviço no Railway (DNS). O app já redireciona
+  301 o apex para `https://www.fraptotransp.com.br`; sem o apontamento no DNS, o apex nem chega ao app.
+- **DMARC (evoluir por etapas, sem quebrar e-mail legítimo):** manter SPF/DKIM do Resend e adicionar o
+  TXT `_dmarc.fraptotransp.com.br`:
+  1. `v=DMARC1; p=none; rua=mailto:fraptotech@gmail.com` — coletar/analisar relatórios;
+  2. `p=quarantine; pct=25` e aumentar o `pct` gradualmente;
+  3. `p=reject` quando todas as fontes legítimas estiverem alinhadas.
