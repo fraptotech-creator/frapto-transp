@@ -38,6 +38,19 @@ function assertProductionSecrets() {
   if (!ENV.appBaseUrl) {
     problems.push("APP_BASE_URL ausente");
   }
+  // Cifragem das chaves de IA em repouso: sem a chave, não dá para cifrar. Já
+  // confirmado SET no Railway antes deste guard (não derruba a prod).
+  if (!ENV.aiConfigEncryptionKey) {
+    problems.push("AI_CONFIG_ENCRYPTION_KEY ausente");
+  } else {
+    try {
+      if (Buffer.from(ENV.aiConfigEncryptionKey, "base64").length !== 32) {
+        problems.push("AI_CONFIG_ENCRYPTION_KEY inválida (esperado 32 bytes)");
+      }
+    } catch {
+      problems.push("AI_CONFIG_ENCRYPTION_KEY inválida (base64)");
+    }
+  }
   if (problems.length > 0) {
     throw new Error(
       `[Boot] Configuração de produção inválida:\n- ${problems.join("\n- ")}`

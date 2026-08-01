@@ -28,6 +28,9 @@ export const ENV = {
   defaultAiBaseUrl:
     process.env.DEFAULT_AI_BASE_URL ?? "https://api.groq.com/openai/v1",
   defaultAiModel: process.env.DEFAULT_AI_MODEL ?? "llama-3.3-70b-versatile",
+  // Chave (32 bytes base64) para cifrar a apiKey de IA de cada empresa em
+  // repouso (AES-256-GCM). Vazia = escrita cifrada indisponível (fail-closed).
+  aiConfigEncryptionKey: process.env.AI_CONFIG_ENCRYPTION_KEY ?? "",
   // Stripe (paywall / assinatura)
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",

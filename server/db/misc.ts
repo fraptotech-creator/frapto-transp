@@ -6,6 +6,7 @@ import {
   InsertAiConfig,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
+import { encryptAiKey, decryptAiKey } from "../_core/aiKeyCrypto";
 
 // ─── Documentos ──────────────────────────────────────────────────────────────
 
@@ -69,7 +70,11 @@ export async function getAiConfig(orgId: number) {
     .from(aiConfig)
     .where(eq(aiConfig.orgId, orgId))
     .limit(1);
-  return result[0];
+  const row = result[0];
+  if (!row) return row;
+  // Decifra a apiKey para uso interno (chamar o provedor). Legado em claro
+  // passa direto. Quem devolve ao browser mascara — nunca expõe a chave.
+  return { ...row, apiKey: decryptAiKey(row.apiKey) };
 }
 
 export async function upsertAiConfig(
@@ -78,9 +83,14 @@ export async function upsertAiConfig(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Cifra a apiKey em REPOUSO (AES-256-GCM) sempre que vier uma não-vazia.
+  const dataToStore =
+    typeof data.apiKey === "string" && data.apiKey !== ""
+      ? { ...data, apiKey: encryptAiKey(data.apiKey) }
+      : data;
   await db
     .insert(aiConfig)
-    .values({ orgId, ...data })
-    .onDuplicateKeyUpdate({ set: data });
+    .values({ orgId, ...dataToStore })
+    .onDuplicateKeyUpdate({ set: dataToStore });
   return getAiConfig(orgId);
 }
