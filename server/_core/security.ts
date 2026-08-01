@@ -105,6 +105,19 @@ export const trackIpBackstop = rateLimit({
   message: { error: "Muitas requisições deste IP." },
 });
 
+// Rate-limit do webhook do Stripe (por IP). ALTO de propósito: o Stripe faz
+// retries e pode enfileirar rajadas de eventos legítimos — o teto só barra
+// flood. Montado ANTES do parser raw + HMAC, para um flood não consumir
+// CPU/memória de verificação. Não usa o envelope tRPC (é rota REST do Stripe).
+export const stripeWebhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 600,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? "0.0.0.0"),
+  message: { error: "Muitas requisições de webhook." },
+});
+
 // Rate-limit estrito para login/cadastro (anti brute-force).
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

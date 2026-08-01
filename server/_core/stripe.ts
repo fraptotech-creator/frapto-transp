@@ -199,7 +199,10 @@ export async function handleWebhookEvent(
 
   // Idempotência: um retry do MESMO evento é descartado sem reaplicar efeito.
   const novo = await recordStripeEvent(event.id, event.type);
-  if (!novo) return;
+  if (!novo) {
+    console.warn(`[Stripe] webhook duplicado ignorado (${event.type})`);
+    return;
+  }
 
   const eventCreatedAt = new Date(event.created * 1000);
 

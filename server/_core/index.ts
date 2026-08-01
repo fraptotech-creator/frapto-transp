@@ -20,6 +20,7 @@ import {
   originCheck,
   trackLimiter,
   trackIpBackstop,
+  stripeWebhookLimiter,
 } from "./security";
 import { toSafeLogError } from "./safeLog";
 
@@ -75,10 +76,14 @@ async function startServer() {
   app.use(securityHeaders);
 
   // Webhook do Stripe ANTES do parser JSON: precisa do corpo CRU pra validar a
-  // assinatura HMAC (fail-closed).
+  // assinatura HMAC (fail-closed). Limiter próprio ALTO (compatível com os
+  // retries do Stripe) na FRENTE + teto pequeno do corpo raw (o payload é
+  // pequeno; evita amplificação). Assinatura inválida e erro de processamento
+  // são logados SEPARADAMENTE (métrica por tag).
   app.post(
     "/api/stripe/webhook",
-    express.raw({ type: "application/json" }),
+    stripeWebhookLimiter,
+    express.raw({ type: "application/json", limit: "1mb" }),
     async (req, res) => {
       const sig = req.headers["stripe-signature"];
       if (typeof sig !== "string") {
@@ -89,7 +94,14 @@ async function startServer() {
         await handleWebhookEvent(req.body as Buffer, sig);
         res.json({ received: true });
       } catch (err) {
-        console.error("[Stripe] webhook error", toSafeLogError(err));
+        // Assinatura inválida (forjado/segredo errado) vs. falha de
+        // processamento (DB/Stripe) — tags distintas para diagnóstico/alerta.
+        const tag =
+          (err as { type?: string })?.type ===
+          "StripeSignatureVerificationError"
+            ? "assinatura inválida"
+            : "erro de processamento";
+        console.error(`[Stripe] webhook ${tag}`, toSafeLogError(err));
         res.status(400).send("webhook error");
       }
     }
