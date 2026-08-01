@@ -7,6 +7,11 @@ name: Build APK — Rastreio (motorista)
 on:
   workflow_dispatch:
 
+# Menor privilégio: o build só lê o repo (o artefato sobe via upload-artifact,
+# que não requer contents:write).
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

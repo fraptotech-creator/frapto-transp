@@ -53,4 +53,19 @@ npx cap open android   # abre no Android Studio
 =false` (nenhuma requisição em HTTP puro; o servidor é sempre https).
 - **Backlog de robustez:** migrar o token de rastreio de `localStorage` para
   armazenamento seguro nativo (Android Keystore). Fecha o vetor de leitura em
-  aparelho com root; o `allowBackup=false` já fecha o vetor de backup.
+  aparelho com root; o `allowBackup=false` já fecha o vetor de backup. O
+  servidor já suporta revogação: o app deve chamar `POST /api/track/revoke` no
+  logout (Lote 7.2) — falta implementar no cliente nativo.
+
+## Supply chain (backlog do APK — sessão dedicada)
+
+Itens que exigem decisão/segredo do usuário e um ciclo próprio, com teste em
+aparelho antes de distribuir:
+
+- **APK de RELEASE assinado** (hoje é `app-debug.apk` autoassinado): gerar um
+  build release com **keystore protegida** (segredo do usuário, guardado como
+  secret do GitHub Actions), desabilitar debug/WebView remoto no release.
+- **Lockfile do mobile**: hoje `package-lock.json` está no `.gitignore`. Versionar
+  o lockfile e usar `npm ci` no workflow (build reprodutível).
+- **Pin por SHA** das actions do workflow e da imagem base do build (reprodutível
+  - à prova de tag movida).

@@ -33,6 +33,11 @@ RUN pnpm install --frozen-lockfile
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/client/public ./client/public
 
+# Roda como usuário NÃO-root (o `node` já existe na imagem oficial). Reduz o
+# impacto de um RCE: o processo não é root dentro do container. Os arquivos
+# copiados são legíveis pelo `node` (não há escrita em disco em runtime).
+USER node
+
 # Railway injeta PORT automaticamente.
 EXPOSE 3000
 

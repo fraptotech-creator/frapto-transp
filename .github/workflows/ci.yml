@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Menor privilégio para o GITHUB_TOKEN: o gate só precisa LER o repositório.
+permissions:
+  contents: read
+
 jobs:
   gate:
     runs-on: ubuntu-latest
