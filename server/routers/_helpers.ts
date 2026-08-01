@@ -32,6 +32,26 @@ export function assertLoginRateLimit(req: { ip?: string }): void {
   }
 }
 
+// Rate-limit ADICIONAL por CONTA (normalizada) + IP: além do teto por IP acima,
+// limita ataque distribuído concentrado numa mesma conta (credential stuffing
+// vindo de vários IPs mira sempre o mesmo login). 10 tentativas / 15 min.
+export function assertAccountLoginRateLimit(
+  req: { ip?: string },
+  conta: string
+): void {
+  const ip = req.ip ?? "unknown";
+  const alvo = conta.toLowerCase().trim();
+  if (!alvo) return;
+  if (
+    !allowRequest(`login:acct:${alvo}:${ip}`, 10, 15 * 60 * 1000, Date.now())
+  ) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Muitas tentativas para esta conta. Aguarde alguns minutos.",
+    });
+  }
+}
+
 // Teto de sanidade: valores (R$), distância (km), peso, custo e capacidade
 // não são negativos nem chegam perto disto. 1e12 é folga com sobra e barra
 // overflow/lixo ("1e999" vira Infinity no parseFloat).

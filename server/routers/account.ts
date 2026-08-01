@@ -27,7 +27,7 @@ import {
   createPortalSession,
   isStripeConfigured,
 } from "../_core/stripe";
-import { assertLoginRateLimit } from "./_helpers";
+import { assertLoginRateLimit, assertAccountLoginRateLimit } from "./_helpers";
 import {
   gerarTokenReset,
   hashToken,
@@ -45,13 +45,24 @@ import { ENV } from "../_core/env";
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }) => {
     if (!ctx.user) return null;
-    // Nunca expõe o hash da senha ao browser.
-    const { passwordHash: _omit, ...safe } = ctx.user;
-    // Flag só pra UI decidir se mostra o menu do painel da plataforma. O gate
-    // de verdade é o superAdminProcedure no servidor — isto aqui é cosmético.
+    // DTO EXPLÍCITO: expõe só o que a UI precisa. Nunca espalha a linha inteira
+    // de users — assim openId (id de sessão), passwordHash, sessionVersion,
+    // resetTokenHash/expiração e timestamps internos NÃO vazam pro browser.
+    const u = ctx.user;
     return {
-      ...safe,
-      isSuperAdmin: isSuperAdmin(ctx.user, {
+      id: u.id,
+      name: u.name ?? "",
+      email: u.email ?? null,
+      username: u.username ?? null,
+      orgId: u.orgId ?? null,
+      orgRole: u.orgRole ?? null,
+      role: u.role,
+      driverId: u.driverId ?? null,
+      mustChangePassword: u.mustChangePassword ?? false,
+      loginMethod: u.loginMethod ?? null,
+      // Flag só pra UI decidir se mostra o menu do painel da plataforma. O gate
+      // de verdade é o superAdminProcedure no servidor — isto é cosmético.
+      isSuperAdmin: isSuperAdmin(u, {
         openId: ENV.superAdminOpenId,
         email: ENV.superAdminEmail,
       }),
@@ -118,6 +129,7 @@ export const authRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       assertLoginRateLimit(ctx.req);
+      assertAccountLoginRateLimit(ctx.req, input.email);
       const email = input.email.toLowerCase().trim();
       const user = await getUserByEmail(email);
       // Mensagem genérica (não revela se o email existe).
@@ -151,6 +163,7 @@ export const authRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       assertLoginRateLimit(ctx.req);
+      assertAccountLoginRateLimit(ctx.req, input.username);
       const username = input.username.toLowerCase().trim();
       const user = await getUserByUsername(username);
       const invalid = new TRPCError({
