@@ -6,6 +6,7 @@ import { invokeLLM, invokeOpenAIAgent, type ChatMessage } from "../_core/llm";
 import { toOpenAiTools, runAiTool } from "../_core/aiTools";
 import { assertSafeBaseUrl } from "../_core/urlSafety";
 import { allowRequest } from "../_core/rateLimit";
+import { acquire, release } from "../_core/concurrency";
 import {
   buildFleetContext,
   FLEET_ASSISTANT_SYSTEM,
@@ -19,14 +20,17 @@ export const aiRouter = router({
   chat: activeOrgProcedure
     .input(
       z.object({
+        // Teto de nº de mensagens e tamanho por mensagem — limita o custo/tokens
+        // por chamada (o total é checado no handler).
         messages: z
           .array(
             z.object({
               role: z.enum(["user", "assistant"]),
-              content: z.string().min(1),
+              content: z.string().min(1).max(8000),
             })
           )
-          .min(1),
+          .min(1)
+          .max(30),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -37,54 +41,85 @@ export const aiRouter = router({
           message: "Muitas perguntas à IA em pouco tempo. Aguarde um instante.",
         });
       }
-      const cfg = await resolveAiConfig(ctx.orgId);
-      if (!cfg) {
+      // Teto do TAMANHO TOTAL da conversa (soma das mensagens) — limita tokens/
+      // custo mesmo dentro do nº e do tamanho por mensagem.
+      const totalChars = input.messages.reduce(
+        (n, m) => n + m.content.length,
+        0
+      );
+      if (totalChars > 40000) {
         throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message:
-            "Assistente de IA não configurado. Configure o provedor e a chave em Configurações.",
+          code: "BAD_REQUEST",
+          message: "Conversa muito longa. Comece uma nova.",
         });
       }
-      const messages: ChatMessage[] = input.messages.map(m => ({
-        role: m.role,
-        content: sanitizeChatContent(m.content),
-      }));
-
-      // GPT/Groq/compatível: AGENTE com ferramentas (consulta o sistema sob
-      // demanda). Claude: contexto rico numa tacada (fora do loop de tools).
-      if (cfg.provider === "anthropic") {
-        const context = await buildFleetContext(ctx.orgId);
-        const response = await invokeLLM(cfg, {
-          system: FLEET_ASSISTANT_SYSTEM + context,
-          messages,
+      // Concorrência: no máx. 3 chamadas simultâneas por empresa e 20 no total
+      // da instância — evita esgotar o pool do provedor. Liberado no finally.
+      const chave = `ai:${ctx.orgId}`;
+      if (!acquire(chave, 3, 20)) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Assistente ocupado agora. Tente em instantes.",
         });
-        return { response };
       }
       try {
-        const response = await invokeOpenAIAgent(cfg, {
-          system: AGENT_SYSTEM,
-          messages,
-          tools: toOpenAiTools(),
-          runTool: (name, args) => runAiTool(ctx.orgId, name, args),
-        });
-        return { response };
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        const status = (e as { status?: number })?.status;
-        // Rate limit do provedor (plano gratuito): mensagem clara, não "erro".
-        if (
-          status === 429 ||
-          /rate limit|too many requests|\b429\b/i.test(msg)
-        ) {
-          return {
-            response:
-              "O assistente recebeu muitas solicitações agora (limite do plano gratuito). Aguarde alguns segundos e pergunte de novo.",
-          };
-        }
-        throw e;
+        return await responderChat(ctx.orgId, input.messages);
+      } finally {
+        release(chave);
       }
     }),
 });
+
+// Núcleo do chat (extraído para caber no semáforo com finally). Recebe as
+// mensagens já validadas; sanitiza, resolve a IA e chama o provedor.
+async function responderChat(
+  orgId: number,
+  inputMessages: { role: "user" | "assistant"; content: string }[]
+): Promise<{ response: string }> {
+  const cfg = await resolveAiConfig(orgId);
+  if (!cfg) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Assistente de IA não configurado. Configure o provedor e a chave em Configurações.",
+    });
+  }
+  const messages: ChatMessage[] = inputMessages.map(m => ({
+    role: m.role,
+    content: sanitizeChatContent(m.content),
+  }));
+
+  // GPT/Groq/compatível: AGENTE com ferramentas (consulta o sistema sob
+  // demanda). Claude: contexto rico numa tacada (fora do loop de tools).
+  if (cfg.provider === "anthropic") {
+    const context = await buildFleetContext(orgId);
+    const response = await invokeLLM(cfg, {
+      system: FLEET_ASSISTANT_SYSTEM + context,
+      messages,
+    });
+    return { response };
+  }
+  try {
+    const response = await invokeOpenAIAgent(cfg, {
+      system: AGENT_SYSTEM,
+      messages,
+      tools: toOpenAiTools(),
+      runTool: (name, args) => runAiTool(orgId, name, args),
+    });
+    return { response };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const status = (e as { status?: number })?.status;
+    // Rate limit do provedor (plano gratuito): mensagem clara, não "erro".
+    if (status === 429 || /rate limit|too many requests|\b429\b/i.test(msg)) {
+      return {
+        response:
+          "O assistente recebeu muitas solicitações agora (limite do plano gratuito). Aguarde alguns segundos e pergunte de novo.",
+      };
+    }
+    throw e;
+  }
+}
 
 // Configurações (dono da org). A chave da IA nunca volta ao browser.
 export const settingsRouter = router({

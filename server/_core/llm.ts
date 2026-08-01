@@ -31,7 +31,13 @@ async function invokeAnthropic(
   messages: ChatMessage[],
   maxTokens: number
 ): Promise<string> {
-  const client = new Anthropic({ apiKey: cfg.apiKey });
+  // Orçamento: timeout server-side curto + retry explícito (o SDK aborta e
+  // libera o recurso; não fica pendurado esperando o provedor).
+  const client = new Anthropic({
+    apiKey: cfg.apiKey,
+    timeout: 60_000,
+    maxRetries: 1,
+  });
   const response = await client.messages.create({
     model: cfg.model || DEFAULT_MODELS.anthropic,
     max_tokens: maxTokens,
@@ -55,6 +61,8 @@ async function invokeOpenAI(
     apiKey: cfg.apiKey,
     baseURL:
       cfg.baseUrl && cfg.baseUrl.trim().length > 0 ? cfg.baseUrl : undefined,
+    timeout: 60_000,
+    maxRetries: 1,
   });
   const response = await client.chat.completions.create({
     model: cfg.model || DEFAULT_MODELS.openai,
@@ -88,6 +96,8 @@ export async function invokeOpenAIAgent(
     apiKey: cfg.apiKey,
     baseURL:
       cfg.baseUrl && cfg.baseUrl.trim().length > 0 ? cfg.baseUrl : undefined,
+    timeout: 60_000,
+    maxRetries: 1,
   });
   const model = cfg.model || DEFAULT_MODELS.openai;
   const maxTokens = params.maxTokens ?? 1024;
