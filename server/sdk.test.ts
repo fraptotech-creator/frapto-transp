@@ -16,10 +16,12 @@ describe("verifySession", () => {
       openId: "user_1",
       appId: "frapto-transp",
       name: "",
+      sver: 0,
     });
     const session = await sdk.verifySession(token);
     expect(session).not.toBeNull();
     expect(session?.openId).toBe("user_1");
+    expect(session?.sver).toBe(0);
   });
 
   it("rejeita sessão sem openId", async () => {
@@ -27,6 +29,27 @@ describe("verifySession", () => {
       openId: "",
       appId: "frapto-transp",
       name: "x",
+      sver: 0,
+    });
+    expect(await sdk.verifySession(token)).toBeNull();
+  });
+
+  it("REJEITA sessão sem sver (token legado, não-revogável) — Lote 5", async () => {
+    const token = await sdk.signSession({
+      openId: "user_1",
+      appId: "frapto-transp",
+      name: "x",
+      // sem sver
+    });
+    expect(await sdk.verifySession(token)).toBeNull();
+  });
+
+  it("REJEITA appId de OUTRA app (isolamento) — Lote 5", async () => {
+    const token = await sdk.signSession({
+      openId: "user_1",
+      appId: "outra-app",
+      name: "x",
+      sver: 0,
     });
     expect(await sdk.verifySession(token)).toBeNull();
   });

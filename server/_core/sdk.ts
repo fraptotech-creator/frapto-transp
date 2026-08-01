@@ -80,7 +80,7 @@ class SDKServer {
     openId: string;
     appId: string;
     name: string;
-    sver?: number;
+    sver: number;
   } | null> {
     if (!cookieValue) {
       console.warn("[Auth] Missing session cookie");
@@ -94,11 +94,23 @@ class SDKServer {
       });
       const { openId, appId, name, sver } = payload as Record<string, unknown>;
 
-      // openId e appId identificam a sessão e SÃO obrigatórios. O `name` é só
-      // exibição e pode ser vazio (usuário que cadastrou sem informar o nome) —
-      // rejeitar por name vazio invalidava a sessão desses usuários (bug).
-      if (!isNonEmptyString(openId) || !isNonEmptyString(appId)) {
-        console.warn("[Auth] Session payload missing required fields");
+      // openId identifica a sessão e é obrigatório. O `name` é só exibição e
+      // pode ser vazio (usuário sem nome) — não rejeita por name.
+      if (!isNonEmptyString(openId)) {
+        console.warn("[Auth] Session payload missing openId");
+        return null;
+      }
+      // appId EXATO desta app: um token válido de OUTRA app que compartilhe o
+      // mesmo segredo/infra não vale aqui (isolamento entre apps).
+      if (appId !== ENV.appId) {
+        console.warn("[Auth] Session appId mismatch");
+        return null;
+      }
+      // sver OBRIGATÓRIO: sem versão de sessão o token não é revogável (logout
+      // não o mata). Todos os emissores atuais incluem sver; só cai aqui token
+      // legado (janela de jul/6-8) — que é deslogado de propósito.
+      if (typeof sver !== "number") {
+        console.warn("[Auth] Session without sver (legacy) rejected");
         return null;
       }
 
@@ -106,7 +118,7 @@ class SDKServer {
         openId,
         appId,
         name: isNonEmptyString(name) ? name : "",
-        sver: typeof sver === "number" ? sver : undefined,
+        sver,
       };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
@@ -139,9 +151,9 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    // Revogação: se o token traz `sver` e ele diverge do atual do usuário, o
-    // token foi revogado (logout). Tokens antigos sem `sver` = grandfather.
-    if (session.sver !== undefined && session.sver !== user.sessionVersion) {
+    // Revogação: o token sempre traz `sver` (verifySession rejeita sem ele); se
+    // diverge do atual do usuário, o token foi revogado (logout/troca de senha).
+    if (session.sver !== user.sessionVersion) {
       throw ForbiddenError("Session revoked");
     }
 
