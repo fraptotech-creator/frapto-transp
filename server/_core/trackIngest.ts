@@ -16,6 +16,11 @@ export interface TrackPayload {
   points: TrackPoint[];
 }
 
+// Formato REAL do token de rastreio: randomBytes(24).toString("hex") = 48 hex.
+// Validar o formato (1) impede que uma string arbitrária de 1 MB vire chave de
+// rate-limit/consulta e (2) descarta lixo antes de tocar o banco. Fail-closed.
+export const TRACK_TOKEN_RE = /^[0-9a-f]{48}$/;
+
 function num(v: unknown): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   if (typeof v === "string" && v.trim() !== "") {
@@ -53,7 +58,12 @@ const MAX_POINTS = 500;
 export function normalizeTrackPayload(body: unknown): TrackPayload {
   if (!body || typeof body !== "object") return { token: null, points: [] };
   const o = body as Record<string, unknown>;
-  const token = typeof o.token === "string" && o.token ? o.token : null;
+  // Só aceita token no formato real (48 hex). Qualquer outra coisa → null, que
+  // o handler trata como 401/400 — nunca deixa string gigante seguir adiante.
+  const token =
+    typeof o.token === "string" && TRACK_TOKEN_RE.test(o.token)
+      ? o.token
+      : null;
 
   // Formatos aceitos: lote em locations[]/points[]; o campo `location` do
   // transistorsoft (objeto único OU array quando batchSync); ou ponto único no

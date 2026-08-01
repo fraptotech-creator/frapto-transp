@@ -79,7 +79,8 @@ describe("/api/track/login — gate de assinatura", () => {
 });
 
 describe("/api/track — gate de assinatura na ingestão", () => {
-  const ponto = { token: "tok", lat: -23.5, lng: -46.6, tripId: 1 };
+  // Token no formato real (48 hex) — a normalização agora rejeita outros.
+  const ponto = { token: "a".repeat(48), lat: -23.5, lng: -46.6, tripId: 1 };
   beforeEach(() => {
     db.getDriverByTrackingToken.mockResolvedValue({ id: 3, orgId: 7 });
     db.getTripById.mockResolvedValue({

@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { normalizeTrackPayload } from "./_core/trackIngest";
 
+// Token no formato real (48 hex): a normalização passou a exigi-lo.
+const TOKEN = "a".repeat(48);
+
 describe("normalizeTrackPayload", () => {
   it("aceita ponto único no corpo", () => {
     const r = normalizeTrackPayload({
-      token: "abc",
+      token: TOKEN,
       tripId: 7,
       lat: -20.38,
       lng: -40.29,
       speed: 62.5,
     });
-    expect(r.token).toBe("abc");
+    expect(r.token).toBe(TOKEN);
     expect(r.points).toEqual([
       { tripId: 7, lat: -20.38, lng: -40.29, speed: 62.5 },
     ]);
@@ -55,10 +58,10 @@ describe("normalizeTrackPayload", () => {
 
   it("aceita o campo 'location' único (transistorsoft)", () => {
     const r = normalizeTrackPayload({
-      token: "t",
+      token: TOKEN,
       location: { lat: -20, lng: -40, speed: 12 },
     });
-    expect(r.token).toBe("t");
+    expect(r.token).toBe(TOKEN);
     expect(r.points).toEqual([{ tripId: null, lat: -20, lng: -40, speed: 12 }]);
   });
 

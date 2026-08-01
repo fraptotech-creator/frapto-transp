@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import { createHash } from "crypto";
 import { ENV } from "./env";
+import { TRACK_TOKEN_RE } from "./trackIngest";
 import {
   trpcErrorBody,
   isTrpcRequest,
@@ -66,18 +68,28 @@ export const apiLimiter = rateLimit({
     ),
 });
 
+// Chave de rate-limit por token (PURA, testável). Só token no formato real vira
+// chave, e como HASH de tamanho FIXO (SHA-256) — assim uma string de 1 MB nunca
+// vira uma entrada gigante/única no store (DoS de memória). Malformado → null,
+// e o chamador cai no IP.
+export function trackTokenKey(raw: string): string | null {
+  return TRACK_TOKEN_RE.test(raw)
+    ? `tok:${createHash("sha256").update(raw).digest("hex")}`
+    : null;
+}
+
 // Rate-limit do rastreio (/api/track). Chaveado pelo TOKEN do motorista, não
 // por IP: várias vans atrás do mesmo IP de operadora (CGNAT) não se
-// auto-bloqueiam. Sem token, cai no IP (normalizado p/ IPv6).
+// auto-bloqueiam. Sem token válido, cai no IP (normalizado p/ IPv6).
 export const trackLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 240,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
-    const t =
+    const raw =
       req.body && typeof req.body.token === "string" ? req.body.token : "";
-    return t ? `tok:${t}` : ipKeyGenerator(req.ip ?? "0.0.0.0");
+    return trackTokenKey(raw) ?? ipKeyGenerator(req.ip ?? "0.0.0.0");
   },
   message: { error: "Muitas requisições de rastreio. Aguarde um instante." },
 });

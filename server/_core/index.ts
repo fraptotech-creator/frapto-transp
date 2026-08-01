@@ -93,6 +93,31 @@ async function startServer() {
     }
   );
 
+  // ── Rastreio do app nativo — ANTES do parser global ───────────────────────
+  // Autenticado por token no corpo (cliente nativo, sem cookie/Origin), fora
+  // do originCheck do /api/trpc. O parser é DEDICADO e pequeno (64 KB): um POST
+  // de rastreio nunca é grande (o app manda no máx. 500 pontos ≈ 30-40 KB). O
+  // parser global de 15 MB (upload de documento) NÃO pode valer aqui, senão um
+  // corpo enorme seria lido em memória antes de qualquer limite (DoS). Ordem:
+  // trackIpBackstop (teto por IP, SEM parsear o corpo → barra flood antes) →
+  // parser 64 KB → trackLimiter (por token, não trava frota atrás de CGNAT).
+  const trackJson = express.json({ limit: "64kb" });
+  app.post(
+    "/api/track",
+    trackIpBackstop,
+    trackJson,
+    trackLimiter,
+    handleTrackIngest
+  );
+  // Login do app nativo: teto por IP antes de parsear + rate-limit estrito.
+  app.post(
+    "/api/track/login",
+    trackIpBackstop,
+    trackJson,
+    authLimiter,
+    handleTrackLogin
+  );
+
   // Parser de corpo: 15 MB cobre o upload de documento (10 MB → ~13,3 MB em
   // base64) com folga; era 50 MB (4× o necessário) — reduz amplificação de DoS
   // por corpo grande nas rotas públicas. Form urlencoded é minúsculo (100 KB).
@@ -102,15 +127,6 @@ async function startServer() {
   app.get("/api/ping", (_req, res) => {
     res.status(200).json({ ok: true });
   });
-  // Ingestão de rastreio do app nativo (GPS em segundo plano). Autenticada por
-  // token de motorista no corpo — NÃO usa cookie/Origin (é um cliente nativo,
-  // não o browser), por isso fica fora do originCheck do /api/trpc. Rate-limit
-  // geral por IP (cada aparelho tem seu IP; posta a cada ~15-30s).
-  // Rastreio: teto por IP (anti-flood) + limite por token (não trava frota
-  // atrás do mesmo IP de operadora). Ambos ANTES do handler.
-  app.post("/api/track", trackIpBackstop, trackLimiter, handleTrackIngest);
-  // Login do app nativo (rate-limit estrito anti brute-force).
-  app.post("/api/track/login", authLimiter, handleTrackLogin);
 
   // Login (email+senha) é via tRPC (auth.signup / auth.login).
   // Rate-limit ESTRITO no login/cadastro (anti brute-force), antes do geral.
