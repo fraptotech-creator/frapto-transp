@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Download, FileText, TrendingUp, DollarSign } from "lucide-react";
 import { formatPlaca, formatCpf, formatPhone } from "@/lib/format";
 import { exportTablePDF } from "@/lib/exportPdf";
+import { sanitizeCsvCell } from "@/lib/csvSafe";
 import {
   filtrarLedgerPorMes,
   resumoAnualPorMes,
@@ -47,21 +48,10 @@ function downloadCSV(filename: string, rows: Record<string, any>[]) {
     return;
   }
   const headers = Object.keys(rows[0]);
-  const escape = (v: any) => {
-    if (v === null || v === undefined) return "";
-    let s = String(v);
-    // Anti CSV/formula-injection: célula que começa com = + - @ (ou TAB/CR)
-    // vira fórmula no Excel/Sheets. Prefixa com aspa simples pra neutralizar.
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-      return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
-  };
   const csvBody =
     headers.join(",") +
     "\n" +
-    rows.map(r => headers.map(h => escape(r[h])).join(",")).join("\n");
+    rows.map(r => headers.map(h => sanitizeCsvCell(r[h])).join(",")).join("\n");
   const blob = new Blob(["\uFEFF" + csvBody], {
     type: "text/csv;charset=utf-8;",
   });

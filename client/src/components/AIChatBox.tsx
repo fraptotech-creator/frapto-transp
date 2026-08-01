@@ -264,12 +264,23 @@ export function AIChatBox({
                     >
                       {message.role === "assistant" ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none">
-                          {/* Saída da IA é conteúdo não-confiável. Streamdown não
-                              renderiza HTML cru (sem <script>/<iframe>/srcdoc/
-                              eventos); urlTransform saneia links/imagens
-                              (bloqueia javascript:, data:, http: → só https/
-                              mailto/tel). */}
-                          <Streamdown urlTransform={safeAiUrl}>
+                          {/* Saída da IA é conteúdo NAO-confiavel. O Streamdown
+                              1.4 habilita rehype-raw (renderiza HTML cru) e o
+                              harden dele nao barra iframe/srcdoc. Sobrescrevemos
+                              rehypePlugins=[] (sem rehype-raw) para o
+                              react-markdown IGNORAR todo HTML cru: script,
+                              iframe, srcdoc, style, handlers "on..." e svg nao
+                              chegam ao DOM. urlTransform saneia as URLs (so
+                              https, mailto, tel). controls=false desliga o
+                              exportador CSV das tabelas (evita formula
+                              injection). Markdown, tabelas e codigo seguem
+                              renderizando (remark-gfm + componentes do
+                              Streamdown, que nao dependem de rehype-raw). */}
+                          <Streamdown
+                            rehypePlugins={[]}
+                            controls={false}
+                            urlTransform={safeAiUrl}
+                          >
                             {message.content}
                           </Streamdown>
                         </div>
