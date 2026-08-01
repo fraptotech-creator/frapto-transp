@@ -33,12 +33,24 @@ export const organizations = mysqlTable("organizations", {
   planName: varchar("planName", { length: 100 }),
   trialEndsAt: timestamp("trialEndsAt"),
   currentPeriodEnd: timestamp("currentPeriodEnd"),
+  // event.created do ÚLTIMO evento Stripe APLICADO. Guarda a ordem: um evento
+  // mais antigo que este é ignorado (ex.: deleted(t2) chega antes de updated(t1)
+  // → updated não reabre a assinatura).
+  lastStripeEventAt: timestamp("lastStripeEventAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = typeof organizations.$inferInsert;
+
+// Idempotência de webhook: cada event.id do Stripe é registrado UMA vez. Um
+// retry (mesmo id) é descartado sem reaplicar efeito.
+export const stripeEvents = mysqlTable("stripe_events", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  eventType: varchar("eventType", { length: 100 }),
+  receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+});
 
 /**
  * Usuário. Login por email+senha (passwordHash). Pertence a uma organização.

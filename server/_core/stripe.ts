@@ -4,6 +4,8 @@ import {
   getOrganization,
   getOrgByStripeCustomerId,
   updateOrganization,
+  recordStripeEvent,
+  updateOrgSubscriptionIfNewer,
 } from "../db";
 import type { Organization } from "../../drizzle/schema";
 
@@ -141,18 +143,40 @@ async function resolveOrgId(sub: Stripe.Subscription): Promise<number | null> {
   return org?.id ?? null;
 }
 
-async function applySubscription(sub: Stripe.Subscription): Promise<void> {
+// Decisão PURA de ORDEM: aplica o evento só se for igual/mais novo que o último
+// já aplicado. Sem último (null) → aplica. Testável sem banco.
+export function deveAplicarEvento(
+  lastAppliedAt: Date | null | undefined,
+  eventCreatedAt: Date
+): boolean {
+  if (!lastAppliedAt) return true;
+  return lastAppliedAt.getTime() <= eventCreatedAt.getTime();
+}
+
+async function applySubscription(
+  sub: Stripe.Subscription,
+  eventCreatedAt: Date
+): Promise<void> {
   const orgId = await resolveOrgId(sub);
   if (!orgId) {
     console.warn("[Stripe] Assinatura sem orgId resolvível:", sub.id);
     return;
   }
   const periodEnd = sub.items.data[0]?.current_period_end;
-  await updateOrganization(orgId, {
-    subscriptionStatus: mapStripeStatus(sub.status),
-    stripeSubscriptionId: sub.id,
-    currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
-  });
+  // UPDATE condicional atômico: só aplica se o evento não for mais antigo que o
+  // último aplicado (ordem monotônica por org).
+  const aplicou = await updateOrgSubscriptionIfNewer(
+    orgId,
+    {
+      subscriptionStatus: mapStripeStatus(sub.status),
+      stripeSubscriptionId: sub.id,
+      currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+    },
+    eventCreatedAt
+  );
+  if (!aplicou) {
+    console.warn(`[Stripe] Evento atrasado ignorado (org ${orgId}, ${sub.id})`);
+  }
 }
 
 /**
@@ -173,6 +197,12 @@ export async function handleWebhookEvent(
     ENV.stripeWebhookSecret
   );
 
+  // Idempotência: um retry do MESMO evento é descartado sem reaplicar efeito.
+  const novo = await recordStripeEvent(event.id, event.type);
+  if (!novo) return;
+
+  const eventCreatedAt = new Date(event.created * 1000);
+
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object;
@@ -181,15 +211,24 @@ export async function handleWebhookEvent(
           typeof session.subscription === "string"
             ? session.subscription
             : session.subscription.id;
+        // Re-consulta o estado ATUAL no Stripe (não confia no payload).
         const sub = await stripe.subscriptions.retrieve(subId);
-        await applySubscription(sub);
+        await applySubscription(sub, eventCreatedAt);
       }
       break;
     }
     case "customer.subscription.created":
-    case "customer.subscription.updated":
+    case "customer.subscription.updated": {
+      // Re-consulta a assinatura ANTES de liberar acesso — o payload pode estar
+      // desatualizado/fora de ordem; a fonte da verdade é a API.
+      const fresh = await stripe.subscriptions.retrieve(event.data.object.id);
+      await applySubscription(fresh, eventCreatedAt);
+      break;
+    }
     case "customer.subscription.deleted": {
-      await applySubscription(event.data.object);
+      // Estado terminal: usa o objeto do evento (mapeia p/ canceled). A ordem
+      // monotônica no UPDATE impede um updated atrasado de reabrir.
+      await applySubscription(event.data.object, eventCreatedAt);
       break;
     }
     default:

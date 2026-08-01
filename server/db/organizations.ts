@@ -1,10 +1,11 @@
-import { eq, and, gt, sql } from "drizzle-orm";
+import { eq, and, gt, or, lte, isNull, sql } from "drizzle-orm";
 import {
   organizations,
   users,
   vehicles,
   drivers,
   trips,
+  stripeEvents,
   InsertOrganization,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
@@ -351,4 +352,54 @@ export async function updateOrganization(
   if (!db) throw new Error("Database not available");
   await db.update(organizations).set(data).where(eq(organizations.id, orgId));
   return getOrganization(orgId);
+}
+
+// Idempotência do webhook Stripe: registra o event.id UMA vez. Retorna true se
+// é NOVO (processar), false se já foi visto (retry → descartar sem reaplicar).
+// Erro de chave duplicada = já processado; qualquer outro erro PROPAGA (não
+// engole — o webhook devolve 400 e o Stripe reenvia).
+export async function recordStripeEvent(
+  id: string,
+  eventType: string
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  try {
+    await db.insert(stripeEvents).values({ id, eventType });
+    return true;
+  } catch (e) {
+    if ((e as { code?: string })?.code === "ER_DUP_ENTRY") return false;
+    throw e;
+  }
+}
+
+// Aplica a assinatura SÓ se o evento for igual ou mais novo que o último já
+// aplicado (ordem). Conditional UPDATE atômico: um evento atrasado não
+// sobrescreve um estado mais recente. Retorna true se aplicou.
+export async function updateOrgSubscriptionIfNewer(
+  orgId: number,
+  fields: {
+    subscriptionStatus: InsertOrganization["subscriptionStatus"];
+    stripeSubscriptionId: string;
+    currentPeriodEnd: Date | null;
+  },
+  eventCreatedAt: Date
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const res = await db
+    .update(organizations)
+    .set({ ...fields, lastStripeEventAt: eventCreatedAt })
+    .where(
+      and(
+        eq(organizations.id, orgId),
+        or(
+          isNull(organizations.lastStripeEventAt),
+          lte(organizations.lastStripeEventAt, eventCreatedAt)
+        )
+      )
+    );
+  return (res[0] as { affectedRows?: number })?.affectedRows
+    ? (res[0] as { affectedRows: number }).affectedRows >= 1
+    : false;
 }

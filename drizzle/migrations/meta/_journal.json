@@ -22,6 +22,13 @@
       "when": 1785610392298,
       "tag": "0002_driver_tracking_token_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1785612083086,
+      "tag": "0003_stripe_events_ordering",
+      "breakpoints": true
     }
   ]
 }
