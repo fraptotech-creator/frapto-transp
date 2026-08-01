@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, gt, sql } from "drizzle-orm";
 import {
   organizations,
   users,
@@ -284,6 +284,41 @@ export async function getUserByResetTokenHash(hash: string) {
     .where(eq(users.resetTokenHash, hash))
     .limit(1);
   return result[0];
+}
+
+/**
+ * Consome o token de reset ATOMICAMENTE. Numa ÚNICA query condicional: casa por
+ * hash + não expirado e, se casar, grava a senha nova, LIMPA o token e
+ * incrementa a sessionVersion (derruba sessões antigas). Retorna true só quando
+ * exatamente 1 linha foi afetada.
+ *
+ * Antes era ler → checar → gravar → limpar → incrementar (4 passos): duas
+ * requisições concorrentes com o MESMO token passavam as duas (reuso/corrida) e,
+ * se um passo intermediário falhasse, o token continuava válido. Agora o banco
+ * arbitra: só um vencedor, e o token some junto com a troca — tudo ou nada.
+ */
+export async function consumeResetToken(
+  hash: string,
+  passwordHash: string
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const res = await db
+    .update(users)
+    .set({
+      passwordHash,
+      mustChangePassword: false,
+      resetTokenHash: null,
+      resetTokenExpiraEm: null,
+      sessionVersion: sql`${users.sessionVersion} + 1`,
+    })
+    .where(
+      and(
+        eq(users.resetTokenHash, hash),
+        gt(users.resetTokenExpiraEm, new Date())
+      )
+    );
+  return (res[0] as { affectedRows?: number })?.affectedRows === 1;
 }
 
 export async function getOrganization(orgId: number) {

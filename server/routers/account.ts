@@ -30,14 +30,13 @@ import { assertLoginRateLimit } from "./_helpers";
 import {
   gerarTokenReset,
   hashToken,
-  podeRedefinir,
   expiraEm,
   linkReset,
   VALIDADE_MS,
 } from "../_core/passwordReset";
 import { enviarEmail } from "../_core/email";
 import { emailRecuperacaoSenha } from "../_core/emailTemplates";
-import { setResetToken, getUserByResetTokenHash } from "../db";
+import { setResetToken, consumeResetToken } from "../db";
 import { isSuperAdmin } from "../_core/superAdmin";
 import { SENHA_MIN } from "../_core/passwordPolicy";
 import { ENV } from "../_core/env";
@@ -291,27 +290,16 @@ export const authRouter = router({
         message: "Link inválido ou expirado. Peça um novo.",
       });
 
-      const user = await getUserByResetTokenHash(hashToken(input.token));
-      if (!user) throw invalido;
-
-      const decisao = podeRedefinir({
-        hashGuardado: user.resetTokenHash,
-        expiraEm: user.resetTokenExpiraEm,
-        tokenRecebido: input.token,
-        agora: new Date(),
-      });
-      if (!decisao.ok) {
-        console.warn(`[Reset] Recusado (${decisao.motivo}) p/ user ${user.id}`);
+      // bcrypt ANTES da escrita; depois UMA operação atômica consome o token
+      // (casa por hash + não expirado → grava senha, limpa token, incrementa
+      // sessionVersion). Fim da corrida/reuso: só um concorrente vence, e o
+      // token some junto com a troca. Resposta genérica (não vira oráculo).
+      const passwordHash = await bcrypt.hash(input.password, 10);
+      const ok = await consumeResetToken(hashToken(input.token), passwordHash);
+      if (!ok) {
+        console.warn("[Reset] token inválido/expirado/já usado");
         throw invalido;
       }
-
-      const passwordHash = await bcrypt.hash(input.password, 10);
-      await setUserPassword(user.openId, passwordHash, false);
-      // Uso único: queima o token ANTES de responder.
-      await setResetToken(user.openId, null, null);
-      // Trocou a senha → derruba todas as sessões antigas, em qualquer
-      // aparelho. Se a conta foi tomada, isso expulsa o invasor.
-      await incrementSessionVersion(user.openId);
       return { ok: true as const };
     }),
 
