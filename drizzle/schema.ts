@@ -403,6 +403,9 @@ export const documents = mysqlTable(
     dataVencimento: timestamp("dataVencimento"),
     arquivoUrl: text("arquivoUrl"),
     arquivoKey: varchar("arquivoKey", { length: 255 }),
+    // Tamanho do arquivo em bytes — usado para a quota de armazenamento por
+    // empresa. NULL em documentos legados (contam como 0 na soma).
+    sizeBytes: int("sizeBytes"),
     status: mysqlEnum("status", ["ativo", "vencido", "proximo_vencer"])
       .default("ativo")
       .notNull(),

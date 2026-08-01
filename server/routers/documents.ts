@@ -6,7 +6,9 @@ import {
   getDocumentById,
   createDocument,
   deleteDocument,
+  getOrgDocumentsBytes,
 } from "../db";
+import { quotaExcedida } from "../_core/quota";
 import {
   putObject,
   getDownloadUrl,
@@ -79,18 +81,42 @@ export const documentsRouter = router({
             "O conteúdo do arquivo não corresponde a um PDF, JPG, PNG ou WEBP válido.",
         });
       }
+      // Quota por empresa: checa ANTES do PUT (não sobe se estourar 5 GB).
+      const usados = await getOrgDocumentsBytes(ctx.orgId);
+      if (quotaExcedida(usados, buffer.length)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "Limite de armazenamento da empresa atingido (5 GB). Exclua documentos antigos.",
+        });
+      }
       const key = buildObjectKey(ctx.orgId, input.fileName);
       await putObject(key, buffer, realMime);
-      return createDocument(ctx.orgId, {
-        tipo: input.tipo,
-        descricao: input.descricao ?? input.fileName.slice(0, 150),
-        veiculoId: input.veiculoId ?? null,
-        motoristId: input.motoristId ?? null,
-        dataVencimento: input.dataVencimento ?? null,
-        arquivoKey: key,
-        arquivoUrl: null,
-        status: "ativo",
-      });
+      try {
+        return await createDocument(ctx.orgId, {
+          tipo: input.tipo,
+          descricao: input.descricao ?? input.fileName.slice(0, 150),
+          veiculoId: input.veiculoId ?? null,
+          motoristId: input.motoristId ?? null,
+          dataVencimento: input.dataVencimento ?? null,
+          arquivoKey: key,
+          arquivoUrl: null,
+          sizeBytes: buffer.length,
+          status: "ativo",
+        });
+      } catch (e) {
+        // Compensação: o PUT já subiu o objeto; se o INSERT falhar, apaga o
+        // objeto órfão para não vazar espaço/quota sem registro.
+        try {
+          await deleteObject(key);
+        } catch (delErr) {
+          console.warn(
+            "[Documents] falha ao compensar objeto R2:",
+            toSafeLogError(delErr)
+          );
+        }
+        throw e;
+      }
     }),
 
   downloadUrl: activeOrgProcedure

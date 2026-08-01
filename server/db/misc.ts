@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import {
   documents,
   aiConfig,
@@ -49,6 +49,20 @@ export async function createDocument(
     .where(and(eq(documents.orgId, orgId), eq(documents.id, ins.id)))
     .limit(1);
   return result[0];
+}
+
+// Soma o tamanho (bytes) dos documentos da empresa — base da quota. Legado com
+// sizeBytes NULL conta como 0 (COALESCE).
+export async function getOrgDocumentsBytes(orgId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${documents.sizeBytes}), 0)`,
+    })
+    .from(documents)
+    .where(eq(documents.orgId, orgId));
+  return Number(rows[0]?.total ?? 0);
 }
 
 export async function deleteDocument(orgId: number, id: number) {
