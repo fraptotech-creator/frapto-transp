@@ -17,6 +17,7 @@ import {
   trackLimiter,
   trackIpBackstop,
 } from "./security";
+import { toSafeLogError } from "./safeLog";
 
 // Fail-closed: em produção, o app NÃO sobe sem os segredos essenciais.
 // Erro visível no boot > sessão insegura silenciosa (JWT fraco / login quebrado).
@@ -84,10 +85,7 @@ async function startServer() {
         await handleWebhookEvent(req.body as Buffer, sig);
         res.json({ received: true });
       } catch (err) {
-        console.error(
-          "[Stripe] webhook error",
-          err instanceof Error ? err.message : err
-        );
+        console.error("[Stripe] webhook error", toSafeLogError(err));
         res.status(400).send("webhook error");
       }
     }
@@ -143,7 +141,12 @@ async function startServer() {
       // logamos o erro REAL para diagnóstico, sem perdê-lo.
       onError({ error, path }) {
         if (error.code === "INTERNAL_SERVER_ERROR") {
-          console.error(`[tRPC] ${path ?? "?"} falhou:`, error.cause ?? error);
+          // NUNCA logar error.cause cru: numa falha de DB é o SQL + os
+          // PARÂMETROS (CPF/telefone/e-mail). Só a classe/código do erro.
+          console.error(
+            `[tRPC] ${path ?? "?"} falhou:`,
+            toSafeLogError(error.cause ?? error)
+          );
         }
       },
     })

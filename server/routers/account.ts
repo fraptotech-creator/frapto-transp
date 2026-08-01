@@ -11,6 +11,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
+import { toSafeLogError } from "../_core/safeLog";
 import {
   getUserByEmail,
   getUserByUsername,
@@ -261,7 +262,7 @@ export const authRouter = router({
         // contexto — envio quebrado em silêncio deixa cliente sem conta.
         console.error(
           "[Reset] Falha ao enviar e-mail de recuperação:",
-          e instanceof Error ? e.message : e
+          toSafeLogError(e)
         );
         // Token pendente sem e-mail entregue é lixo: limpa para não ficar
         // uma janela de 1h aberta que ninguém pediu.

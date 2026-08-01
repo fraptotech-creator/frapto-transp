@@ -18,6 +18,7 @@ import {
   isStorageConfigured,
 } from "../_core/storage";
 import { detectDocMime } from "../_core/fileType";
+import { toSafeLogError } from "../_core/safeLog";
 import { assertRefsOwned } from "./_helpers";
 
 // Documentos (upload em R2), isolado por organização.
@@ -137,7 +138,10 @@ export const documentsRouter = router({
         try {
           await deleteObject(doc.arquivoKey);
         } catch (e) {
-          console.warn("[Documents] falha ao apagar objeto R2:", e);
+          console.warn(
+            "[Documents] falha ao apagar objeto R2:",
+            toSafeLogError(e)
+          );
         }
       }
       return deleteDocument(ctx.orgId, input.id);

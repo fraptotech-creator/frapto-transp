@@ -8,6 +8,7 @@ import {
   type TripRef,
 } from "../_core/tracking";
 import { assinaturaAtiva } from "../_core/subscription";
+import { toSafeLogError } from "../_core/safeLog";
 import {
   getDriverByTrackingToken,
   getUserByUsername,
@@ -69,10 +70,7 @@ export async function handleTrackLogin(req: Request, res: Response) {
     }
     res.status(200).json({ token, nome: driver.nome });
   } catch (err) {
-    console.error(
-      "[track] login error",
-      err instanceof Error ? err.message : err
-    );
+    console.error("[track] login error", toSafeLogError(err));
     res.status(500).json({ error: "erro interno" });
   }
 }
@@ -131,10 +129,7 @@ export async function handleTrackIngest(req: Request, res: Response) {
     await addTripPositions(driver.orgId, rows);
     res.status(200).json({ recorded: rows.length });
   } catch (err) {
-    console.error(
-      "[track] ingest error",
-      err instanceof Error ? err.message : err
-    );
+    console.error("[track] ingest error", toSafeLogError(err));
     res.status(500).json({ error: "erro interno" });
   }
 }

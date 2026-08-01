@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2";
+import { toSafeLogError } from "../_core/safeLog";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: ReturnType<typeof createPool> | null = null;
@@ -21,7 +22,9 @@ export async function getDb() {
       _pool = createPool({ ...poolConfig, uri: process.env.DATABASE_URL });
       _db = drizzle(_pool);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      // Não logar o erro cru: a mensagem de falha de conexão pode conter a
+      // URI do banco (credencial). Só a classe/código.
+      console.warn("[Database] Failed to connect:", toSafeLogError(error));
       _db = null;
     }
   }
