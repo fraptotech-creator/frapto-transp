@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { randomBytes } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { driverProcedure, router } from "../_core/trpc";
 import {
@@ -9,7 +8,7 @@ import {
   accrueTripKm,
   addTripPosition,
   getDriverById,
-  setDriverTrackingToken,
+  issueTrackingToken,
 } from "../db";
 import { canRecordPosition } from "../_core/tracking";
 import { visivelParaMotorista } from "../_core/driverTrips";
@@ -118,11 +117,9 @@ export const driverAppRouter = router({
         message: "Motorista não encontrado.",
       });
     }
-    let token = driver.trackingToken;
-    if (!token) {
-      token = randomBytes(24).toString("hex");
-      await setDriverTrackingToken(ctx.orgId, ctx.driverId, token);
-    }
+    // Emite um token hasheado novo (não dá mais para reusar: só o hash é
+    // guardado). Rotaciona → "um aparelho por vez".
+    const token = await issueTrackingToken(ctx.orgId, ctx.driverId);
     return { token } as const;
   }),
 });

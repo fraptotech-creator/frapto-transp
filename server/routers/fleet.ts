@@ -22,7 +22,7 @@ import {
   setUsername,
   deleteDriverUser,
   incrementSessionVersion,
-  setDriverTrackingToken,
+  revokeTrackingToken,
   setResetToken,
   getTrips,
   getTripById,
@@ -344,9 +344,9 @@ export const driversRouter = router({
       const hash = await bcrypt.hash(genThrowawayPassword(), 10);
       await setUserPassword(user.openId, hash, true);
       await incrementSessionVersion(user.openId);
-      // Rotaciona (anula) o token de rastreio: mata o acesso do aparelho antigo
-      // ao /api/track; no próximo login o app gera um token novo.
-      await setDriverTrackingToken(ctx.orgId, input.driverId, null);
+      // Revoga o token de rastreio: mata o acesso do aparelho antigo ao
+      // /api/track (hash zerado + revogado); no próximo login gera um novo.
+      await revokeTrackingToken(ctx.orgId, input.driverId);
       const activationToken = await emitirTokenAtivacao(user.openId);
       return { activationToken } as const;
     }),

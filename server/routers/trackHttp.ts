@@ -1,10 +1,10 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "crypto";
 import { normalizeTrackPayload } from "../_core/trackIngest";
 import {
   planTrackInserts,
   distinctTripIds,
+  trackingTokenBloqueado,
   type TripRef,
 } from "../_core/tracking";
 import { assinaturaAtiva } from "../_core/subscription";
@@ -13,7 +13,9 @@ import {
   getDriverByTrackingToken,
   getUserByUsername,
   getDriverById,
-  setDriverTrackingToken,
+  issueTrackingToken,
+  migrateTrackingTokenToHash,
+  revokeTrackingToken,
   getTripById,
   getTrips,
   addTripPositions,
@@ -63,11 +65,10 @@ export async function handleTrackLogin(req: Request, res: Response) {
       res.status(402).json({ error: "assinatura inativa" });
       return;
     }
-    let token = driver.trackingToken;
-    if (!token) {
-      token = randomBytes(24).toString("hex");
-      await setDriverTrackingToken(user.orgId, user.driverId, token);
-    }
+    // SEMPRE emite um token NOVO no login (rotação). Só o hash é guardado; o
+    // valor em claro vai para o aparelho. "Um aparelho por vez": o hash anterior
+    // é sobrescrito, invalidando o aparelho antigo (decisão do produto).
+    const token = await issueTrackingToken(user.orgId, user.driverId);
     res.status(200).json({ token, nome: driver.nome });
   } catch (err) {
     console.error("[track] login error", toSafeLogError(err));
@@ -90,6 +91,16 @@ export async function handleTrackIngest(req: Request, res: Response) {
     if (!driver) {
       res.status(401).json({ error: "token inválido" });
       return;
+    }
+    // Token expirado (1 ano) ou revogado (logout/reset) → nega.
+    if (trackingTokenBloqueado(driver, new Date())) {
+      res.status(401).json({ error: "token expirado ou revogado" });
+      return;
+    }
+    // Migração LAZY: aparelho legado (achado pelo valor em claro, sem hash)
+    // passa a hash no primeiro ping — o token-em-claro some do banco sozinho.
+    if (!driver.trackingTokenHash) {
+      await migrateTrackingTokenToHash(driver.orgId, driver.id, token);
     }
     // Mesmo com token válido, uma frota inadimplente não grava GPS: o gate de
     // assinatura vale para TODA borda, não só o tRPC. A org sai do registro do
@@ -130,6 +141,24 @@ export async function handleTrackIngest(req: Request, res: Response) {
     res.status(200).json({ recorded: rows.length });
   } catch (err) {
     console.error("[track] ingest error", toSafeLogError(err));
+    res.status(500).json({ error: "erro interno" });
+  }
+}
+
+// Logout do app NATIVO: revoga o token no SERVIDOR (mata a credencial mesmo se
+// o aparelho for perdido). Autenticado pelo próprio token. Idempotente: token
+// desconhecido também responde 200 (não vira oráculo de tokens válidos).
+export async function handleTrackRevoke(req: Request, res: Response) {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const token = typeof body.token === "string" ? body.token : "";
+    if (token) {
+      const driver = await getDriverByTrackingToken(token);
+      if (driver) await revokeTrackingToken(driver.orgId, driver.id);
+    }
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("[track] revoke error", toSafeLogError(err));
     res.status(500).json({ error: "erro interno" });
   }
 }

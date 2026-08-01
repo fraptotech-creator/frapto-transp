@@ -8,7 +8,9 @@ const db = vi.hoisted(() => ({
   getUserByUsername: vi.fn(),
   getDriverById: vi.fn(),
   getOrganization: vi.fn(),
-  setDriverTrackingToken: vi.fn(),
+  issueTrackingToken: vi.fn().mockResolvedValue("t".repeat(48)),
+  migrateTrackingTokenToHash: vi.fn(),
+  revokeTrackingToken: vi.fn(),
   getDriverByTrackingToken: vi.fn(),
   getTrips: vi.fn(),
   getTripById: vi.fn(),
@@ -66,15 +68,15 @@ describe("/api/track/login — gate de assinatura", () => {
     const { res, r } = fakeRes();
     await handleTrackLogin(req({ username: "joao", password: "x" }), res);
     expect(r.code).toBe(402);
-    expect(db.setDriverTrackingToken).not.toHaveBeenCalled();
+    expect(db.issueTrackingToken).not.toHaveBeenCalled();
   });
 
-  it("emite token quando a assinatura está ativa", async () => {
+  it("emite token NOVO (rotação) quando a assinatura está ativa", async () => {
     db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
     const { res, r } = fakeRes();
     await handleTrackLogin(req({ username: "joao", password: "x" }), res);
     expect(r.code).toBe(200);
-    expect(db.setDriverTrackingToken).toHaveBeenCalledOnce();
+    expect(db.issueTrackingToken).toHaveBeenCalledOnce();
   });
 });
 
@@ -107,5 +109,45 @@ describe("/api/track — gate de assinatura na ingestão", () => {
     // Um único INSERT em lote (não um por ponto).
     expect(db.addTripPositions).toHaveBeenCalledOnce();
     expect(r.body).toEqual({ recorded: 1 });
+  });
+
+  it("REJEITA (401) token REVOGADO e NÃO grava (Lote 7.2)", async () => {
+    db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
+    db.getDriverByTrackingToken.mockResolvedValue({
+      id: 3,
+      orgId: 7,
+      trackingTokenRevokedAt: new Date(),
+    });
+    const { res, r } = fakeRes();
+    await handleTrackIngest(req(ponto), res);
+    expect(r.code).toBe(401);
+    expect(db.addTripPositions).not.toHaveBeenCalled();
+  });
+
+  it("REJEITA (401) token EXPIRADO e NÃO grava (Lote 7.2)", async () => {
+    db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
+    db.getDriverByTrackingToken.mockResolvedValue({
+      id: 3,
+      orgId: 7,
+      trackingTokenExpiresAt: new Date(Date.now() - 1000),
+    });
+    const { res, r } = fakeRes();
+    await handleTrackIngest(req(ponto), res);
+    expect(r.code).toBe(401);
+    expect(db.addTripPositions).not.toHaveBeenCalled();
+  });
+
+  it("MIGRA aparelho legado (sem hash) para hash no primeiro ping", async () => {
+    db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
+    // driver sem trackingTokenHash = legado (achado pelo valor em claro)
+    db.getDriverByTrackingToken.mockResolvedValue({
+      id: 3,
+      orgId: 7,
+      trackingTokenHash: null,
+    });
+    const { res, r } = fakeRes();
+    await handleTrackIngest(req(ponto), res);
+    expect(r.code).toBe(200);
+    expect(db.migrateTrackingTokenToHash).toHaveBeenCalledOnce();
   });
 });

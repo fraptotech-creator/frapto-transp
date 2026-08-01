@@ -1,5 +1,7 @@
 import { eq, and, desc, sql } from "drizzle-orm";
+import { randomBytes } from "crypto";
 import { tripKmToAccrue, accrueOdometerCore } from "../_core/odometer";
+import { hashTrackingToken, TRACKING_TOKEN_TTL_MS } from "../_core/tracking";
 import {
   vehicles,
   drivers,
@@ -278,27 +280,84 @@ export async function addTripPositions(
 // Busca o motorista pelo token de rastreio (usado pelo /api/track — o app
 // nativo em background não tem cookie de sessão). Token é global; a org e o
 // driverId saem do REGISTRO, nunca de input do cliente (fail-closed).
+// DUAL-READ: procura primeiro pelo HASH (novo padrão); se não achar, cai no
+// valor em claro LEGADO (aparelho ainda não migrado). A borda migra o legado.
 export async function getDriverByTrackingToken(token: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
+  const hash = hashTrackingToken(token);
+  const porHash = await db
+    .select()
+    .from(drivers)
+    .where(eq(drivers.trackingTokenHash, hash))
+    .limit(1);
+  if (porHash[0]) return porHash[0];
+  const porClaro = await db
     .select()
     .from(drivers)
     .where(eq(drivers.trackingToken, token))
     .limit(1);
-  return result[0];
+  return porClaro[0];
 }
 
-export async function setDriverTrackingToken(
+// Emite um token NOVO (rotação): guarda só o HASH + expiração (1 ano) + carimbo
+// de rotação, e ZERA o valor em claro e a revogação. "Um aparelho por vez": o
+// hash anterior é sobrescrito, então o aparelho antigo deixa de valer. Devolve
+// o token em claro (vai para o aparelho — nunca é relido do banco).
+export async function issueTrackingToken(
+  orgId: number,
+  driverId: number
+): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const token = randomBytes(24).toString("hex");
+  const now = new Date();
+  await db
+    .update(drivers)
+    .set({
+      trackingToken: null,
+      trackingTokenHash: hashTrackingToken(token),
+      trackingTokenExpiresAt: new Date(now.getTime() + TRACKING_TOKEN_TTL_MS),
+      trackingTokenRotatedAt: now,
+      trackingTokenRevokedAt: null,
+    })
+    .where(and(eq(drivers.orgId, orgId), eq(drivers.id, driverId)));
+  return token;
+}
+
+// Migração LAZY: um aparelho legado (token em claro) que ainda pinga vira hash
+// no primeiro uso — mesmo token, agora guardado como hash + ganha expiração.
+export async function migrateTrackingTokenToHash(
   orgId: number,
   driverId: number,
-  token: string | null
+  token: string
 ) {
+  const db = await getDb();
+  if (!db) return;
+  const now = new Date();
+  await db
+    .update(drivers)
+    .set({
+      trackingToken: null,
+      trackingTokenHash: hashTrackingToken(token),
+      trackingTokenExpiresAt: new Date(now.getTime() + TRACKING_TOKEN_TTL_MS),
+      trackingTokenRotatedAt: now,
+    })
+    .where(and(eq(drivers.orgId, orgId), eq(drivers.id, driverId)));
+}
+
+// Revoga o token (logout do app / reset pelo admin): marca revogação e zera
+// hash+claro. O aparelho para de gravar no próximo ping (fail-closed).
+export async function revokeTrackingToken(orgId: number, driverId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db
     .update(drivers)
-    .set({ trackingToken: token })
+    .set({
+      trackingToken: null,
+      trackingTokenHash: null,
+      trackingTokenRevokedAt: new Date(),
+    })
     .where(and(eq(drivers.orgId, orgId), eq(drivers.id, driverId)));
 }
 

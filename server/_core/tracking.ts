@@ -1,4 +1,34 @@
+import { createHash } from "crypto";
 import type { TrackPoint } from "./trackIngest";
+
+// Validade do token de rastreio: 1 ANO sem novo login (decisão do produto).
+export const TRACKING_TOKEN_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+
+// Hash do token de rastreio — só o hash é persistido; o valor cru vive só no
+// aparelho. Dump do banco não expõe credencial utilizável.
+export function hashTrackingToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+// Decisão PURA: o token está bloqueado (revogado ou expirado)? Legado sem
+// expiração (expiresAt null) NÃO é considerado expirado — ganha prazo na
+// migração lazy, no próximo ping. Revogado sempre bloqueia.
+export function trackingTokenBloqueado(
+  d: {
+    trackingTokenExpiresAt?: Date | null;
+    trackingTokenRevokedAt?: Date | null;
+  },
+  now: Date
+): boolean {
+  if (d.trackingTokenRevokedAt) return true;
+  if (
+    d.trackingTokenExpiresAt &&
+    d.trackingTokenExpiresAt.getTime() <= now.getTime()
+  ) {
+    return true;
+  }
+  return false;
+}
 
 // Decisão PURA do rastreio: uma posição só é gravada se a viagem for do
 // motorista logado E estiver EM ANDAMENTO. Fora disso, ignora em silêncio

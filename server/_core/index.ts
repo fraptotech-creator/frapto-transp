@@ -4,7 +4,11 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
-import { handleTrackIngest, handleTrackLogin } from "../routers/trackHttp";
+import {
+  handleTrackIngest,
+  handleTrackLogin,
+  handleTrackRevoke,
+} from "../routers/trackHttp";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
@@ -114,6 +118,14 @@ async function startServer() {
     trackJson,
     authLimiter,
     handleTrackLogin
+  );
+  // Logout do app nativo: revoga o token no servidor (autenticado pelo token).
+  app.post(
+    "/api/track/revoke",
+    trackIpBackstop,
+    trackJson,
+    trackLimiter,
+    handleTrackRevoke
   );
 
   // Parser de corpo: 15 MB cobre o upload de documento (10 MB → ~13,3 MB em
