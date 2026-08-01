@@ -6,6 +6,7 @@ import {
   protectedProcedure,
   router,
   orgProcedure,
+  orgOwnerProcedure,
 } from "../_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -333,7 +334,11 @@ export const billingRouter = router({
     };
   }),
 
-  createCheckout: orgProcedure.mutation(async ({ ctx }) => {
+  // Só o DONO paga/gerencia: createPortal abre o portal do Stripe (cancelar
+  // assinatura, trocar cartão) e createCheckout inicia cobrança — um MEMBER não
+  // pode fazer nem uma coisa nem outra. getStatus segue acessível (não expõe ID)
+  // porque o app usa para decidir o paywall inclusive para members.
+  createCheckout: orgOwnerProcedure.mutation(async ({ ctx }) => {
     const url = await createCheckoutSession({
       orgId: ctx.orgId,
       email: ctx.user.email ?? "",
@@ -341,7 +346,7 @@ export const billingRouter = router({
     return { url };
   }),
 
-  createPortal: orgProcedure.mutation(async ({ ctx }) => {
+  createPortal: orgOwnerProcedure.mutation(async ({ ctx }) => {
     const url = await createPortalSession(ctx.orgId);
     return { url };
   }),
