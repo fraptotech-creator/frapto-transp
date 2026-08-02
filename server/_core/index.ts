@@ -26,6 +26,7 @@ import { toSafeLogError } from "./safeLog";
 import { isTrpcUploadPath } from "./trpcBody";
 import { decideBoot } from "./bootGuard";
 import { uploadGate } from "./uploadGate";
+import { reportFatalStartup } from "./fatalStartup";
 
 // Bytes decodificados da chave de cifragem (0 se ausente/base64 inválido).
 function aiKeyByteLen(raw: string): number {
@@ -247,4 +248,7 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+// Falha fatal no boot (ex.: guard de config negou) → encerra com status != 0,
+// para o Railway reiniciar/alertar em vez de sair com 0. O guard roda antes do
+// listen, então nenhuma porta é aberta.
+startServer().catch(reportFatalStartup);
