@@ -25,6 +25,7 @@ import { toSafeLogError } from "./safeLog";
 import { decideBoot } from "./bootGuard";
 import { mountTrpcPipeline } from "./trpcPipeline";
 import { reportFatalStartup } from "./fatalStartup";
+import { installGracefulShutdown } from "./shutdown";
 
 // Bytes decodificados da chave de cifragem (0 se ausente/base64 inválido).
 function aiKeyByteLen(raw: string): number {
@@ -231,6 +232,11 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  // Encerramento gracioso: no redeploy o Railway envia SIGTERM — para de aceitar
+  // conexões novas, drena as em andamento e sai limpo (timeout de segurança
+  // força a saída se algo travar).
+  installGracefulShutdown(server);
 }
 
 // Falha fatal no boot (ex.: guard de config negou) → encerra com status != 0,
