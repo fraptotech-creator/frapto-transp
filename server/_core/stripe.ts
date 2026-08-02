@@ -5,9 +5,9 @@ import {
   getOrgByStripeCustomerId,
   updateOrganization,
   claimStripeEvent,
-  markStripeEventProcessed,
   markStripeEventFailed,
-  updateOrgSubscriptionIfNewer,
+  commitStripeEffectUnderLease,
+  type OrgSubscriptionEffect,
 } from "../db";
 import { toSafeLogError } from "./safeLog";
 import type { Organization } from "../../drizzle/schema";
@@ -160,29 +160,68 @@ export function deveAplicarEvento(
   return lastAppliedAt.getTime() <= eventCreatedAt.getTime();
 }
 
-async function applySubscription(
-  sub: Stripe.Subscription,
-  eventCreatedAt: Date
-): Promise<void> {
+type ResolvedEffect = {
+  orgId: number | null;
+  effect: OrgSubscriptionEffect | null;
+};
+
+// Constrói o efeito aplicável a partir de uma assinatura (fonte da verdade).
+async function effectFromSubscription(
+  sub: Stripe.Subscription
+): Promise<ResolvedEffect> {
   const orgId = await resolveOrgId(sub);
   if (!orgId) {
     console.warn("[Stripe] Assinatura sem orgId resolvível:", sub.id);
-    return;
+    return { orgId: null, effect: null };
   }
   const periodEnd = sub.items.data[0]?.current_period_end;
-  // UPDATE condicional atômico: só aplica se o evento não for mais antigo que o
-  // último aplicado (ordem monotônica por org).
-  const aplicou = await updateOrgSubscriptionIfNewer(
+  return {
     orgId,
-    {
+    effect: {
       subscriptionStatus: mapStripeStatus(sub.status),
       stripeSubscriptionId: sub.id,
       currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
     },
-    eventCreatedAt
-  );
-  if (!aplicou) {
-    console.warn(`[Stripe] Evento atrasado ignorado (org ${orgId}, ${sub.id})`);
+  };
+}
+
+// Resolve o EFEITO aplicável (orgId + campos) a partir da fonte da verdade do
+// Stripe. TODA chamada de rede (retrieve) acontece AQUI, FORA da transação de
+// commit. Como sempre re-consultamos o estado ATUAL, eventos fora de ordem ou
+// no MESMO segundo convergem para a verdade corrente (política determinística:
+// a fonte é o Stripe agora, não a ordem de chegada) — por isso a ordem no banco
+// mantém `<=` (não descarta um evento legítimo do mesmo segundo). orgId/effect
+// nulos = nada a aplicar; o evento ainda é marcado 'processed' (idempotência).
+async function resolveOrgEffect(
+  event: Stripe.Event,
+  stripe: Stripe
+): Promise<ResolvedEffect> {
+  switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object;
+      if (!session.subscription) return { orgId: null, effect: null };
+      const subId =
+        typeof session.subscription === "string"
+          ? session.subscription
+          : session.subscription.id;
+      const sub = await stripe.subscriptions.retrieve(subId);
+      return effectFromSubscription(sub);
+    }
+    case "customer.subscription.created":
+    case "customer.subscription.updated": {
+      // Re-consulta ANTES de liberar acesso — o payload pode estar
+      // desatualizado/fora de ordem; a fonte da verdade é a API.
+      const fresh = await stripe.subscriptions.retrieve(event.data.object.id);
+      return effectFromSubscription(fresh);
+    }
+    case "customer.subscription.deleted": {
+      // Estado terminal: usa o objeto do evento (mapeia p/ canceled). A ordem
+      // monotônica no UPDATE impede um updated atrasado de reabrir.
+      return effectFromSubscription(event.data.object);
+    }
+    default:
+      // Outros eventos ignorados de propósito (nada a aplicar).
+      return { orgId: null, effect: null };
   }
 }
 
@@ -240,51 +279,30 @@ export async function processStripeEvent(
   const generation = claim.generation;
   const eventCreatedAt = new Date(event.created * 1000);
   try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        if (session.subscription) {
-          const subId =
-            typeof session.subscription === "string"
-              ? session.subscription
-              : session.subscription.id;
-          // Re-consulta o estado ATUAL no Stripe (não confia no payload).
-          const sub = await stripe.subscriptions.retrieve(subId);
-          await applySubscription(sub, eventCreatedAt);
-        }
-        break;
-      }
-      case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        // Re-consulta a assinatura ANTES de liberar acesso — o payload pode
-        // estar desatualizado/fora de ordem; a fonte da verdade é a API.
-        const fresh = await stripe.subscriptions.retrieve(event.data.object.id);
-        await applySubscription(fresh, eventCreatedAt);
-        break;
-      }
-      case "customer.subscription.deleted": {
-        // Estado terminal: usa o objeto do evento (mapeia p/ canceled). A ordem
-        // monotônica no UPDATE impede um updated atrasado de reabrir.
-        await applySubscription(event.data.object, eventCreatedAt);
-        break;
-      }
-      default:
-        // Outros eventos ignorados de propósito.
-        break;
-    }
-    // Efeito aplicado (ou tipo ignorado de propósito) → marca concluído, com
-    // FENCING pela geração. Se false, o lease foi perdido (outro worker
-    // reivindicou por stale e conduz o lifecycle) — o efeito é idempotente
-    // (updateOrgSubscriptionIfNewer é ordenado), então não relançamos, mas
-    // TAMBÉM não afirmamos ter concluído a transição.
-    const marcou = await markStripeEventProcessed(event.id, generation);
-    if (!marcou) {
+    // 1) Fonte da verdade: re-consulta o estado ATUAL no Stripe (REDE) — FORA
+    //    da transação de commit. Nenhuma chamada de rede dentro da transação.
+    const { orgId, effect } = await resolveOrgEffect(event, stripe);
+    // 2) Efeito na organização + marca 'processed' ATÔMICOS, sob a geração
+    //    (row lock + fencing). Se o lease foi perdido (worker antigo retomou
+    //    após reclaim/stale), a organização NÃO é tocada e nada é marcado —
+    //    outro worker conduz o lifecycle. Nunca gravamos entitlement de um
+    //    snapshot antigo.
+    const outcome = await commitStripeEffectUnderLease({
+      eventId: event.id,
+      generation,
+      orgId,
+      effect,
+      eventCreatedAt,
+    });
+    if (outcome === "lease-lost") {
       console.warn(`[Stripe] lease perdido ao concluir (${event.type})`);
     }
   } catch (e) {
-    // Efeito FALHOU: marca 'failed' (permite retry) e relança para o Stripe
-    // reenviar. O erro é sanitizado (não vaza SQL/PII no banco). Com fencing:
-    // se o lease já é de outra geração, a marca falha (0 linhas) e não sobrescreve.
+    // Falha ANTES do commit (rede, ou rollback por inconsistência): marca
+    // 'failed' (permite retry) e relança para o Stripe reenviar. O erro é
+    // sanitizado (não vaza SQL/PII no banco). Fencing: se o lease já é de outra
+    // geração — OU o commit já concluiu (status 'processed') — a marca falha
+    // (0 linhas) e não rebaixa nada. Falha APÓS o commit não vira 'failed'.
     const safe = toSafeLogError(e);
     const marcou = await markStripeEventFailed(
       event.id,

@@ -9,7 +9,11 @@ import {
   InsertOrganization,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
-import { isDupError, podeReivindicar } from "../_core/stripeEventState";
+import {
+  isDupError,
+  podeReivindicar,
+  podeMarcar,
+} from "../_core/stripeEventState";
 
 // ⚠️ ÚNICA leitura CROSS-ORG do sistema: painel do SUPER-ADMIN da plataforma.
 // Não recebe orgId de propósito — quem protege é o superAdminProcedure
@@ -464,33 +468,127 @@ export async function markStripeEventFailed(
   return ((res[0] as { affectedRows?: number })?.affectedRows ?? 0) === 1;
 }
 
-// Aplica a assinatura SÓ se o evento for igual ou mais novo que o último já
-// aplicado (ordem). Conditional UPDATE atômico: um evento atrasado não
-// sobrescreve um estado mais recente. Retorna true se aplicou.
-export async function updateOrgSubscriptionIfNewer(
-  orgId: number,
-  fields: {
-    subscriptionStatus: InsertOrganization["subscriptionStatus"];
-    stripeSubscriptionId: string;
-    currentPeriodEnd: Date | null;
-  },
-  eventCreatedAt: Date
-): Promise<boolean> {
+// Efeito aplicável à organização, já RESOLVIDO a partir da fonte da verdade do
+// Stripe (re-consulta). Dados PUROS — nenhuma chamada de rede acontece dentro
+// da transação de commit.
+export interface OrgSubscriptionEffect {
+  subscriptionStatus: InsertOrganization["subscriptionStatus"];
+  stripeSubscriptionId: string;
+  currentPeriodEnd: Date | null;
+}
+
+export interface CommitLeaseParams {
+  eventId: string;
+  generation: number;
+  // orgId/effect nulos = nada a aplicar (tipo ignorado, checkout sem assinatura,
+  // org não resolvível) — ainda assim o evento é marcado 'processed'.
+  orgId: number | null;
+  effect: OrgSubscriptionEffect | null;
+  eventCreatedAt: Date;
+}
+
+export type CommitOutcome = "committed" | "lease-lost";
+
+// Executor mínimo da transação de commit sob lease. Existe para tornar a
+// ORQUESTRAÇÃO (checar posse → aplicar efeito → marcar) testável sem banco real
+// (mesmo padrão de OrgOwnerExecutor). O wrapper real liga cada método ao `tx`.
+export interface LeaseExecutor {
+  // SELECT ... FOR UPDATE da linha do evento (row lock pessimista).
+  lockEvent(
+    id: string
+  ): Promise<{ status: string; attempts: number | null } | undefined>;
+  // UPDATE condicional da organização (ordem monotônica por lastStripeEventAt).
+  applyOrgEffect(
+    orgId: number,
+    effect: OrgSubscriptionEffect,
+    eventCreatedAt: Date
+  ): Promise<void>;
+  // Marca 'processed' com fencing pela geração; retorna linhas afetadas.
+  markProcessed(id: string, generation: number): Promise<number>;
+}
+
+// Orquestração PURA do commit sob lease. Dentro de UMA transação:
+//   1. trava a linha do evento (row lock);
+//   2. se NÃO somos mais donos da geração (worker antigo perdeu o lease por
+//      reclaim/stale), NÃO toca a organização → "lease-lost" (rollback);
+//   3. aplica o efeito na organização (ordem monotônica: evento atrasado no-op);
+//   4. marca 'processed' na MESMA transação, com fencing pela geração;
+//   5. se a marca não afeta exatamente 1 linha (inconsistência sob o lock),
+//      LANÇA → rollback (desfaz também o efeito na organização).
+// Assim o efeito de assinatura e a marca são ATÔMICOS sob a geração atual: um
+// snapshot de worker antigo nunca grava entitlement e depois falha a marca.
+export async function commitStripeEffectCore(
+  exec: LeaseExecutor,
+  params: CommitLeaseParams
+): Promise<CommitOutcome> {
+  const row = await exec.lockEvent(params.eventId);
+  if (!row || !podeMarcar(row, params.generation)) return "lease-lost";
+  if (params.orgId != null && params.effect) {
+    await exec.applyOrgEffect(
+      params.orgId,
+      params.effect,
+      params.eventCreatedAt
+    );
+  }
+  const afetadas = await exec.markProcessed(params.eventId, params.generation);
+  if (afetadas !== 1) {
+    throw new Error("fencing inconsistente ao concluir evento Stripe");
+  }
+  return "committed";
+}
+
+// Wrapper REAL: abre transação CURTA e liga o executor ao `tx`. O row lock vem
+// de `.for("update")` — confirmado que o Drizzle instalado gera
+// `... for update` (SELECT com lock pessimista; TiDB/MySQL serializam duas
+// transações nesse lock). A chamada de rede ao Stripe fica FORA daqui (o efeito
+// já chega resolvido) — nada de rede dentro da transação.
+export async function commitStripeEffectUnderLease(
+  params: CommitLeaseParams
+): Promise<CommitOutcome> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const res = await db
-    .update(organizations)
-    .set({ ...fields, lastStripeEventAt: eventCreatedAt })
-    .where(
-      and(
-        eq(organizations.id, orgId),
-        or(
-          isNull(organizations.lastStripeEventAt),
-          lte(organizations.lastStripeEventAt, eventCreatedAt)
-        )
-      )
-    );
-  return (res[0] as { affectedRows?: number })?.affectedRows
-    ? (res[0] as { affectedRows: number }).affectedRows >= 1
-    : false;
+  return db.transaction(async tx => {
+    const exec: LeaseExecutor = {
+      async lockEvent(id) {
+        const rows = await tx
+          .select({
+            status: stripeEvents.status,
+            attempts: stripeEvents.attempts,
+          })
+          .from(stripeEvents)
+          .where(eq(stripeEvents.id, id))
+          .for("update")
+          .limit(1);
+        return rows[0];
+      },
+      async applyOrgEffect(orgId, effect, eventCreatedAt) {
+        await tx
+          .update(organizations)
+          .set({ ...effect, lastStripeEventAt: eventCreatedAt })
+          .where(
+            and(
+              eq(organizations.id, orgId),
+              or(
+                isNull(organizations.lastStripeEventAt),
+                lte(organizations.lastStripeEventAt, eventCreatedAt)
+              )
+            )
+          );
+      },
+      async markProcessed(id, generation) {
+        const res = await tx
+          .update(stripeEvents)
+          .set({ status: "processed", lastError: null })
+          .where(
+            and(
+              eq(stripeEvents.id, id),
+              eq(stripeEvents.status, "processing"),
+              eq(stripeEvents.attempts, generation)
+            )
+          );
+        return (res[0] as { affectedRows?: number })?.affectedRows ?? 0;
+      },
+    };
+    return commitStripeEffectCore(exec, params);
+  });
 }
