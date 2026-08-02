@@ -29,6 +29,21 @@ describe("reportFatalStartup — boot fatal encerra != 0 (Lote 4)", () => {
     expect(setExitCode).toHaveBeenCalledWith(1);
   });
 
+  it("diagnóstico SUFICIENTE: inclui name/code (allowlist), sem stack/cause", () => {
+    const log = vi.fn();
+    const err = Object.assign(new Error("conexão recusada"), {
+      name: "BootError",
+      code: "ECONNREFUSED",
+      stack: "at /app secret=sk_live_XYZ",
+    });
+    reportFatalStartup(err, { log, setExitCode: vi.fn() });
+    const out = log.mock.calls.map(c => c[0]).join("\n");
+    expect(out).toContain("BootError");
+    expect(out).toContain("ECONNREFUSED"); // código simbólico é seguro
+    expect(out).toContain("conexão recusada");
+    expect(out).not.toContain("sk_live_XYZ"); // nada de stack
+  });
+
   it("erro não-Error (string) também encerra != 0", () => {
     const setExitCode = vi.fn();
     reportFatalStartup("falha crua", { log: vi.fn(), setExitCode });

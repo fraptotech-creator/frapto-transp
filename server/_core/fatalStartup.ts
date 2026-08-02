@@ -1,12 +1,17 @@
+import { toSafeLogError } from "./safeLog";
+
 // Falha FATAL de inicialização deve encerrar o processo com status != 0, para o
 // Railway detectar (restart policy / alerta) em vez de encerrar com 0 e mascarar
 // o problema. Usa process.exitCode (NÃO process.exit) para não cortar o flush
 // dos logs — o processo termina naturalmente quando o event loop drena (o listen
 // não chegou a segurar o loop, pois o guard roda antes).
 //
-// Loga SOMENTE a mensagem: o guard de boot produz texto acionável e SEM valores
-// de segredo (nomes dos problemas + no máximo o valor de NODE_ENV, que não é
-// segredo). NUNCA loga stack/cause (poderiam trazer mais que a mensagem curada).
+// DIAGNÓSTICO suficiente, SEM vazar segredo: loga a mensagem (o guard de boot
+// produz texto acionável e sem valores — nomes dos problemas + no máximo o valor
+// de NODE_ENV, que não é segredo) MAIS a identidade curada do erro
+// (name/code/errno via allowlist do toSafeLogError). NUNCA loga stack/cause crus
+// (poderiam trazer SQL/PII/credenciais). Assim um erro inesperado no boot (não só
+// o do guard) deixa rastro para diagnóstico, sem risco de vazamento.
 export function reportFatalStartup(
   err: unknown,
   deps: {
@@ -21,6 +26,8 @@ export function reportFatalStartup(
       process.exitCode = c;
     });
   const msg = err instanceof Error ? err.message : String(err);
-  log(`[Boot] Falha fatal na inicialização:\n${msg}`);
+  const safe = toSafeLogError(err);
+  const id = [safe.name, safe.code, safe.errno].filter(Boolean).join(" ");
+  log(`[Boot] Falha fatal na inicialização [${id}]:\n${msg}`);
   setExitCode(1);
 }
