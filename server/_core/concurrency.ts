@@ -1,39 +1,49 @@
-// Limite de CONCORRÊNCIA (semáforo em memória) por chave + global. Usado para o
-// assistente de IA: uma empresa não pode disparar N chamadas simultâneas (custo/
-// esgotamento do pool), e o total global também tem teto. Em memória → vale por
-// instância; com múltiplas réplicas, migrar para store compartilhado (deferido).
+// Limite de CONCORRÊNCIA (semáforo em memória) por chave + global. Em memória →
+// vale por instância; com múltiplas réplicas, migrar para store compartilhado
+// (deferido). Cada POOL tem seu próprio teto global INDEPENDENTE — assim o
+// upload de documentos e o assistente de IA não competem pelo mesmo teto (antes
+// compartilhavam um único contador global: um upload consumia o orçamento da IA
+// e vice-versa).
 
-const emUso = new Map<string, number>();
-let globalEmUso = 0;
-
-// Tenta adquirir um slot. Retorna true se conseguiu (lembre de release depois),
-// false se a chave OU o global já estão no teto. Fail-closed.
-export function acquire(
-  key: string,
-  perKeyMax: number,
-  globalMax: number
-): boolean {
-  const atual = emUso.get(key) ?? 0;
-  if (atual >= perKeyMax || globalEmUso >= globalMax) return false;
-  emUso.set(key, atual + 1);
-  globalEmUso++;
-  return true;
+export interface Semaphore {
+  // Tenta adquirir um slot. true se conseguiu (lembre de release depois); false
+  // se a chave OU o global já estão no teto. Fail-closed.
+  acquire(key: string, perKeyMax: number, globalMax: number): boolean;
+  release(key: string): void;
+  // Observabilidade/teste.
+  snapshot(): { global: number; chaves: number };
+  // Só para testes: zera o estado entre casos.
+  reset(): void;
 }
 
-export function release(key: string): void {
-  const atual = emUso.get(key) ?? 0;
-  if (atual <= 1) emUso.delete(key);
-  else emUso.set(key, atual - 1);
-  if (globalEmUso > 0) globalEmUso--;
+export function createSemaphore(): Semaphore {
+  const emUso = new Map<string, number>();
+  let globalEmUso = 0;
+  return {
+    acquire(key, perKeyMax, globalMax) {
+      const atual = emUso.get(key) ?? 0;
+      if (atual >= perKeyMax || globalEmUso >= globalMax) return false;
+      emUso.set(key, atual + 1);
+      globalEmUso++;
+      return true;
+    },
+    release(key) {
+      const atual = emUso.get(key) ?? 0;
+      if (atual <= 1) emUso.delete(key);
+      else emUso.set(key, atual - 1);
+      if (globalEmUso > 0) globalEmUso--;
+    },
+    snapshot() {
+      return { global: globalEmUso, chaves: emUso.size };
+    },
+    reset() {
+      emUso.clear();
+      globalEmUso = 0;
+    },
+  };
 }
 
-// Só para teste/observabilidade.
-export function _snapshot() {
-  return { global: globalEmUso, chaves: emUso.size };
-}
-
-// Só para testes: zera o estado do semáforo entre casos.
-export function _resetConcurrency(): void {
-  emUso.clear();
-  globalEmUso = 0;
-}
+// Pools INDEPENDENTES (teto global separado): o upload (rota cara, ~13 MB) não
+// disputa o mesmo teto do assistente de IA.
+export const uploadSemaphore = createSemaphore();
+export const aiSemaphore = createSemaphore();

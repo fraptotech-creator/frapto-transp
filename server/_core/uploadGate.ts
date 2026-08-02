@@ -3,7 +3,7 @@ import { parse as parseCookieHeader } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { sdk } from "./sdk";
 import { allowRequest } from "./rateLimit";
-import { acquire, release } from "./concurrency";
+import { uploadSemaphore } from "./concurrency";
 import { trpcErrorBody, type TrpcErrorKey } from "./trpcErrorBody";
 import {
   grantUploadCapability,
@@ -94,7 +94,13 @@ export async function uploadGate(
   }
   // 5) Concorrência (por usuário e global). Libera ao fim da resposta —
   // sucesso, 413, erro do adapter (finish) ou conexão abortada (close).
-  if (!acquire(key, UPLOAD_CONCURRENCY_PER_USER, UPLOAD_CONCURRENCY_GLOBAL)) {
+  if (
+    !uploadSemaphore.acquire(
+      key,
+      UPLOAD_CONCURRENCY_PER_USER,
+      UPLOAD_CONCURRENCY_GLOBAL
+    )
+  ) {
     deny(
       res,
       429,
@@ -107,7 +113,7 @@ export async function uploadGate(
   const soltar = () => {
     if (!released) {
       released = true;
-      release(key);
+      uploadSemaphore.release(key);
     }
   };
   res.on("finish", soltar);

@@ -6,7 +6,9 @@ const sdkMock = vi.hoisted(() => ({ validateActiveSession: vi.fn() }));
 vi.mock("./_core/sdk", () => ({ sdk: sdkMock }));
 const rl = vi.hoisted(() => ({ allowRequest: vi.fn() }));
 vi.mock("./_core/rateLimit", () => rl);
-const conc = vi.hoisted(() => ({ acquire: vi.fn(), release: vi.fn() }));
+const conc = vi.hoisted(() => ({
+  uploadSemaphore: { acquire: vi.fn(), release: vi.fn() },
+}));
 vi.mock("./_core/concurrency", () => conc);
 
 import { uploadGate } from "./_core/uploadGate";
@@ -57,7 +59,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   sdkMock.validateActiveSession.mockResolvedValue(activeUser);
   rl.allowRequest.mockReturnValue(true);
-  conc.acquire.mockReturnValue(true);
+  conc.uploadSemaphore.acquire.mockReturnValue(true);
 });
 
 describe("uploadGate — barreira fail-closed do upload (Lote 1)", () => {
@@ -100,7 +102,7 @@ describe("uploadGate — barreira fail-closed do upload (Lote 1)", () => {
     await uploadGate(req({ cookie: "frapto_session=lixo" }), res, next);
     expect(r.code).toBe(401);
     expect(next).not.toHaveBeenCalled();
-    expect(conc.acquire).not.toHaveBeenCalled();
+    expect(conc.uploadSemaphore.acquire).not.toHaveBeenCalled();
     expect(hasUploadCapability(res)).toBe(false);
   });
 
@@ -121,11 +123,11 @@ describe("uploadGate — barreira fail-closed do upload (Lote 1)", () => {
     await uploadGate(req({ cookie: "c=1" }), res, next);
     expect(r.code).toBe(429);
     expect(next).not.toHaveBeenCalled();
-    expect(conc.acquire).not.toHaveBeenCalled();
+    expect(conc.uploadSemaphore.acquire).not.toHaveBeenCalled();
   });
 
   it("concorrência no teto → 429 sem next", async () => {
-    conc.acquire.mockReturnValue(false);
+    conc.uploadSemaphore.acquire.mockReturnValue(false);
     const { res, r } = fakeRes();
     const next = vi.fn();
     await uploadGate(req({ cookie: "c=1" }), res, next);
@@ -141,13 +143,13 @@ describe("uploadGate — barreira fail-closed do upload (Lote 1)", () => {
     expect(r.code).toBe(0);
     expect(hasUploadCapability(res)).toBe(true);
     expect(getGateUser(res)).toBe(activeUser);
-    expect(conc.acquire).toHaveBeenCalledOnce();
+    expect(conc.uploadSemaphore.acquire).toHaveBeenCalledOnce();
     // libera o slot ao término da resposta (finish) e também no close.
     expect(r.handlers.finish).toBeTypeOf("function");
     expect(r.handlers.close).toBeTypeOf("function");
     r.handlers.finish();
     r.handlers.close(); // idempotente: não libera duas vezes
-    expect(conc.release).toHaveBeenCalledOnce();
+    expect(conc.uploadSemaphore.release).toHaveBeenCalledOnce();
   });
 
   it("chaves de rate-limit/concorrência são POR usuário; backstop é por IP", async () => {
@@ -167,7 +169,7 @@ describe("uploadGate — barreira fail-closed do upload (Lote 1)", () => {
       expect.any(Number),
       expect.any(Number)
     );
-    expect(conc.acquire).toHaveBeenCalledWith(
+    expect(conc.uploadSemaphore.acquire).toHaveBeenCalledWith(
       "upload:u1",
       expect.any(Number),
       expect.any(Number)

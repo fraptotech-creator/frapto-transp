@@ -14,7 +14,7 @@ vi.mock("./_core/sdk", () => ({ sdk: sdkMock }));
 import { mountTrpcPipeline } from "./_core/trpcPipeline";
 import { getTrpcProc } from "./_core/uploadCapability";
 import { _resetRateLimit } from "./_core/rateLimit";
-import { _resetConcurrency, _snapshot } from "./_core/concurrency";
+import { uploadSemaphore } from "./_core/concurrency";
 import {
   UPLOAD_IP_LIMIT,
   UPLOAD_RATE_LIMIT,
@@ -149,7 +149,7 @@ const big = (n: number) => `{"j":"${"a".repeat(n)}"}`;
 beforeEach(() => {
   vi.clearAllMocks();
   _resetRateLimit();
-  _resetConcurrency();
+  uploadSemaphore.reset();
   sdkMock.validateActiveSession.mockResolvedValue(activeUser);
 });
 
@@ -315,8 +315,8 @@ describe("pipeline /api/trpc — parser grande fail-closed (Lote 1)", () => {
     resolveHang();
     const done = await Promise.all(inflight);
     expect(done.every(d => d.status === 200)).toBe(true);
-    await waitFor(() => _snapshot().global === 0);
-    expect(_snapshot().global).toBe(0);
+    await waitFor(() => uploadSemaphore.snapshot().global === 0);
+    expect(uploadSemaphore.snapshot().global).toBe(0);
     await close();
   });
 
@@ -329,8 +329,8 @@ describe("pipeline /api/trpc — parser grande fail-closed (Lote 1)", () => {
       headers: { cookie: "c=1" },
     });
     expect(r.status).toBe(200);
-    await waitFor(() => _snapshot().global === 0);
-    expect(_snapshot().global).toBe(0);
+    await waitFor(() => uploadSemaphore.snapshot().global === 0);
+    expect(uploadSemaphore.snapshot().global).toBe(0);
     await close();
   });
 
@@ -343,8 +343,8 @@ describe("pipeline /api/trpc — parser grande fail-closed (Lote 1)", () => {
       headers: { cookie: "c=1" },
     });
     expect(r.status).toBe(500);
-    await waitFor(() => _snapshot().global === 0);
-    expect(_snapshot().global).toBe(0);
+    await waitFor(() => uploadSemaphore.snapshot().global === 0);
+    expect(uploadSemaphore.snapshot().global).toBe(0);
     await close();
   });
 
@@ -359,8 +359,8 @@ describe("pipeline /api/trpc — parser grande fail-closed (Lote 1)", () => {
     });
     expect(r.status).toBe(413);
     expect(spy.uploadRuns).toBe(1); // foi o parser grande que barrou
-    await waitFor(() => _snapshot().global === 0);
-    expect(_snapshot().global).toBe(0);
+    await waitFor(() => uploadSemaphore.snapshot().global === 0);
+    expect(uploadSemaphore.snapshot().global).toBe(0);
     await close();
   });
 
@@ -372,8 +372,8 @@ describe("pipeline /api/trpc — parser grande fail-closed (Lote 1)", () => {
       headers: { cookie: "c=1", "content-length": "500000" },
       abortAfterMs: 30,
     }).catch(() => undefined); // o abort rejeita o cliente; ok
-    await waitFor(() => _snapshot().global === 0);
-    expect(_snapshot().global).toBe(0);
+    await waitFor(() => uploadSemaphore.snapshot().global === 0);
+    expect(uploadSemaphore.snapshot().global).toBe(0);
     await close();
   });
 });

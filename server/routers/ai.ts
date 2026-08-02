@@ -6,7 +6,7 @@ import { invokeLLM, invokeOpenAIAgent, type ChatMessage } from "../_core/llm";
 import { toOpenAiTools, runAiTool } from "../_core/aiTools";
 import { assertSafeBaseUrl } from "../_core/urlSafety";
 import { allowRequest } from "../_core/rateLimit";
-import { acquire, release } from "../_core/concurrency";
+import { aiSemaphore } from "../_core/concurrency";
 import {
   buildFleetContext,
   FLEET_ASSISTANT_SYSTEM,
@@ -56,7 +56,7 @@ export const aiRouter = router({
       // Concorrência: no máx. 3 chamadas simultâneas por empresa e 20 no total
       // da instância — evita esgotar o pool do provedor. Liberado no finally.
       const chave = `ai:${ctx.orgId}`;
-      if (!acquire(chave, 3, 20)) {
+      if (!aiSemaphore.acquire(chave, 3, 20)) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
           message: "Assistente ocupado agora. Tente em instantes.",
@@ -65,7 +65,7 @@ export const aiRouter = router({
       try {
         return await responderChat(ctx.orgId, input.messages);
       } finally {
-        release(chave);
+        aiSemaphore.release(chave);
       }
     }),
 });
