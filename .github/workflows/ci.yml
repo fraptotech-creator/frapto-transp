@@ -40,6 +40,12 @@ jobs:
       - name: Tests (vitest)
         run: pnpm test
 
+      # Build de PRODUÇÃO (vite → dist do cliente + esbuild do server). Sem isto,
+      # um erro que só aparece no bundle (ex.: import que o esbuild não resolve)
+      # passava o CI e só quebrava no deploy. Roda depois de tsc/testes.
+      - name: Build (client + server)
+        run: pnpm build
+
       # Garante que TODA mudança de schema veio com sua migração versionada.
       # `generate` só lê o schema (DATABASE_URL dummy, não conecta); se o schema
       # divergir das migrações commitadas, ele cria um arquivo novo e o
@@ -52,3 +58,18 @@ jobs:
             git --no-pager diff --stat -- drizzle/migrations
             exit 1
           fi
+
+  # Valida a MESMA imagem que o Railway constrói (builder=dockerfile). Só roda se
+  # o gate passar (needs: gate). Sem segredos reais — o Dockerfile não precisa de
+  # ARG/segredo em build e usa o MESMO lockfile congelado. Assim um Dockerfile
+  # quebrado (ou um install que não resolve no Alpine) é pego no CI, não no deploy.
+  docker:
+    needs: gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker build (imagem de produção, lockfile congelado, sem segredos)
+        run: docker build -t frapto-transp:ci .
