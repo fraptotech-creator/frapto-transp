@@ -66,11 +66,18 @@ e Cloudflare R2, respectivamente.)
 
 - Build local não-Docker validado: `pnpm install --frozen-lockfile`, `pnpm build`, boot de produção
   (`node dist/index.js`) servindo `/api/ping` e o HTML, e fail-closed abortando com `JWT_SECRET` fraco.
-- O build da imagem Docker **não** foi executado localmente (Docker indisponível na máquina de dev);
-  o `Dockerfile` replica exatamente os passos já validados, com `pnpm@10.4.1` pinado.
+- O build da imagem Docker **não** roda na máquina de dev (Docker indisponível), mas o **CI executa
+  `docker build`** da mesma imagem (job `docker` em `.github/workflows/ci.yml`), com o lockfile
+  congelado e sem segredos — um `Dockerfile` quebrado é pego no CI, não no deploy.
 
 ## Segurança de infra (DNS / proxy) — passos do usuário
 
+- **Deploy só após CI verde (Wait for CI).** O gatilho de deploy do serviço tem `checkSuites=true`
+  (Railway → Settings → o "Wait for CI" do trigger do GitHub; setável também pela API GraphQL:
+  `deploymentTriggerUpdate(id, input:{ checkSuites:true })`). Assim a Railway **só promove um commit de
+  `main` depois que o check suite do CI conclui VERDE** — se o CI falha (tsc/testes/prettier/build/Docker/
+  drift), o deploy não inicia e o deploy anterior (bom) permanece no ar. Isto NÃO é controlado pelo
+  `railway.json` (ele só define build/deploy da imagem, não a dependência do CI) — é um ajuste do trigger.
 - **Env do Railway é a fonte da verdade.** O bloco `environmentVariables` do `railway.json` é
   **ignorado** pela Railway (foi removido para não enganar) — as variáveis valem só via painel/CLI/API.
   Os boot-guards falham fechado (o app não sobe sem `JWT_SECRET`/`DATABASE_URL`/`APP_BASE_URL`/
