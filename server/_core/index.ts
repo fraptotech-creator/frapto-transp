@@ -25,6 +25,7 @@ import {
 import { toSafeLogError } from "./safeLog";
 import { isTrpcUploadPath } from "./trpcBody";
 import { decideBoot } from "./bootGuard";
+import { uploadGate } from "./uploadGate";
 
 // Bytes decodificados da chave de cifragem (0 se ausente/base64 inválido).
 function aiKeyByteLen(raw: string): number {
@@ -190,6 +191,11 @@ async function startServer() {
   // Login (email+senha) é via tRPC (auth.signup / auth.login).
   // Rate-limit ESTRITO no login/cadastro (anti brute-force), antes do geral.
   app.use(["/api/trpc/auth.login", "/api/trpc/auth.signup"], authLimiter);
+  // Upload de documento (rota cara, parser de 15 MB): autentica + throttle +
+  // concorrência ANTES do parser. Não autenticado → 401 aqui, sem parsear o
+  // corpo. Só o path EXATO (app.post) casa — alias não pega. Passando, cai no
+  // handler geral abaixo (que aplica o parser de 15 MB e a procedure).
+  app.post("/api/trpc/documents.upload", originCheck, uploadGate);
   // tRPC API: rate-limit geral + checagem de Origin (CSRF) ANTES do parser do
   // corpo; só então o parser (pequeno, ou grande no upload) e o handler.
   app.use(
