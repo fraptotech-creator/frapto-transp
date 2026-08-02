@@ -38,11 +38,13 @@ const evento = (over: Partial<Stripe.Event> = {}) =>
 beforeEach(() => {
   vi.clearAllMocks();
   db.updateOrgSubscriptionIfNewer.mockResolvedValue(true);
+  db.markStripeEventProcessed.mockResolvedValue(true);
+  db.markStripeEventFailed.mockResolvedValue(true);
 });
 
 describe("processStripeEvent — lifecycle retry-safe (Lote B)", () => {
   it("claim → efeito ok → marca PROCESSED (nunca failed)", async () => {
-    db.claimStripeEvent.mockResolvedValue("claimed");
+    db.claimStripeEvent.mockResolvedValue({ claim: "claimed", generation: 1 });
     await processStripeEvent(evento(), stripe);
     expect(db.updateOrgSubscriptionIfNewer).toHaveBeenCalledOnce();
     expect(db.markStripeEventProcessed).toHaveBeenCalledOnce();
@@ -50,7 +52,7 @@ describe("processStripeEvent — lifecycle retry-safe (Lote B)", () => {
   });
 
   it("falha DEPOIS do claim (antes do update) → marca FAILED e relança", async () => {
-    db.claimStripeEvent.mockResolvedValue("claimed");
+    db.claimStripeEvent.mockResolvedValue({ claim: "claimed", generation: 1 });
     db.updateOrgSubscriptionIfNewer.mockRejectedValueOnce(new Error("db down"));
     await expect(processStripeEvent(evento(), stripe)).rejects.toThrow(
       /db down/
@@ -61,20 +63,22 @@ describe("processStripeEvent — lifecycle retry-safe (Lote B)", () => {
 
   it("RETRY depois da falha aplica o efeito e marca processed", async () => {
     // 1ª tentativa falha
-    db.claimStripeEvent.mockResolvedValue("claimed");
+    db.claimStripeEvent.mockResolvedValue({ claim: "claimed", generation: 1 });
     db.updateOrgSubscriptionIfNewer.mockRejectedValueOnce(new Error("x"));
     await expect(processStripeEvent(evento(), stripe)).rejects.toThrow();
     vi.clearAllMocks();
-    // retry: claim reivindica o 'failed', efeito ok
-    db.claimStripeEvent.mockResolvedValue("claimed");
+    // retry: claim reivindica o 'failed' com NOVA geração, efeito ok
+    db.claimStripeEvent.mockResolvedValue({ claim: "claimed", generation: 2 });
     db.updateOrgSubscriptionIfNewer.mockResolvedValue(true);
+    db.markStripeEventProcessed.mockResolvedValue(true);
     await processStripeEvent(evento(), stripe);
     expect(db.updateOrgSubscriptionIfNewer).toHaveBeenCalledOnce();
-    expect(db.markStripeEventProcessed).toHaveBeenCalledOnce();
+    // marca com a geração conquistada no retry (2), não a antiga (1).
+    expect(db.markStripeEventProcessed).toHaveBeenCalledWith("evt_1", 2);
   });
 
   it("evento JÁ processed → não re-executa efeito nem marca de novo", async () => {
-    db.claimStripeEvent.mockResolvedValue("processed");
+    db.claimStripeEvent.mockResolvedValue({ claim: "processed" });
     await processStripeEvent(evento(), stripe);
     expect(stripe.subscriptions.retrieve).not.toHaveBeenCalled();
     expect(db.updateOrgSubscriptionIfNewer).not.toHaveBeenCalled();
@@ -82,7 +86,7 @@ describe("processStripeEvent — lifecycle retry-safe (Lote B)", () => {
   });
 
   it("BUSY (worker concorrente) → relança, sem efeito (não retorna sucesso)", async () => {
-    db.claimStripeEvent.mockResolvedValue("busy");
+    db.claimStripeEvent.mockResolvedValue({ claim: "busy" });
     await expect(processStripeEvent(evento(), stripe)).rejects.toThrow(
       /concorrente/i
     );
@@ -91,7 +95,7 @@ describe("processStripeEvent — lifecycle retry-safe (Lote B)", () => {
   });
 
   it("falha no CANCELAMENTO (deleted) não descarta: marca failed p/ retry", async () => {
-    db.claimStripeEvent.mockResolvedValue("claimed");
+    db.claimStripeEvent.mockResolvedValue({ claim: "claimed", generation: 1 });
     db.updateOrgSubscriptionIfNewer.mockRejectedValueOnce(new Error("boom"));
     const del = evento({
       type: "customer.subscription.deleted",
@@ -100,5 +104,39 @@ describe("processStripeEvent — lifecycle retry-safe (Lote B)", () => {
     await expect(processStripeEvent(del, stripe)).rejects.toThrow();
     expect(db.markStripeEventFailed).toHaveBeenCalledOnce();
     expect(db.markStripeEventProcessed).not.toHaveBeenCalled();
+  });
+});
+
+describe("processStripeEvent — FENCING por geração (Lote 2)", () => {
+  it("fecha a transição com a GERAÇÃO conquistada na claim", async () => {
+    db.claimStripeEvent.mockResolvedValue({ claim: "claimed", generation: 7 });
+    await processStripeEvent(evento(), stripe);
+    expect(db.markStripeEventProcessed).toHaveBeenCalledWith("evt_1", 7);
+  });
+
+  it("marca FAILED também com a geração da claim", async () => {
+    db.claimStripeEvent.mockResolvedValue({ claim: "claimed", generation: 3 });
+    db.updateOrgSubscriptionIfNewer.mockRejectedValueOnce(new Error("x"));
+    await expect(processStripeEvent(evento(), stripe)).rejects.toThrow();
+    expect(db.markStripeEventFailed).toHaveBeenCalledWith(
+      "evt_1",
+      3,
+      expect.any(String)
+    );
+  });
+
+  it("LEASE PERDIDO ao concluir (mark=false, outro worker reivindicou) → não lança, não afirma sucesso", async () => {
+    db.claimStripeEvent.mockResolvedValue({ claim: "claimed", generation: 1 });
+    db.markStripeEventProcessed.mockResolvedValue(false); // geração já é outra
+    // Não deve lançar: o efeito é idempotente e outro worker conduz o lifecycle.
+    await expect(processStripeEvent(evento(), stripe)).resolves.toBeUndefined();
+  });
+
+  it("worker antigo não vira lease: mark com geração defasada retorna false e é tolerado no catch", async () => {
+    db.claimStripeEvent.mockResolvedValue({ claim: "claimed", generation: 1 });
+    db.updateOrgSubscriptionIfNewer.mockRejectedValueOnce(new Error("y"));
+    db.markStripeEventFailed.mockResolvedValue(false); // lease perdido
+    await expect(processStripeEvent(evento(), stripe)).rejects.toThrow(/y/);
+    expect(db.markStripeEventFailed).toHaveBeenCalledOnce();
   });
 });

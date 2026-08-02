@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { isDupError, podeReivindicar } from "./_core/stripeEventState";
+import {
+  isDupError,
+  podeReivindicar,
+  podeMarcar,
+} from "./_core/stripeEventState";
 
 describe("isDupError — duplicata na cadeia de cause (Lote B)", () => {
   it("detecta ER_DUP_ENTRY direto", () => {
@@ -56,5 +60,28 @@ describe("podeReivindicar — quando reprocessar (Lote B)", () => {
     expect(
       podeReivindicar({ status: "processing", updatedAt: velho }, now, STALE)
     ).toBe(true);
+  });
+});
+
+describe("podeMarcar — fencing por geração (Lote 2)", () => {
+  it("dono da geração atual (processing + mesma attempts) pode marcar", () => {
+    expect(podeMarcar({ status: "processing", attempts: 1 }, 1)).toBe(true);
+    expect(podeMarcar({ status: "processing", attempts: 2 }, 2)).toBe(true);
+  });
+
+  it("cenário do plano: A(gen1) NÃO marca após B reivindicar (gen2)", () => {
+    // Depois do reclaim de B, a linha está processing com attempts=2.
+    const apos_reclaim_B = { status: "processing", attempts: 2 };
+    expect(podeMarcar(apos_reclaim_B, 1)).toBe(false); // A (gen1) fenced out
+    expect(podeMarcar(apos_reclaim_B, 2)).toBe(true); // B (gen2) é o dono
+  });
+
+  it("linha já processed → nenhuma geração marca (A não vira processed→failed)", () => {
+    expect(podeMarcar({ status: "processed", attempts: 2 }, 1)).toBe(false);
+    expect(podeMarcar({ status: "processed", attempts: 2 }, 2)).toBe(false);
+  });
+
+  it("linha failed não é marcável sem reivindicar antes", () => {
+    expect(podeMarcar({ status: "failed", attempts: 1 }, 1)).toBe(false);
   });
 });

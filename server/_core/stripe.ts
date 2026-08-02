@@ -224,17 +224,20 @@ export async function processStripeEvent(
     STRIPE_EVENT_STALE_MS,
     new Date()
   );
-  if (claim === "processed") {
+  if (claim.claim === "processed") {
     console.warn(`[Stripe] webhook já processado, ignorado (${event.type})`);
     return;
   }
-  if (claim === "busy") {
+  if (claim.claim === "busy") {
     // Outro worker está processando este mesmo evento. Não confirmamos o efeito
     // → devolve erro para o Stripe reenviar (o outro worker conclui e o próximo
     // retry vê 'processed'). Nunca retorna sucesso sem o efeito comprovado.
     throw new Error("Evento Stripe em processamento concorrente");
   }
 
+  // Geração conquistada nesta claim — exigida para FECHAR a transição (fencing):
+  // um worker antigo, reivindicado por stale, não sobrescreve o estado novo.
+  const generation = claim.generation;
   const eventCreatedAt = new Date(event.created * 1000);
   try {
     switch (event.type) {
@@ -269,16 +272,28 @@ export async function processStripeEvent(
         // Outros eventos ignorados de propósito.
         break;
     }
-    // Efeito aplicado (ou tipo ignorado de propósito) → marca concluído.
-    await markStripeEventProcessed(event.id);
+    // Efeito aplicado (ou tipo ignorado de propósito) → marca concluído, com
+    // FENCING pela geração. Se false, o lease foi perdido (outro worker
+    // reivindicou por stale e conduz o lifecycle) — o efeito é idempotente
+    // (updateOrgSubscriptionIfNewer é ordenado), então não relançamos, mas
+    // TAMBÉM não afirmamos ter concluído a transição.
+    const marcou = await markStripeEventProcessed(event.id, generation);
+    if (!marcou) {
+      console.warn(`[Stripe] lease perdido ao concluir (${event.type})`);
+    }
   } catch (e) {
     // Efeito FALHOU: marca 'failed' (permite retry) e relança para o Stripe
-    // reenviar. O erro é sanitizado (não vaza SQL/PII no banco).
+    // reenviar. O erro é sanitizado (não vaza SQL/PII no banco). Com fencing:
+    // se o lease já é de outra geração, a marca falha (0 linhas) e não sobrescreve.
     const safe = toSafeLogError(e);
-    await markStripeEventFailed(
+    const marcou = await markStripeEventFailed(
       event.id,
+      generation,
       `${safe.name}${safe.code ? ":" + safe.code : ""}`
     );
+    if (!marcou) {
+      console.warn(`[Stripe] lease perdido ao falhar (${event.type})`);
+    }
     throw e;
   }
 }

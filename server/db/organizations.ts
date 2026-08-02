@@ -359,7 +359,10 @@ export async function updateOrganization(
 // é NOVO (processar), false se já foi visto (retry → descartar sem reaplicar).
 // Erro de chave duplicada = já processado; qualquer outro erro PROPAGA (não
 // engole — o webhook devolve 400 e o Stripe reenvia).
-export type StripeClaim = "claimed" | "processed" | "busy";
+export type StripeClaim =
+  | { claim: "claimed"; generation: number }
+  | { claim: "processed" }
+  | { claim: "busy" };
 
 // Reivindica o evento para processar, ATOMICAMENTE:
 // - INSERT novo (status 'processing') → "claimed";
@@ -379,7 +382,7 @@ export async function claimStripeEvent(
     await db
       .insert(stripeEvents)
       .values({ id, eventType, status: "processing", attempts: 1 });
-    return "claimed";
+    return { claim: "claimed", generation: 1 };
   } catch (e) {
     if (!isDupError(e)) throw e; // erro real propaga (não engole)
   }
@@ -390,18 +393,17 @@ export async function claimStripeEvent(
     .where(eq(stripeEvents.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row) return "busy"; // sumiu numa corrida — trata como ocupado (retry)
-  if (row.status === "processed") return "processed";
-  if (!podeReivindicar(row, now, staleMs)) return "busy";
-  // Reivindica de forma condicional: só vence quem casar o estado esperado.
+  if (!row) return { claim: "busy" }; // sumiu numa corrida → ocupado (retry)
+  if (row.status === "processed") return { claim: "processed" };
+  if (!podeReivindicar(row, now, staleMs)) return { claim: "busy" };
+  // Reivindica condicional: só vence quem casar o estado esperado (failed OU
+  // processing stale). A nova GERAÇÃO é attempts+1. Duas corridas: o row-lock
+  // serializa; a 2ª reavalia o WHERE (updatedAt já fresco) e falha → busy.
+  const novaGeracao = (row.attempts ?? 0) + 1;
   const staleCutoff = new Date(now.getTime() - staleMs);
   const res = await db
     .update(stripeEvents)
-    .set({
-      status: "processing",
-      attempts: (row.attempts ?? 0) + 1,
-      lastError: null,
-    })
+    .set({ status: "processing", attempts: novaGeracao, lastError: null })
     .where(
       and(
         eq(stripeEvents.id, id),
@@ -415,28 +417,51 @@ export async function claimStripeEvent(
       )
     );
   const afetadas = (res[0] as { affectedRows?: number })?.affectedRows ?? 0;
-  return afetadas >= 1 ? "claimed" : "busy";
+  return afetadas >= 1
+    ? { claim: "claimed", generation: novaGeracao }
+    : { claim: "busy" };
 }
 
-export async function markStripeEventProcessed(id: string): Promise<void> {
+// FENCING: só fecha se ainda for 'processing' E da MESMA geração (attempts) da
+// claim. affectedRows===1 = a transição foi nossa; 0 = lease perdido (outro
+// worker reivindicou por stale) → NUNCA tratar como concluída. Retorna se marcou.
+export async function markStripeEventProcessed(
+  id: string,
+  generation: number
+): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db
+  const res = await db
     .update(stripeEvents)
     .set({ status: "processed", lastError: null })
-    .where(eq(stripeEvents.id, id));
+    .where(
+      and(
+        eq(stripeEvents.id, id),
+        eq(stripeEvents.status, "processing"),
+        eq(stripeEvents.attempts, generation)
+      )
+    );
+  return ((res[0] as { affectedRows?: number })?.affectedRows ?? 0) === 1;
 }
 
 export async function markStripeEventFailed(
   id: string,
+  generation: number,
   safeError: string
-): Promise<void> {
+): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db
+  const res = await db
     .update(stripeEvents)
     .set({ status: "failed", lastError: safeError.slice(0, 200) })
-    .where(eq(stripeEvents.id, id));
+    .where(
+      and(
+        eq(stripeEvents.id, id),
+        eq(stripeEvents.status, "processing"),
+        eq(stripeEvents.attempts, generation)
+      )
+    );
+  return ((res[0] as { affectedRows?: number })?.affectedRows ?? 0) === 1;
 }
 
 // Aplica a assinatura SÓ se o evento for igual ou mais novo que o último já

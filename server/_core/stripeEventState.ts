@@ -18,6 +18,19 @@ export type EventoRow = {
   updatedAt: Date | string | null | undefined;
 };
 
+// FENCING: só o dono da geração ATUAL pode fechar a transição. A marca de
+// processed/failed exige status ainda 'processing' E o mesmo `attempts` que a
+// claim conquistou. Um worker antigo (geração anterior) que volta depois de um
+// reclaim por stale tem attempts defasado → não marca nada (evita sobrescrever
+// o estado produzido pela claim mais nova). É a MESMA condição do WHERE do
+// UPDATE — testável aqui.
+export function podeMarcar(
+  row: { status: string; attempts: number | null | undefined },
+  generation: number
+): boolean {
+  return row.status === "processing" && (row.attempts ?? 0) === generation;
+}
+
 // Um evento já registrado PODE ser reivindicado (reprocessado) se falhou, ou se
 // está 'processing' há mais que staleMs (worker anterior morreu no meio). Já
 // 'processed' nunca; 'processing' recente = outro worker ativo → não reivindica.
