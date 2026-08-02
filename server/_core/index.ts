@@ -168,10 +168,10 @@ async function startServer() {
     handleTrackRevoke
   );
 
-  // Form urlencoded minúsculo (nada no app posta form; só defesa). NÃO há mais
-  // parser JSON GLOBAL: cada rota tem o seu, com o limite certo, DEPOIS do
-  // rate-limit — um corpo grande não é lido em memória antes do limiter.
-  app.use(express.urlencoded({ limit: "100kb", extended: true }));
+  // Sem parser de corpo GLOBAL: nenhuma rota consome form-urlencoded (os <form>
+  // do cliente usam onSubmit→tRPC, não POST nativo; não há callback OAuth). Cada
+  // rota tem o seu parser, com o limite certo e DEPOIS do rate-limit — nada é
+  // lido em memória antes do limiter. (Removido o express.urlencoded global.)
   // Healthcheck do Railway — precisa ficar ACIMA de tudo e sempre 200.
   app.get("/api/ping", (_req, res) => {
     res.status(200).json({ ok: true });
