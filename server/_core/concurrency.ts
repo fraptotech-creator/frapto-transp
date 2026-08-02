@@ -31,3 +31,9 @@ export function release(key: string): void {
 export function _snapshot() {
   return { global: globalEmUso, chaves: emUso.size };
 }
+
+// Só para testes: zera o estado do semáforo entre casos.
+export function _resetConcurrency(): void {
+  emUso.clear();
+  globalEmUso = 0;
+}

@@ -4,7 +4,12 @@ import { COOKIE_NAME } from "@shared/const";
 import { sdk } from "./sdk";
 import { allowRequest } from "./rateLimit";
 import { acquire, release } from "./concurrency";
-import { trpcErrorBody } from "./trpcErrorBody";
+import { trpcErrorBody, type TrpcErrorKey } from "./trpcErrorBody";
+import {
+  grantUploadCapability,
+  getTrpcProc,
+  UPLOAD_PROC,
+} from "./uploadCapability";
 
 // Limites do upload de documento — MUITO menores que o geral (300/min): é uma
 // operação cara (até ~13 MB parseados). Uso humano de upload cabe folgado.
@@ -12,61 +17,92 @@ export const UPLOAD_RATE_LIMIT = 30; // por minuto, por usuário
 export const UPLOAD_RATE_WINDOW_MS = 60 * 1000;
 export const UPLOAD_CONCURRENCY_PER_USER = 2;
 export const UPLOAD_CONCURRENCY_GLOBAL = 10;
+// Teto por IP do endpoint de upload — roda ANTES de autenticar/logar. Barra
+// flood de cookie ausente/inválido (cada um gastaria verificação de JWT + uma
+// linha de log): sem este backstop, um atacante sem sessão inundaria o log e a
+// CPU antes do 401. Alto o bastante para uso humano legítimo.
+export const UPLOAD_IP_LIMIT = 60; // por minuto, por IP
+export const UPLOAD_IP_WINDOW_MS = 60 * 1000;
 
-// Barreira do /api/trpc/documents.upload, montada ANTES do parser de 15 MB:
-// autentica pela sessão (cookie), aplica rate-limit dedicado e limite de
-// concorrência — SEM ler o corpo. Se negar, NÃO chama next() → o parser grande
-// (middleware seguinte) nunca roda e o corpo não é consumido. Reusa a validação
-// de sessão existente (sdk.verifySession verifica o JWT: assinatura + sver +
-// appId) — não deriva identidade do body nem aceita a mera presença do cookie.
+function deny(
+  res: Response,
+  status: number,
+  code: TrpcErrorKey,
+  msg: string
+): void {
+  res.status(status).json(trpcErrorBody(code, status, msg));
+}
+
+// Barreira do path /api/trpc/documents.upload, montada ANTES do seletor de
+// parser. Só ATUA nesse path; as demais procedures seguem direto (next). Ordem
+// fail-closed:
+//   1) backstop por IP (antes de autenticar/logar; limita cookie ausente/lixo);
+//   2) só POST (qualquer outro método é negado ANTES de parser de corpo);
+//   3) sessão ATIVA — não só JWT assinado: usuário existe e sessionVersion bate
+//      (revogação); SEM efeito colateral (não faz touch de lastSignedIn aqui);
+//   4) rate-limit dedicado por USUÁRIO;
+//   5) concorrência (por usuário + global), com release ao fim da resposta;
+//   6) concede a CAPACIDADE (marca interna) — só então o parser de 15 MB libera.
+// Se qualquer passo nega, NÃO chama next() → o parser (middleware seguinte)
+// nunca roda e o corpo não é consumido.
 export async function uploadGate(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const cookies = parseCookieHeader(req.headers.cookie ?? "");
-  const session = await sdk.verifySession(cookies[COOKIE_NAME]);
-  if (!session) {
-    res
-      .status(401)
-      .json(trpcErrorBody("UNAUTHORIZED", 401, "Sessão inválida ou ausente."));
+  if (getTrpcProc(res) !== UPLOAD_PROC) {
+    next();
     return;
   }
-  // Rate-limit dedicado por USUÁRIO, independente do apiLimiter geral.
+  // 1) Backstop por IP — antes de autenticar/logar.
+  const ip = req.ip ?? "0.0.0.0";
   if (
     !allowRequest(
-      `upload:${session.openId}`,
-      UPLOAD_RATE_LIMIT,
-      UPLOAD_RATE_WINDOW_MS,
+      `upload-ip:${ip}`,
+      UPLOAD_IP_LIMIT,
+      UPLOAD_IP_WINDOW_MS,
       Date.now()
     )
   ) {
-    res
-      .status(429)
-      .json(
-        trpcErrorBody(
-          "TOO_MANY_REQUESTS",
-          429,
-          "Muitos uploads em pouco tempo. Aguarde um instante."
-        )
-      );
+    deny(res, 429, "TOO_MANY_REQUESTS", "Muitas requisições deste IP.");
     return;
   }
-  // Concorrência: limita o trabalho caro simultâneo (por usuário e global).
-  const key = `upload:${session.openId}`;
+  // 2) Só POST usa o parser grande; outro método é negado ANTES do parser.
+  if (req.method !== "POST") {
+    deny(res, 405, "METHOD_NOT_SUPPORTED", "Método não suportado.");
+    return;
+  }
+  // 3) Sessão ATIVA (usuário + sver), sem efeito colateral (sem touch).
+  const cookies = parseCookieHeader(req.headers.cookie ?? "");
+  const user = await sdk.validateActiveSession(cookies[COOKIE_NAME]);
+  if (!user) {
+    deny(res, 401, "UNAUTHORIZED", "Sessão inválida ou ausente.");
+    return;
+  }
+  // 4) Rate-limit dedicado por USUÁRIO.
+  const key = `upload:${user.openId}`;
+  if (
+    !allowRequest(key, UPLOAD_RATE_LIMIT, UPLOAD_RATE_WINDOW_MS, Date.now())
+  ) {
+    deny(
+      res,
+      429,
+      "TOO_MANY_REQUESTS",
+      "Muitos uploads em pouco tempo. Aguarde um instante."
+    );
+    return;
+  }
+  // 5) Concorrência (por usuário e global). Libera ao fim da resposta —
+  // sucesso, 413, erro do adapter (finish) ou conexão abortada (close).
   if (!acquire(key, UPLOAD_CONCURRENCY_PER_USER, UPLOAD_CONCURRENCY_GLOBAL)) {
-    res
-      .status(429)
-      .json(
-        trpcErrorBody(
-          "TOO_MANY_REQUESTS",
-          429,
-          "Muitos uploads simultâneos. Aguarde terminar."
-        )
-      );
+    deny(
+      res,
+      429,
+      "TOO_MANY_REQUESTS",
+      "Muitos uploads simultâneos. Aguarde terminar."
+    );
     return;
   }
-  // Libera o slot ao fim da resposta (sucesso, erro ou conexão fechada).
   let released = false;
   const soltar = () => {
     if (!released) {
@@ -76,5 +112,8 @@ export async function uploadGate(
   };
   res.on("finish", soltar);
   res.on("close", soltar);
+  // 6) Capacidade concedida: o seletor libera o parser de 15 MB só com esta
+  // marca + POST + path canônico. O usuário validado viaja para o contexto.
+  grantUploadCapability(res, user);
   next();
 }

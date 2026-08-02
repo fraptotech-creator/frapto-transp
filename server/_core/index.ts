@@ -17,15 +17,13 @@ import {
   securityHeaders,
   apiLimiter,
   authLimiter,
-  originCheck,
   trackLimiter,
   trackIpBackstop,
   stripeWebhookLimiter,
 } from "./security";
 import { toSafeLogError } from "./safeLog";
-import { isTrpcUploadPath } from "./trpcBody";
 import { decideBoot } from "./bootGuard";
-import { uploadGate } from "./uploadGate";
+import { mountTrpcPipeline } from "./trpcPipeline";
 import { reportFatalStartup } from "./fatalStartup";
 
 // Bytes decodificados da chave de cifragem (0 se ausente/base64 inválido).
@@ -178,33 +176,20 @@ async function startServer() {
     res.status(200).json({ ok: true });
   });
 
-  // Parsers do /api/trpc: PEQUENO (128 KB) por padrão; GRANDE só no upload de
-  // documento. Rodam DEPOIS de apiLimiter + originCheck — nunca antes.
+  // Parsers do /api/trpc: PEQUENO (128 KB) por padrão; GRANDE (15 MB) só no
+  // upload de documento — e só quando a barreira concede a CAPACIDADE (POST +
+  // path canônico + sessão ativa). O tamanho grande nunca é escolhido por path
+  // sozinho. A cadeia completa (canonicalização → apiLimiter → originCheck →
+  // barreira de upload → seletor de parser → adapter) fica em mountTrpcPipeline,
+  // usada igual pela produção e pelos testes (sem wiring divergente).
   const trpcSmallJson = express.json({ limit: "128kb" });
   const trpcUploadJson = express.json({ limit: "15mb" });
-  const trpcBodyParser: express.RequestHandler = (req, res, next) =>
-    (isTrpcUploadPath(req.path) ? trpcUploadJson : trpcSmallJson)(
-      req,
-      res,
-      next
-    );
-
-  // Login (email+senha) é via tRPC (auth.signup / auth.login).
-  // Rate-limit ESTRITO no login/cadastro (anti brute-force), antes do geral.
-  app.use(["/api/trpc/auth.login", "/api/trpc/auth.signup"], authLimiter);
-  // Upload de documento (rota cara, parser de 15 MB): autentica + throttle +
-  // concorrência ANTES do parser. Não autenticado → 401 aqui, sem parsear o
-  // corpo. Só o path EXATO (app.post) casa — alias não pega. Passando, cai no
-  // handler geral abaixo (que aplica o parser de 15 MB e a procedure).
-  app.post("/api/trpc/documents.upload", originCheck, uploadGate);
-  // tRPC API: rate-limit geral + checagem de Origin (CSRF) ANTES do parser do
-  // corpo; só então o parser (pequeno, ou grande no upload) e o handler.
-  app.use(
-    "/api/trpc",
+  mountTrpcPipeline(app, {
+    authLimiter,
     apiLimiter,
-    originCheck,
-    trpcBodyParser,
-    createExpressMiddleware({
+    smallParser: trpcSmallJson,
+    uploadParser: trpcUploadJson,
+    adapter: createExpressMiddleware({
       router: appRouter,
       createContext,
       // Sem batching no servidor: um POST não pode carregar N operações (o
@@ -223,8 +208,8 @@ async function startServer() {
           );
         }
       },
-    })
-  );
+    }),
+  });
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

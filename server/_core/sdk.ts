@@ -135,30 +135,43 @@ class SDKServer {
     return new Map(Object.entries(parsed));
   }
 
-  async authenticateRequest(req: Request): Promise<User> {
-    const cookies = this.parseCookies(req.headers.cookie);
-    const sessionCookie = cookies.get(COOKIE_NAME);
-    const session = await this.verifySession(sessionCookie);
-
-    if (!session) {
-      throw ForbiddenError("Invalid session cookie");
-    }
-
+  /**
+   * Valida a sessão ATIVA (não só o JWT assinado): verifica o token
+   * (verifySession) E confirma contra o banco que o usuário existe e que a
+   * `sessionVersion` do token bate com a atual (revogação por logout/troca de
+   * senha). Retorna o usuário ou `null`. NÃO tem efeito colateral — não faz
+   * touch de lastSignedIn — para poder ser usada por gates PRÉ-corpo (upload) e
+   * reutilizada pelo contexto tRPC sem repetir a consulta. Fail-closed: token
+   * assinado mas usuário sumido/revogado → null (não libera acesso).
+   */
+  async validateActiveSession(
+    cookieValue: string | undefined | null
+  ): Promise<User | null> {
+    const session = await this.verifySession(cookieValue);
+    if (!session) return null;
     // O usuário é criado no cadastro (auth.signup). Se a sessão é válida mas o
     // usuário sumiu do banco, falha fechado (não sincroniza cego).
     const user = await db.getUserByOpenId(session.openId);
     if (!user) {
-      throw ForbiddenError("User not found");
+      console.warn("[Auth] Active session for missing user");
+      return null;
     }
-
     // Revogação: o token sempre traz `sver` (verifySession rejeita sem ele); se
     // diverge do atual do usuário, o token foi revogado (logout/troca de senha).
     if (session.sver !== user.sessionVersion) {
-      throw ForbiddenError("Session revoked");
+      console.warn("[Auth] Session revoked (sver mismatch)");
+      return null;
     }
+    return user;
+  }
 
+  async authenticateRequest(req: Request): Promise<User> {
+    const cookies = this.parseCookies(req.headers.cookie);
+    const user = await this.validateActiveSession(cookies.get(COOKIE_NAME));
+    if (!user) {
+      throw ForbiddenError("Invalid or revoked session");
+    }
     await db.touchUserLastSignedIn(user.openId);
-
     return user;
   }
 }
