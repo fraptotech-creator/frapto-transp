@@ -4,6 +4,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { sdk } from "./sdk";
 import { allowRequest } from "./rateLimit";
 import { uploadSemaphore } from "./concurrency";
+import { installUploadSlot } from "./uploadSlot";
 import { trpcErrorBody, type TrpcErrorKey } from "./trpcErrorBody";
 import {
   grantUploadCapability,
@@ -41,7 +42,11 @@ function deny(
 //   3) sessão ATIVA — não só JWT assinado: usuário existe e sessionVersion bate
 //      (revogação); SEM efeito colateral (não faz touch de lastSignedIn aqui);
 //   4) rate-limit dedicado por USUÁRIO;
-//   5) concorrência (por usuário + global), com release ao fim da resposta;
+//   5) concorrência (por usuário + global): ADQUIRE o slot e instala o handle
+//      (uploadSlot) — a rede de segurança libera se a resposta terminar ANTES de
+//      a operação assumir o slot (413/abort no parsing/timeout); a operação
+//      pesada (procedure) o assume e libera no próprio try/finally, mantendo-o
+//      até R2/DB terminarem (fechar o socket NÃO abre slot novo);
 //   6) concede a CAPACIDADE (marca interna) — só então o parser de 15 MB libera.
 // Se qualquer passo nega, NÃO chama next() → o parser (middleware seguinte)
 // nunca roda e o corpo não é consumido.
@@ -92,8 +97,9 @@ export async function uploadGate(
     );
     return;
   }
-  // 5) Concorrência (por usuário e global). Libera ao fim da resposta —
-  // sucesso, 413, erro do adapter (finish) ou conexão abortada (close).
+  // 5) Concorrência (por usuário e global): adquire o slot e instala o handle.
+  // A rede de segurança (uploadSlot) libera se a resposta terminar ANTES de a
+  // operação assumir o slot; a operação pesada o mantém até R2/DB terminarem.
   if (
     !uploadSemaphore.acquire(
       key,
@@ -109,15 +115,7 @@ export async function uploadGate(
     );
     return;
   }
-  let released = false;
-  const soltar = () => {
-    if (!released) {
-      released = true;
-      uploadSemaphore.release(key);
-    }
-  };
-  res.on("finish", soltar);
-  res.on("close", soltar);
+  installUploadSlot(req, res, key);
   // 6) Capacidade concedida: o seletor libera o parser de 15 MB só com esta
   // marca + POST + path canônico. O usuário validado viaja para o contexto.
   grantUploadCapability(res, user);

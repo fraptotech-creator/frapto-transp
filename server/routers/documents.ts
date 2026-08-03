@@ -21,6 +21,7 @@ import {
 } from "../_core/storage";
 import { detectDocMime } from "../_core/fileType";
 import { toSafeLogError } from "../_core/safeLog";
+import { getUploadSlot } from "../_core/uploadSlot";
 import { assertRefsOwned } from "./_helpers";
 
 // Documentos (upload em R2), isolado por organização.
@@ -45,77 +46,89 @@ export const documentsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      if (!isStorageConfigured()) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Armazenamento de arquivos não configurado.",
-        });
-      }
-      // Trava de MIME (bloqueia svg/html/js → XSS servido pelo CDN).
-      if (!ALLOWED_DOC_MIME.has(input.contentType)) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Tipo de arquivo não permitido (use PDF, JPG, PNG ou WEBP).",
-        });
-      }
-      // FK: veículo/motorista têm de ser da MESMA empresa.
-      await assertRefsOwned(ctx.orgId, {
-        veiculoId: input.veiculoId,
-        motoristaId: input.motoristId,
-      });
-      const buffer = Buffer.from(input.dataBase64, "base64");
-      if (buffer.length === 0 || buffer.length > MAX_DOC_BYTES) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Arquivo vazio ou maior que 10 MB.",
-        });
-      }
-      // Confere o conteúdo REAL pelos magic bytes — o contentType declarado
-      // pelo cliente não é confiável (HTML/SVG rotulado como png viraria XSS
-      // servido inline). Grava com o tipo DETECTADO, não com o declarado.
-      const realMime = detectDocMime(buffer);
-      if (!realMime) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "O conteúdo do arquivo não corresponde a um PDF, JPG, PNG ou WEBP válido.",
-        });
-      }
-      // Quota por empresa: checa ANTES do PUT (não sobe se estourar 5 GB).
-      const usados = await getOrgDocumentsBytes(ctx.orgId);
-      if (quotaExcedida(usados, buffer.length)) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message:
-            "Limite de armazenamento da empresa atingido (5 GB). Exclua documentos antigos.",
-        });
-      }
-      const key = buildObjectKey(ctx.orgId, input.fileName);
-      await putObject(key, buffer, realMime);
+      // Assume o slot de concorrência ADQUIRIDO pela barreira e o mantém até R2
+      // e banco terminarem (try/finally). Assim um abort do cliente não libera o
+      // slot enquanto o trabalho pesado ainda roda. Fora do fluxo HTTP real
+      // (createCaller em teste), getUploadSlot é undefined → no-op.
+      const slot = getUploadSlot(ctx.res);
+      slot?.claimOperation();
       try {
-        return await createDocument(ctx.orgId, {
-          tipo: input.tipo,
-          descricao: input.descricao ?? input.fileName.slice(0, 150),
-          veiculoId: input.veiculoId ?? null,
-          motoristId: input.motoristId ?? null,
-          dataVencimento: input.dataVencimento ?? null,
-          arquivoKey: key,
-          arquivoUrl: null,
-          sizeBytes: buffer.length,
-          status: "ativo",
-        });
-      } catch (e) {
-        // Compensação: o PUT já subiu o objeto; se o INSERT falhar, apaga o
-        // objeto órfão para não vazar espaço/quota sem registro.
-        try {
-          await deleteObject(key);
-        } catch (delErr) {
-          console.warn(
-            "[Documents] falha ao compensar objeto R2:",
-            toSafeLogError(delErr)
-          );
+        if (!isStorageConfigured()) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Armazenamento de arquivos não configurado.",
+          });
         }
-        throw e;
+        // Trava de MIME (bloqueia svg/html/js → XSS servido pelo CDN).
+        if (!ALLOWED_DOC_MIME.has(input.contentType)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Tipo de arquivo não permitido (use PDF, JPG, PNG ou WEBP).",
+          });
+        }
+        // FK: veículo/motorista têm de ser da MESMA empresa.
+        await assertRefsOwned(ctx.orgId, {
+          veiculoId: input.veiculoId,
+          motoristaId: input.motoristId,
+        });
+        const buffer = Buffer.from(input.dataBase64, "base64");
+        if (buffer.length === 0 || buffer.length > MAX_DOC_BYTES) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Arquivo vazio ou maior que 10 MB.",
+          });
+        }
+        // Confere o conteúdo REAL pelos magic bytes — o contentType declarado
+        // pelo cliente não é confiável (HTML/SVG rotulado como png viraria XSS
+        // servido inline). Grava com o tipo DETECTADO, não com o declarado.
+        const realMime = detectDocMime(buffer);
+        if (!realMime) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "O conteúdo do arquivo não corresponde a um PDF, JPG, PNG ou WEBP válido.",
+          });
+        }
+        // Quota por empresa: checa ANTES do PUT (não sobe se estourar 5 GB).
+        const usados = await getOrgDocumentsBytes(ctx.orgId);
+        if (quotaExcedida(usados, buffer.length)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message:
+              "Limite de armazenamento da empresa atingido (5 GB). Exclua documentos antigos.",
+          });
+        }
+        const key = buildObjectKey(ctx.orgId, input.fileName);
+        await putObject(key, buffer, realMime);
+        try {
+          return await createDocument(ctx.orgId, {
+            tipo: input.tipo,
+            descricao: input.descricao ?? input.fileName.slice(0, 150),
+            veiculoId: input.veiculoId ?? null,
+            motoristId: input.motoristId ?? null,
+            dataVencimento: input.dataVencimento ?? null,
+            arquivoKey: key,
+            arquivoUrl: null,
+            sizeBytes: buffer.length,
+            status: "ativo",
+          });
+        } catch (e) {
+          // Compensação: o PUT já subiu o objeto; se o INSERT falhar, apaga o
+          // objeto órfão para não vazar espaço/quota sem registro.
+          try {
+            await deleteObject(key);
+          } catch (delErr) {
+            console.warn(
+              "[Documents] falha ao compensar objeto R2:",
+              toSafeLogError(delErr)
+            );
+          }
+          throw e;
+        }
+      } finally {
+        // Libera o slot só quando a operação pesada assentou (sucesso ou erro).
+        slot?.release();
       }
     }),
 

@@ -13,6 +13,7 @@ vi.mock("./_core/sdk", () => ({ sdk: sdkMock }));
 
 import { mountTrpcPipeline } from "./_core/trpcPipeline";
 import { getTrpcProc } from "./_core/uploadCapability";
+import { getUploadSlot } from "./_core/uploadSlot";
 import { _resetRateLimit } from "./_core/rateLimit";
 import { uploadSemaphore } from "./_core/concurrency";
 import {
@@ -58,11 +59,21 @@ function buildApp(opts: AppOpts = {}) {
       res.status(400).json({ error: "no batch" });
       return;
     }
-    spy.inFlight++;
-    if (opts.hang) await hangPromise;
-    spy.lastBodyKeys = Object.keys((req.body as Record<string, unknown>) ?? {});
-    res.status(opts.status ?? 200).json({ ok: true });
-    spy.inFlight--;
+    // Espelha a procedure real: a OPERAÇÃO PESADA assume o slot e o libera no
+    // finally (mantém até "R2/DB" terminarem, mesmo com abort no meio).
+    const slot = getUploadSlot(res);
+    slot?.claimOperation();
+    try {
+      spy.inFlight++;
+      if (opts.hang) await hangPromise;
+      spy.lastBodyKeys = Object.keys(
+        (req.body as Record<string, unknown>) ?? {}
+      );
+      res.status(opts.status ?? 200).json({ ok: true });
+    } finally {
+      spy.inFlight--;
+      slot?.release();
+    }
   };
   mountTrpcPipeline(app, {
     authLimiter: (_q, _s, n) => n(),
@@ -364,7 +375,7 @@ describe("pipeline /api/trpc — parser grande fail-closed (Lote 1)", () => {
     await close();
   });
 
-  it("slot é liberado em ABORT do cliente (close)", async () => {
+  it("slot é liberado em ABORT do cliente durante o PARSING (close)", async () => {
     const { port, close } = await start();
     await request(port, {
       method: "POST",
@@ -372,6 +383,71 @@ describe("pipeline /api/trpc — parser grande fail-closed (Lote 1)", () => {
       headers: { cookie: "c=1", "content-length": "500000" },
       abortAfterMs: 30,
     }).catch(() => undefined); // o abort rejeita o cliente; ok
+    await waitFor(() => uploadSemaphore.snapshot().global === 0);
+    expect(uploadSemaphore.snapshot().global).toBe(0);
+    await close();
+  });
+
+  it("abort DURANTE a operação: slot é MANTIDO até a op assentar, depois liberado", async () => {
+    const { port, spy, resolveHang, close } = await start({ hang: true });
+    // Corpo COMPLETO → parser conclui → adapter (op pesada) assume o slot e trava.
+    const data = Buffer.from(upBody);
+    const clientReq = http.request({
+      host: "127.0.0.1",
+      port,
+      method: "POST",
+      path: UP,
+      headers: {
+        cookie: "c=1",
+        "content-type": "application/json",
+        "content-length": data.length,
+      },
+    });
+    clientReq.on("error", () => undefined); // o abort rejeita o cliente
+    clientReq.write(data);
+    clientReq.end();
+    await waitFor(() => spy.inFlight === 1); // op assumiu o slot
+    expect(uploadSemaphore.snapshot().global).toBe(1);
+    clientReq.destroy(); // ABORT no meio da operação
+    await new Promise(r => setTimeout(r, 60)); // deixa o 'close' propagar
+    // slot MANTIDO: fechar o socket não pode abrir vaga enquanto a op roda
+    expect(uploadSemaphore.snapshot().global).toBe(1);
+    resolveHang(); // op assenta (finally libera)
+    await waitFor(() => uploadSemaphore.snapshot().global === 0);
+    expect(uploadSemaphore.snapshot().global).toBe(0);
+    await close();
+  });
+
+  it("teto GLOBAL: 11º trabalho pesado negado com 10 pendentes; todos liberados ao fim", async () => {
+    // Usuários DISTINTOS → o teto por usuário (2) não é o gargalo; o global (10) é.
+    let n = 0;
+    sdkMock.validateActiveSession.mockImplementation(
+      async () => ({ openId: `u${n++}`, sessionVersion: 0 }) as unknown as User
+    );
+    const { port, spy, resolveHang, close } = await start({ hang: true });
+    const inflight = [];
+    for (let i = 0; i < 10; i++) {
+      inflight.push(
+        request(port, {
+          method: "POST",
+          path: UP,
+          body: upBody,
+          headers: { cookie: "c=1" },
+        })
+      );
+    }
+    await waitFor(() => spy.inFlight === 10); // 10 ops assumiram slots
+    expect(uploadSemaphore.snapshot().global).toBe(10);
+    const over = await request(port, {
+      method: "POST",
+      path: UP,
+      body: upBody,
+      headers: { cookie: "c=1" },
+    });
+    expect(over.status).toBe(429); // 11º: teto global cheio
+    resolveHang();
+    const done = await Promise.all(inflight);
+    expect(done.every(d => d.status === 200)).toBe(true);
     await waitFor(() => uploadSemaphore.snapshot().global === 0);
     expect(uploadSemaphore.snapshot().global).toBe(0);
     await close();

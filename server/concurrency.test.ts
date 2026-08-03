@@ -34,6 +34,16 @@ describe("semáforo de concorrência", () => {
     s.release("z");
   });
 
+  it("release de chave INEXISTENTE não libera o slot global de outra chave", () => {
+    const s = createSemaphore();
+    expect(s.acquire("a", 1, 1)).toBe(true); // global 1/1 (cheio)
+    s.release("b"); // chave que nunca adquiriu — não pode creditar slot fantasma
+    expect(s.acquire("c", 1, 1)).toBe(false); // global AINDA cheio (a continua)
+    s.release("a");
+    expect(s.acquire("c", 1, 1)).toBe(true); // agora sim liberou
+    s.release("c");
+  });
+
   it("pools upload e IA são INDEPENDENTES (teto global separado)", () => {
     uploadSemaphore.reset();
     aiSemaphore.reset();

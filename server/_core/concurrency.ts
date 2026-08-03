@@ -29,7 +29,10 @@ export function createSemaphore(): Semaphore {
     },
     release(key) {
       const atual = emUso.get(key) ?? 0;
-      if (atual <= 1) emUso.delete(key);
+      // Release de chave SEM slot ativo não pode creditar um slot global
+      // fantasma (bug: liberaria vaga que ninguém adquiriu). No-op.
+      if (atual <= 0) return;
+      if (atual === 1) emUso.delete(key);
       else emUso.set(key, atual - 1);
       if (globalEmUso > 0) globalEmUso--;
     },
