@@ -175,6 +175,20 @@ describe("pipeline /api/trpc — parser grande fail-closed (Lote 1)", () => {
     await close();
   });
 
+  it("rejeição INESPERADA no gate async (banco fora) → 5xx sanitizado, sem parser/adapter, processo vivo", async () => {
+    // validateActiveSession REJEITA (não resolve null) — no Express 4 cru isso
+    // viraria unhandledRejection e derrubaria o processo.
+    sdkMock.validateActiveSession.mockRejectedValue(new Error("db down"));
+    const { port, spy, close } = await start();
+    const r = await request(port, { method: "POST", path: UP, body: upBody });
+    expect(r.status).toBe(500);
+    expect(r.text).not.toContain("db down"); // sanitizado
+    expect(spy.uploadRuns).toBe(0); // parser grande não rodou
+    expect(spy.adapterRuns).toBe(0); // adapter não rodou
+    // O teste chegar aqui já prova que o processo não caiu por unhandledRejection.
+    await close();
+  });
+
   it("cookie inválido / sessão revogada → 401 ANTES do parser (parser não roda)", async () => {
     sdkMock.validateActiveSession.mockResolvedValue(null); // JWT ok mas revogado
     const { port, spy, close } = await start();

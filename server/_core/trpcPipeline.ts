@@ -3,6 +3,8 @@ import { originCheck } from "./security";
 import { trpcCanonicalGate } from "./trpcCanonical";
 import { uploadGate } from "./uploadGate";
 import { makeTrpcParserSelector } from "./uploadCapability";
+import { asyncHandler } from "./asyncHandler";
+import { trpcErrorHandler } from "./trpcErrorHandler";
 
 export interface TrpcPipelineDeps {
   // Rate-limit ESTRITO de login/cadastro (anti brute-force).
@@ -41,8 +43,13 @@ export function mountTrpcPipeline(app: Express, deps: TrpcPipelineDeps): void {
     trpcCanonicalGate,
     deps.apiLimiter,
     originCheck,
-    uploadGate,
+    // uploadGate é async: envolto no asyncHandler para que uma rejeição
+    // inesperada (ex.: banco fora no meio de validateActiveSession) vire
+    // next(error) e não derrube o processo (Express 4 não faz isso sozinho).
+    asyncHandler(uploadGate),
     makeTrpcParserSelector(deps.smallParser, deps.uploadParser),
-    deps.adapter
+    deps.adapter,
+    // Handler de erro da cadeia: 5xx sanitizado, sem alcançar parser/adapter.
+    trpcErrorHandler
   );
 }
