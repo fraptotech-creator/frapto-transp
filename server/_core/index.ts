@@ -30,8 +30,11 @@ import { checkReady } from "./health";
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
 
-// Readiness: timeout curto do SELECT 1 (o probe tem de responder rápido).
-const READY_TIMEOUT_MS = 2000;
+// Readiness: timeout do SELECT 1. Curto o bastante para pegar banco fora, mas
+// FOLGADO para a conexão FRIA do TiDB Serverless (TLS novo após ocioso pode
+// passar de 2s → healthcheck flaparia com 503 espúrio). 5s « healthcheckTimeout
+// (30s) e « connectTimeout do pool (10s). Medido: conexão quente ~0,6s.
+const READY_TIMEOUT_MS = 5000;
 // Encerramento gracioso: deadline de drenagem alinhado ao drainingSeconds=30 do
 // railway.json — força a saída ANTES do SIGKILL do Railway. Ops dentro deste
 // prazo (upload: teto de leitura 30s + R2/DB; IA: timeout 60s no pior caso)
