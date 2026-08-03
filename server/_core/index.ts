@@ -26,6 +26,18 @@ import { decideBoot } from "./bootGuard";
 import { mountTrpcPipeline } from "./trpcPipeline";
 import { reportFatalStartup } from "./fatalStartup";
 import { installGracefulShutdown } from "./shutdown";
+import { checkReady } from "./health";
+import { getDb } from "../db";
+import { sql } from "drizzle-orm";
+
+// Readiness: timeout curto do SELECT 1 (o probe tem de responder rápido).
+const READY_TIMEOUT_MS = 2000;
+// Encerramento gracioso: deadline de drenagem alinhado ao drainingSeconds=30 do
+// railway.json — força a saída ANTES do SIGKILL do Railway. Ops dentro deste
+// prazo (upload: teto de leitura 30s + R2/DB; IA: timeout 60s no pior caso)
+// drenam; o raro caso de IA passando de 25s num deploy é cortado (o cliente
+// repete). Ver DEPLOY.md.
+const SHUTDOWN_DRAIN_MS = 25_000;
 
 // Bytes decodificados da chave de cifragem (0 se ausente/base64 inválido).
 function aiKeyByteLen(raw: string): number {
@@ -172,9 +184,25 @@ async function startServer() {
   // do cliente usam onSubmit→tRPC, não POST nativo; não há callback OAuth). Cada
   // rota tem o seu parser, com o limite certo e DEPOIS do rate-limit — nada é
   // lido em memória antes do limiter. (Removido o express.urlencoded global.)
-  // Healthcheck do Railway — precisa ficar ACIMA de tudo e sempre 200.
+  // LIVENESS — o processo está de pé. SEMPRE 200 (não depende de banco).
   app.get("/api/ping", (_req, res) => {
     res.status(200).json({ ok: true });
+  });
+
+  // READINESS — o banco está utilizável? SELECT 1 (só leitura, nunca escreve)
+  // com timeout curto; 200 só com banco ok, 503 sanitizado se fora/lento. É este
+  // que o Railway usa como healthcheck (não promove/roteia sem banco). Handler
+  // com try/catch próprio (não pode rejeitar — não é async montado inseguro).
+  app.get("/api/ready", async (_req, res) => {
+    try {
+      const db = await getDb();
+      const pronto = db
+        ? await checkReady(() => db.execute(sql`select 1`), READY_TIMEOUT_MS)
+        : false;
+      res.status(pronto ? 200 : 503).json({ ready: pronto });
+    } catch {
+      res.status(503).json({ ready: false });
+    }
   });
 
   // Parsers do /api/trpc: PEQUENO (128 KB) por padrão; GRANDE (15 MB) só no
@@ -234,9 +262,9 @@ async function startServer() {
   });
 
   // Encerramento gracioso: no redeploy o Railway envia SIGTERM — para de aceitar
-  // conexões novas, drena as em andamento e sai limpo (timeout de segurança
-  // força a saída se algo travar).
-  installGracefulShutdown(server);
+  // conexões novas, drena as em andamento e sai limpo. O deadline (SHUTDOWN_DRAIN_MS)
+  // é alinhado ao drainingSeconds do railway.json (força a saída antes do SIGKILL).
+  installGracefulShutdown(server, { timeoutMs: SHUTDOWN_DRAIN_MS });
 }
 
 // Falha fatal no boot (ex.: guard de config negou) → encerra com status != 0,

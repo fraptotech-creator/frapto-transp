@@ -43,7 +43,10 @@ Cria as tabelas: users, vehicles, drivers, trips, maintenance, notifications, ex
 
 ## Validação ao vivo (fazer após o 1º deploy)
 
-1. `GET https://SEU_DOMINIO/api/ping` → `200 {"ok":true}` (healthcheck do Railway).
+1. `GET https://SEU_DOMINIO/api/ping` → `200 {"ok":true}` (LIVENESS — só diz que o
+   processo está de pé) e `GET .../api/ready` → `200 {"ready":true}` (READINESS —
+   faz `SELECT 1`; é este o `healthcheckPath` do Railway, então o deploy só é
+   promovido/roteado com banco utilizável; 503 se o banco estiver fora/lento).
 2. Abrir a home → landing → cadastrar/entrar com email e senha → cai no Painel.
 3. Cadastrar 1 veículo → **recarregar a página** → o veículo persiste (confirma DB real).
 4. Menu "Assistente IA" → perguntar "Quais CNHs vencem nos próximos 30 dias?" → resposta coerente com os dados.
@@ -72,6 +75,16 @@ e Cloudflare R2, respectivamente.)
 
 ## Segurança de infra (DNS / proxy) — passos do usuário
 
+- **Readiness + draining + manifesto.** `healthcheckPath=/api/ready` (readiness com `SELECT 1`) — o
+  Railway não promove/roteia sem banco. `drainingSeconds=30` no `railway.json`: no redeploy o Railway
+  envia SIGTERM e espera até 30s antes do SIGKILL; o app para de aceitar conexões, drena e força a saída
+  em `SHUTDOWN_DRAIN_MS=25s` (alinhado, sai antes do SIGKILL). **Deadline de trabalho em contrato = 25s**:
+  upload (teto de leitura 30s + R2/DB, tipicamente segundos) e IA (timeout 60s no pior caso) drenam; o
+  raro caso de IA passando de 25s num deploy é cortado e o cliente repete. Enums do manifesto são
+  **case-sensitive MAIÚSCULOS** (`builder:"DOCKERFILE"`, `restartPolicyType:"ON_FAILURE"`) — validados de
+  forma determinística no CI por `server/railwayManifest.test.ts` (um valor minúsculo cairia no default
+  silenciosamente). Após o deploy, confira no painel/API que o manifesto resolvido, `checkSuites=true`,
+  readiness (200), draining e restart policy estão efetivos.
 - **Deploy só após CI verde (Wait for CI).** O gatilho de deploy do serviço tem `checkSuites=true`
   (Railway → Settings → o "Wait for CI" do trigger do GitHub; setável também pela API GraphQL:
   `deploymentTriggerUpdate(id, input:{ checkSuites:true })`). Assim a Railway **só promove um commit de
