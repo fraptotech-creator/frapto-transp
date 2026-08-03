@@ -93,3 +93,34 @@ describe("saída da IA — sem HTML ativo no DOM (Lote A)", () => {
     expect(container.querySelectorAll("li").length).toBeGreaterThanOrEqual(2);
   });
 });
+
+// COBERTURA para o upgrade DEFERIDO (item 5): o `rehypePlugins={[]}` barra HTML
+// cru, mas NÃO desabilita o Mermaid. No Streamdown 1.4.0 o Mermaid é decidido
+// DENTRO do componente `code` (language === "mermaid"), independente de
+// rehypePlugins e sem prop para desligar — ou seja, um bloco ```mermaid vindo da
+// saída NÃO-confiável da IA é um caminho ALCANÇÁVEL até a cadeia
+// mermaid→DOMPurify (as 4 vulns altas do audit). Estes testes fixam o fato ANTES
+// da correção real (upgrade controlado de streamdown/mermaid/dompurify, em PR
+// próprio): o fence de mermaid ATRAVESSA o rehypePlugins=[] intacto (no
+// react-markdown vira um <code class="language-mermaid">; no Streamdown viraria
+// um diagrama vivo). react-markdown por si NÃO renderiza Mermaid — por isso a
+// mitigação não pode depender de rehypePlugins.
+describe("saída da IA — Mermaid é caminho alcançável (advisory DEFERIDO, item 5)", () => {
+  it("bloco ```mermaid NÃO é neutralizado por rehypePlugins=[] (fence sobrevive)", () => {
+    const { container } = renderAi("```mermaid\ngraph TD; A-->B;\n```");
+    // o conteúdo mermaid atravessa intacto (Streamdown o renderizaria como
+    // diagrama vivo — rehypePlugins=[] não barra isso).
+    const code = container.querySelector("code.language-mermaid");
+    expect(code).not.toBeNull();
+    expect(code?.textContent).toContain("graph TD");
+  });
+
+  it("react-markdown puro NÃO cria elemento de diagrama (mermaid é feature do Streamdown)", () => {
+    const { container } = renderAi("```mermaid\ngraph TD; A-->B;\n```");
+    // confirma que a proteção NÃO vem do motor markdown: nenhum svg/diagrama
+    // aqui — o risco mora no render do Streamdown (a tratar no upgrade).
+    expect(
+      container.querySelector("svg, [data-streamdown='mermaid-block']")
+    ).toBeNull();
+  });
+});
