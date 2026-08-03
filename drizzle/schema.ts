@@ -61,6 +61,21 @@ export const stripeEvents = mysqlTable("stripe_events", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+// Coordenação DURÁVEL de checkout (exatamente-uma-vez entre réplicas). Uma
+// intenção por organização (orgId é PK → unicidade durável, sem mutex em
+// memória). `idempotencyKey` é a chave ESTÁVEL enviada ao Stripe (mesma chave →
+// Stripe cria no máximo um customer/sessão, mesmo com réplicas concorrentes).
+// `sessionUrl`/`expiresAt` permitem reusar a mesma sessão enquanto válida e
+// recriar após expirar/abandonar.
+export const stripeCheckoutIntents = mysqlTable("stripe_checkout_intents", {
+  orgId: int("orgId").primaryKey(),
+  idempotencyKey: varchar("idempotencyKey", { length: 80 }).notNull(),
+  sessionUrl: varchar("sessionUrl", { length: 600 }),
+  expiresAt: timestamp("expiresAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 /**
  * Usuário. Login por email+senha (passwordHash). Pertence a uma organização.
  * openId é o identificador de sessão (único). email é a chave de login (único).

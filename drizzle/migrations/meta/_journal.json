@@ -43,6 +43,13 @@
       "when": 1785625044297,
       "tag": "0005_stripe_event_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1785800959304,
+      "tag": "0006_stripe_checkout_intents",
+      "breakpoints": true
     }
   ]
 }

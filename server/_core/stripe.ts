@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { ENV } from "./env";
+import { randomUUID } from "crypto";
 import {
   getOrganization,
   getOrgByStripeCustomerId,
@@ -7,10 +8,19 @@ import {
   claimStripeEvent,
   markStripeEventFailed,
   commitStripeEffectUnderLease,
+  claimCheckoutIntent,
+  finalizeCheckoutIntent,
   type OrgSubscriptionEffect,
 } from "../db";
 import { toSafeLogError } from "./safeLog";
 import type { Organization } from "../../drizzle/schema";
+
+// Chave de idempotência ESTÁVEL de uma tentativa de checkout (única por
+// tentativa; o orgId dá legibilidade). A intenção durável decide se esta chave
+// nova é usada ou se a de uma tentativa em andamento é reutilizada.
+function newCheckoutKey(orgId: number): string {
+  return `co_${orgId}_${randomUUID()}`;
+}
 
 // Um evento 'processing' sem conclusão por mais que isto = worker abandonado
 // (crash/deploy no meio) → pode ser reivindicado por outro retry.
@@ -55,18 +65,24 @@ export function isStripeConfigured(): boolean {
   });
 }
 
-// Garante um Stripe Customer para a organização (cria e persiste se faltar).
+// Garante um Stripe Customer para a organização (cria e persiste se faltar). A
+// idempotency key (estável por org+intenção) faz o Stripe devolver o MESMO
+// customer se duas réplicas criarem em paralelo — nunca dois customers.
 async function ensureCustomer(
   org: Organization,
-  email: string
+  email: string,
+  idempotencyKey: string
 ): Promise<string> {
   if (org.stripeCustomerId) return org.stripeCustomerId;
   const stripe = getStripe();
-  const customer = await stripe.customers.create({
-    email,
-    name: org.name,
-    metadata: { orgId: String(org.id) },
-  });
+  const customer = await stripe.customers.create(
+    {
+      email,
+      name: org.name,
+      metadata: { orgId: String(org.id) },
+    },
+    { idempotencyKey: `${idempotencyKey}-cust` }
+  );
   await updateOrganization(org.id, { stripeCustomerId: customer.id });
   return customer.id;
 }
@@ -81,8 +97,11 @@ export function bloqueiaNovoCheckout(
 }
 
 /**
- * Cria a sessão de Checkout (assinatura). Retorna a URL para redirecionar.
- * O cartão é cobrado no Stripe; a liberação vem pelo webhook.
+ * Cria (ou reutiliza) a sessão de Checkout da assinatura, EXATAMENTE-UMA-VEZ sob
+ * concorrência e entre réplicas: coordenação durável por `stripe_checkout_intents`
+ * (unicidade por orgId) + idempotency key ESTÁVEL no Stripe. Nunca segura
+ * transação de banco durante a chamada de rede. Retry/timeout reusam a mesma
+ * chave (Stripe dedupe → sem cobrança duplicada); sessão expirada é recriada.
  */
 export async function createCheckoutSession(params: {
   orgId: number;
@@ -108,21 +127,39 @@ export async function createCheckoutSession(params: {
     );
   }
 
+  // Reivindica a intenção (transação CURTA, sem rede): devolve a idempotency key
+  // estável e, se já houver uma sessão válida, a url para reusar direto.
+  const now = new Date();
+  const claim = await claimCheckoutIntent(org.id, newCheckoutKey(org.id), now);
+  if (claim.url) return claim.url; // concorrente/retry → MESMA sessão, sem nova rede
+
+  // Rede FORA de transação. As idempotency keys (derivadas da chave da intenção)
+  // fazem o Stripe criar no máximo UM customer e UMA sessão por org/intenção.
   const stripe = getStripe();
-  const customerId = await ensureCustomer(org, params.email);
+  const customerId = await ensureCustomer(org, params.email, claim.key);
   const base = ENV.appBaseUrl.replace(/\/$/, "");
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer: customerId,
-    line_items: [{ price: ENV.stripePriceId, quantity: 1 }],
-    success_url: `${base}/?checkout=success`,
-    cancel_url: `${base}/?checkout=cancel`,
-    metadata: { orgId: String(org.id) },
-    subscription_data: { metadata: { orgId: String(org.id) } },
-  });
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: ENV.stripePriceId, quantity: 1 }],
+      success_url: `${base}/?checkout=success`,
+      cancel_url: `${base}/?checkout=cancel`,
+      metadata: { orgId: String(org.id) },
+      subscription_data: { metadata: { orgId: String(org.id) } },
+    },
+    { idempotencyKey: claim.key }
+  );
 
   if (!session.url) throw new Error("Falha ao criar sessão de checkout");
+  // Persiste a url/expiração para reuso por chamadas concorrentes/retries.
+  await finalizeCheckoutIntent(
+    org.id,
+    claim.key,
+    session.url,
+    session.expires_at ? new Date(session.expires_at * 1000) : null
+  );
   return session.url;
 }
 
