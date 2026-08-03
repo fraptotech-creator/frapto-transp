@@ -1,4 +1,4 @@
-import { eq, and, gt, or, lte, isNull, sql } from "drizzle-orm";
+import { eq, and, gt, or, lte, sql } from "drizzle-orm";
 import {
   organizations,
   users,
@@ -13,6 +13,7 @@ import {
   isDupError,
   podeReivindicar,
   podeMarcar,
+  deveAplicarEfeito,
 } from "../_core/stripeEventState";
 
 // ⚠️ ÚNICA leitura CROSS-ORG do sistema: painel do SUPER-ADMIN da plataforma.
@@ -472,7 +473,7 @@ export async function markStripeEventFailed(
 // Stripe (re-consulta). Dados PUROS — nenhuma chamada de rede acontece dentro
 // da transação de commit.
 export interface OrgSubscriptionEffect {
-  subscriptionStatus: InsertOrganization["subscriptionStatus"];
+  subscriptionStatus: NonNullable<InsertOrganization["subscriptionStatus"]>;
   stripeSubscriptionId: string;
   currentPeriodEnd: Date | null;
 }
@@ -497,7 +498,15 @@ export interface LeaseExecutor {
   lockEvent(
     id: string
   ): Promise<{ status: string; attempts: number | null } | undefined>;
-  // UPDATE condicional da organização (ordem monotônica por lastStripeEventAt).
+  // SELECT ... FOR UPDATE da ORGANIZAÇÃO: trava a linha e devolve o estado atual
+  // para a decisão de ordem ser atômica (serializa efeitos concorrentes da mesma
+  // org). undefined se a org sumiu.
+  lockOrgState(
+    orgId: number
+  ): Promise<
+    { subscriptionStatus: string; lastStripeEventAt: Date | null } | undefined
+  >;
+  // UPDATE INCONDICIONAL da organização (a ordem já foi decidida sob o lock).
   applyOrgEffect(
     orgId: number,
     effect: OrgSubscriptionEffect,
@@ -511,12 +520,15 @@ export interface LeaseExecutor {
 //   1. trava a linha do evento (row lock);
 //   2. se NÃO somos mais donos da geração (worker antigo perdeu o lease por
 //      reclaim/stale), NÃO toca a organização → "lease-lost" (rollback);
-//   3. aplica o efeito na organização (ordem monotônica: evento atrasado no-op);
+//   3. trava a ORG, lê o estado atual e decide a ordem (deveAplicarEfeito:
+//      determinística, fail-closed no empate de timestamp) — só então aplica o
+//      efeito (UPDATE incondicional sob o lock); se a org sumiu ou o evento é
+//      atrasado/perdedor do empate, PULA o efeito (mas ainda marca processed);
 //   4. marca 'processed' na MESMA transação, com fencing pela geração;
 //   5. se a marca não afeta exatamente 1 linha (inconsistência sob o lock),
 //      LANÇA → rollback (desfaz também o efeito na organização).
-// Assim o efeito de assinatura e a marca são ATÔMICOS sob a geração atual: um
-// snapshot de worker antigo nunca grava entitlement e depois falha a marca.
+// Assim o efeito de assinatura e a marca são ATÔMICOS sob a geração atual, e a
+// ordem por org/assinatura é determinística mesmo com eventos no mesmo segundo.
 export async function commitStripeEffectCore(
   exec: LeaseExecutor,
   params: CommitLeaseParams
@@ -524,11 +536,20 @@ export async function commitStripeEffectCore(
   const row = await exec.lockEvent(params.eventId);
   if (!row || !podeMarcar(row, params.generation)) return "lease-lost";
   if (params.orgId != null && params.effect) {
-    await exec.applyOrgEffect(
-      params.orgId,
-      params.effect,
-      params.eventCreatedAt
-    );
+    const org = await exec.lockOrgState(params.orgId);
+    if (
+      org &&
+      deveAplicarEfeito(
+        { status: org.subscriptionStatus, at: org.lastStripeEventAt },
+        { status: params.effect.subscriptionStatus, at: params.eventCreatedAt }
+      )
+    ) {
+      await exec.applyOrgEffect(
+        params.orgId,
+        params.effect,
+        params.eventCreatedAt
+      );
+    }
   }
   const afetadas = await exec.markProcessed(params.eventId, params.generation);
   if (afetadas !== 1) {
@@ -561,19 +582,24 @@ export async function commitStripeEffectUnderLease(
           .limit(1);
         return rows[0];
       },
+      async lockOrgState(orgId) {
+        const rows = await tx
+          .select({
+            subscriptionStatus: organizations.subscriptionStatus,
+            lastStripeEventAt: organizations.lastStripeEventAt,
+          })
+          .from(organizations)
+          .where(eq(organizations.id, orgId))
+          .for("update")
+          .limit(1);
+        return rows[0];
+      },
       async applyOrgEffect(orgId, effect, eventCreatedAt) {
+        // UPDATE incondicional: a ordem já foi decidida sob o lock da org.
         await tx
           .update(organizations)
           .set({ ...effect, lastStripeEventAt: eventCreatedAt })
-          .where(
-            and(
-              eq(organizations.id, orgId),
-              or(
-                isNull(organizations.lastStripeEventAt),
-                lte(organizations.lastStripeEventAt, eventCreatedAt)
-              )
-            )
-          );
+          .where(eq(organizations.id, orgId));
       },
       async markProcessed(id, generation) {
         const res = await tx

@@ -31,6 +31,41 @@ export function podeMarcar(
   return row.status === "processing" && (row.attempts ?? 0) === generation;
 }
 
+// Rank de "privilégio" do status da assinatura: MENOR = mais terminal. Usado só
+// para desempatar eventos com o MESMO timestamp (Stripe dá `created` em
+// segundos). Fail-closed para entitlement: sob empate, o cancelamento (0) vence
+// a ativação (3) — nunca reabrimos acesso por causa de um empate de relógio.
+const STATUS_RANK: Record<string, number> = {
+  canceled: 0,
+  past_due: 1,
+  none: 1,
+  trialing: 2,
+  active: 3,
+};
+function statusRank(s: string): number {
+  return STATUS_RANK[s] ?? 1;
+}
+
+// Decisão PURA de ORDEM por organização/assinatura, determinística e fail-closed:
+//   - sem efeito anterior (at null) → aplica;
+//   - evento mais NOVO (created maior) → aplica;
+//   - evento ATRASADO (created menor) → ignora (não reabre estado mais recente);
+//   - EMPATE de timestamp → aplica só se o novo for IGUAL ou MAIS terminal
+//     (rank <=). Assim deleted(T) vence updated(T) independentemente da ordem de
+//     chegada, e um updated(T) nunca reabre um canceled(T). O caller serializa
+//     por organização (lock da linha) para a decisão ser atômica.
+export function deveAplicarEfeito(
+  current: { status: string; at: Date | null },
+  incoming: { status: string; at: Date }
+): boolean {
+  if (current.at === null) return true;
+  const t = current.at.getTime();
+  const e = incoming.at.getTime();
+  if (e > t) return true;
+  if (e < t) return false;
+  return statusRank(incoming.status) <= statusRank(current.status);
+}
+
 // Um evento já registrado PODE ser reivindicado (reprocessado) se falhou, ou se
 // está 'processing' há mais que staleMs (worker anterior morreu no meio). Já
 // 'processed' nunca; 'processing' recente = outro worker ativo → não reivindica.

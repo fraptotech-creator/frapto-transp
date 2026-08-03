@@ -71,6 +71,15 @@ async function ensureCustomer(
   return customer.id;
 }
 
+// Decisão PURA: uma org com assinatura ATIVA/pendente não pode abrir um checkout
+// NOVO (criaria uma SEGUNDA assinatura cobrando em paralelo). Ela deve usar o
+// Portal do Cliente para gerenciar. Só none/canceled podem (re)assinar.
+export function bloqueiaNovoCheckout(
+  status: Organization["subscriptionStatus"]
+): boolean {
+  return status === "active" || status === "trialing" || status === "past_due";
+}
+
 /**
  * Cria a sessão de Checkout (assinatura). Retorna a URL para redirecionar.
  * O cartão é cobrado no Stripe; a liberação vem pelo webhook.
@@ -90,6 +99,14 @@ export async function createCheckoutSession(params: {
   }
   const org = await getOrganization(params.orgId);
   if (!org) throw new Error("Organização não encontrada");
+
+  // Impede assinatura DUPLICADA: org já ativa/pendente vai para o portal, não
+  // abre um checkout concorrente (que cobraria duas vezes).
+  if (bloqueiaNovoCheckout(org.subscriptionStatus)) {
+    throw new Error(
+      "Já existe uma assinatura ativa. Gerencie pelo portal do cliente."
+    );
+  }
 
   const stripe = getStripe();
   const customerId = await ensureCustomer(org, params.email);
@@ -150,15 +167,9 @@ async function resolveOrgId(sub: Stripe.Subscription): Promise<number | null> {
   return org?.id ?? null;
 }
 
-// Decisão PURA de ORDEM: aplica o evento só se for igual/mais novo que o último
-// já aplicado. Sem último (null) → aplica. Testável sem banco.
-export function deveAplicarEvento(
-  lastAppliedAt: Date | null | undefined,
-  eventCreatedAt: Date
-): boolean {
-  if (!lastAppliedAt) return true;
-  return lastAppliedAt.getTime() <= eventCreatedAt.getTime();
-}
+// A decisão de ordem migrou para deveAplicarEfeito (server/_core/stripeEventState),
+// que é determinística por org/assinatura e fail-closed no empate de timestamp —
+// aplicada sob o lock da org dentro de commitStripeEffectUnderLease.
 
 type ResolvedEffect = {
   orgId: number | null;
@@ -187,10 +198,9 @@ async function effectFromSubscription(
 
 // Resolve o EFEITO aplicável (orgId + campos) a partir da fonte da verdade do
 // Stripe. TODA chamada de rede (retrieve) acontece AQUI, FORA da transação de
-// commit. Como sempre re-consultamos o estado ATUAL, eventos fora de ordem ou
-// no MESMO segundo convergem para a verdade corrente (política determinística:
-// a fonte é o Stripe agora, não a ordem de chegada) — por isso a ordem no banco
-// mantém `<=` (não descarta um evento legítimo do mesmo segundo). orgId/effect
+// commit. Sempre re-consultamos o estado ATUAL; a ORDEM/desempate por org é
+// decidida sob o lock da org por deveAplicarEfeito (determinística, fail-closed
+// no empate de timestamp — deleted vence updated do mesmo segundo). orgId/effect
 // nulos = nada a aplicar; o evento ainda é marcado 'processed' (idempotência).
 async function resolveOrgEffect(
   event: Stripe.Event,

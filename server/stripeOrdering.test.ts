@@ -1,26 +1,90 @@
 import { describe, it, expect } from "vitest";
-import { deveAplicarEvento, mapStripeStatus } from "./_core/stripe";
+import { deveAplicarEfeito } from "./_core/stripeEventState";
+import { mapStripeStatus, bloqueiaNovoCheckout } from "./_core/stripe";
 
-describe("deveAplicarEvento — ordem monotônica (Lote 8.2)", () => {
-  const t1 = new Date("2026-08-01T10:00:00Z");
-  const t2 = new Date("2026-08-01T10:05:00Z");
+const T1 = new Date("2026-08-01T10:00:00Z");
+const T2 = new Date("2026-08-01T10:05:00Z");
 
-  it("sem último aplicado (null) → aplica", () => {
-    expect(deveAplicarEvento(null, t1)).toBe(true);
-    expect(deveAplicarEvento(undefined, t1)).toBe(true);
+describe("deveAplicarEfeito — ordem determinística por org/assinatura (item 3)", () => {
+  it("sem efeito anterior (at null) → aplica", () => {
+    expect(
+      deveAplicarEfeito(
+        { status: "none", at: null },
+        { status: "active", at: T1 }
+      )
+    ).toBe(true);
   });
 
-  it("evento mais NOVO que o último → aplica", () => {
-    expect(deveAplicarEvento(t1, t2)).toBe(true);
+  it("evento mais NOVO → aplica", () => {
+    expect(
+      deveAplicarEfeito(
+        { status: "active", at: T1 },
+        { status: "canceled", at: T2 }
+      )
+    ).toBe(true);
   });
 
-  it("evento ATRASADO (mais antigo que o último) → NÃO aplica", () => {
-    // Cenário do plano: deleted(t2) já aplicado; updated(t1) chega depois.
-    expect(deveAplicarEvento(t2, t1)).toBe(false);
+  it("evento ATRASADO (created menor) → NÃO aplica (não reabre estado recente)", () => {
+    // canceled(T2) já aplicado; updated(T1) chega atrasado → ignora.
+    expect(
+      deveAplicarEfeito(
+        { status: "canceled", at: T2 },
+        { status: "active", at: T1 }
+      )
+    ).toBe(false);
   });
 
-  it("mesmo instante → aplica (idempotente, <=)", () => {
-    expect(deveAplicarEvento(t1, t1)).toBe(true);
+  it("EMPATE de timestamp: cancelamento VENCE ativação (fail-closed)", () => {
+    // deleted(T) e updated(T) no mesmo segundo — qualquer ordem de chegada
+    // converge para canceled.
+    expect(
+      deveAplicarEfeito(
+        { status: "active", at: T1 },
+        { status: "canceled", at: T1 }
+      )
+    ).toBe(true); // aplica canceled sobre active
+    expect(
+      deveAplicarEfeito(
+        { status: "canceled", at: T1 },
+        { status: "active", at: T1 }
+      )
+    ).toBe(false); // NÃO reabre canceled com active do mesmo segundo
+  });
+
+  it("EMPATE com mesmo status (retry/duplicado) → aplica (idempotente)", () => {
+    expect(
+      deveAplicarEfeito(
+        { status: "active", at: T1 },
+        { status: "active", at: T1 }
+      )
+    ).toBe(true);
+  });
+
+  it("EMPATE: past_due (pendente) vence active, mas não vence canceled", () => {
+    expect(
+      deveAplicarEfeito(
+        { status: "active", at: T1 },
+        { status: "past_due", at: T1 }
+      )
+    ).toBe(true);
+    expect(
+      deveAplicarEfeito(
+        { status: "canceled", at: T1 },
+        { status: "past_due", at: T1 }
+      )
+    ).toBe(false);
+  });
+});
+
+describe("bloqueiaNovoCheckout — anti assinatura duplicada (item 3)", () => {
+  it("bloqueia quando já ativa/trial/pendente", () => {
+    expect(bloqueiaNovoCheckout("active")).toBe(true);
+    expect(bloqueiaNovoCheckout("trialing")).toBe(true);
+    expect(bloqueiaNovoCheckout("past_due")).toBe(true);
+  });
+  it("permite quando none/canceled (pode (re)assinar)", () => {
+    expect(bloqueiaNovoCheckout("none")).toBe(false);
+    expect(bloqueiaNovoCheckout("canceled")).toBe(false);
   });
 });
 

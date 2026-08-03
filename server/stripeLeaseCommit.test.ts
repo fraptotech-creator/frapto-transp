@@ -7,7 +7,7 @@ import {
   type CommitLeaseParams,
   type OrgSubscriptionEffect,
 } from "./db/organizations";
-import { stripeEvents } from "../drizzle/schema";
+import { stripeEvents, organizations } from "../drizzle/schema";
 
 const effect: OrgSubscriptionEffect = {
   subscriptionStatus: "active",
@@ -27,6 +27,9 @@ const params = (over: Partial<CommitLeaseParams> = {}): CommitLeaseParams => ({
 // Executor FAKE tipado (sem any) — grava a ordem das operações.
 function fakeExec(over: {
   row?: { status: string; attempts: number | null } | undefined;
+  org?:
+    | { subscriptionStatus: string; lastStripeEventAt: Date | null }
+    | undefined;
   marked?: number;
   applyThrows?: boolean;
 }) {
@@ -35,6 +38,13 @@ function fakeExec(over: {
     async lockEvent() {
       calls.push("lock");
       return over.row;
+    },
+    async lockOrgState() {
+      calls.push("lockOrg");
+      // Padrão: org sem efeito anterior (at null) → deveAplicarEfeito aplica.
+      return "org" in over
+        ? over.org
+        : { subscriptionStatus: "none", lastStripeEventAt: null };
     },
     async applyOrgEffect() {
       calls.push("apply");
@@ -49,15 +59,15 @@ function fakeExec(over: {
 }
 
 describe("commitStripeEffectCore — efeito + marca atômicos sob lease (Lote 2)", () => {
-  it("dono da geração: aplica efeito E marca na MESMA passagem → committed", async () => {
+  it("dono da geração: trava a org, aplica efeito E marca → committed", async () => {
     const { exec, calls } = fakeExec({
       row: { status: "processing", attempts: 1 },
       marked: 1,
     });
     const out = await commitStripeEffectCore(exec, params());
     expect(out).toBe("committed");
-    // efeito e marca acontecem juntos, nessa ordem
-    expect(calls).toEqual(["lock", "apply", "mark"]);
+    // trava evento → trava org → aplica → marca, nessa ordem
+    expect(calls).toEqual(["lock", "lockOrg", "apply", "mark"]);
   });
 
   it("linha sumida (lock não achou) → lease-lost, NÃO aplica nem marca", async () => {
@@ -84,7 +94,7 @@ describe("commitStripeEffectCore — efeito + marca atômicos sob lease (Lote 2)
     expect(calls).toEqual(["lock"]);
   });
 
-  it("orgId/effect nulos (tipo ignorado): pula o efeito, mas MARCA processed", async () => {
+  it("orgId/effect nulos (tipo ignorado): pula org+efeito, mas MARCA processed", async () => {
     const { exec, calls } = fakeExec({
       row: { status: "processing", attempts: 1 },
       marked: 1,
@@ -94,7 +104,40 @@ describe("commitStripeEffectCore — efeito + marca atômicos sob lease (Lote 2)
       params({ orgId: null, effect: null })
     );
     expect(out).toBe("committed");
-    expect(calls).toEqual(["lock", "mark"]); // sem 'apply'
+    expect(calls).toEqual(["lock", "mark"]); // sem 'lockOrg'/'apply'
+  });
+
+  it("evento ATRASADO (org mais recente): trava a org, PULA o efeito, mas marca", async () => {
+    const { exec, calls } = fakeExec({
+      row: { status: "processing", attempts: 1 },
+      // org já em T2 (mais novo que o evento em T1) → deveAplicarEfeito=false
+      org: {
+        subscriptionStatus: "active",
+        lastStripeEventAt: new Date("2026-08-01T10:05:00Z"),
+      },
+      marked: 1,
+    });
+    const out = await commitStripeEffectCore(
+      exec,
+      params({ eventCreatedAt: new Date("2026-08-01T10:00:00Z") })
+    );
+    expect(out).toBe("committed");
+    expect(calls).toEqual(["lock", "lockOrg", "mark"]); // sem 'apply'
+  });
+
+  it("empate de timestamp: canceled NÃO reabre — org canceled@T, effect active@T → pula", async () => {
+    const T = new Date("2026-08-01T10:00:00Z");
+    const { exec, calls } = fakeExec({
+      row: { status: "processing", attempts: 1 },
+      org: { subscriptionStatus: "canceled", lastStripeEventAt: T },
+      marked: 1,
+    });
+    const out = await commitStripeEffectCore(
+      exec,
+      params({ eventCreatedAt: T }) // effect.subscriptionStatus = "active"
+    );
+    expect(out).toBe("committed");
+    expect(calls).toEqual(["lock", "lockOrg", "mark"]); // não reabriu (sem apply)
   });
 
   it("marca não afeta 1 linha (inconsistência) → LANÇA (rollback)", async () => {
@@ -115,7 +158,7 @@ describe("commitStripeEffectCore — efeito + marca atômicos sob lease (Lote 2)
     await expect(commitStripeEffectCore(exec, params())).rejects.toThrow(
       /db down no efeito/
     );
-    expect(calls).toEqual(["lock", "apply"]); // 'mark' nunca aconteceu
+    expect(calls).toEqual(["lock", "lockOrg", "apply"]); // 'mark' nunca aconteceu
   });
 });
 
@@ -150,5 +193,22 @@ describe("row lock — o Drizzle instalado gera SELECT ... FOR UPDATE (Lote 2)",
       .sql.toLowerCase();
     expect(sql).toContain("status");
     expect(sql).toContain("attempts");
+  });
+
+  it("o lock da ORGANIZAÇÃO usa `for update` (serializa efeitos por org)", () => {
+    const qb = new QueryBuilder();
+    const sql = qb
+      .select({
+        subscriptionStatus: organizations.subscriptionStatus,
+        lastStripeEventAt: organizations.lastStripeEventAt,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, 1))
+      .for("update")
+      .limit(1)
+      .toSQL()
+      .sql.toLowerCase();
+    expect(sql).toContain("for update");
+    expect(sql).toContain("organizations");
   });
 });
