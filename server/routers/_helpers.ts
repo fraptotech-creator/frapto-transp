@@ -281,13 +281,11 @@ Regras: baseie-se SÓ nos dados retornados pelas ferramentas; nunca invente
 números, nomes ou datas. Se algo não existir nos dados, diga que não há esse
 registro. Valores em reais (R$) e datas no formato brasileiro.`;
 
-const coerceProvider = (p: string): AiProvider =>
-  p === "anthropic" || p === "openai" || p === "openai_compatible"
-    ? p
-    : "openai_compatible";
-
-// Decisão PURA de qual IA usar (testável): 1º a config da EMPRESA (se ativa e
-// com chave); 2º o PADRÃO do sistema (grátis, ex.: Groq); 3º o Anthropic legado.
+// Decisão PURA de qual IA usar (testável), FAIL-CLOSED: usa SOMENTE a config da
+// PRÓPRIA empresa, e apenas se ATIVA e com chave. NÃO existe mais fallback para
+// uma chave-padrão do sistema (Groq/Anthropic): a IA acessa dados do cliente
+// (LGPD/consentimento), então sem config ativa da org NÃO se chama provedor nem
+// se expõem ferramentas de dados — o caller trata o null como erro controlado.
 export function pickAiConfig(
   orgCfg:
     | {
@@ -298,14 +296,7 @@ export function pickAiConfig(
         enabled: boolean;
       }
     | null
-    | undefined,
-  defaults: {
-    key: string;
-    provider: string;
-    model: string;
-    baseUrl: string;
-    anthropicKey: string;
-  }
+    | undefined
 ): AiRuntimeConfig | null {
   if (orgCfg && orgCfg.enabled && orgCfg.apiKey) {
     return {
@@ -313,22 +304,6 @@ export function pickAiConfig(
       apiKey: orgCfg.apiKey,
       model: orgCfg.model ?? "",
       baseUrl: orgCfg.baseUrl,
-    };
-  }
-  if (defaults.key) {
-    return {
-      provider: coerceProvider(defaults.provider),
-      apiKey: defaults.key,
-      model: defaults.model || "",
-      baseUrl: defaults.baseUrl || null,
-    };
-  }
-  if (defaults.anthropicKey) {
-    return {
-      provider: "anthropic",
-      apiKey: defaults.anthropicKey,
-      model: "claude-haiku-4-5",
-      baseUrl: null,
     };
   }
   return null;
@@ -354,11 +329,5 @@ export async function resolveAiConfig(
       });
     }
   }
-  return pickAiConfig(cfg, {
-    key: ENV.defaultAiKey,
-    provider: ENV.defaultAiProvider,
-    model: ENV.defaultAiModel,
-    baseUrl: ENV.defaultAiBaseUrl,
-    anthropicKey: ENV.anthropicApiKey,
-  });
+  return pickAiConfig(cfg);
 }

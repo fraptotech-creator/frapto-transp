@@ -1,33 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { pickAiConfig } from "./routers/_helpers";
 
-const groqDefaults = {
-  key: "gsk_teste",
-  provider: "openai_compatible",
-  model: "llama-3.3-70b-versatile",
-  baseUrl: "https://api.groq.com/openai/v1",
-  anthropicKey: "",
-};
-const noDefaults = {
-  key: "",
-  provider: "openai_compatible",
-  model: "",
-  baseUrl: "",
-  anthropicKey: "",
-};
-
-describe("pickAiConfig", () => {
+// FAIL-CLOSED (item 4): a IA acessa dados do cliente → só a config ATIVA da
+// PRÓPRIA org habilita o provedor. Sem fallback para chave-padrão do sistema.
+describe("pickAiConfig — fail-closed (item 4)", () => {
   it("usa a config da EMPRESA quando ativa e com chave", () => {
-    const r = pickAiConfig(
-      {
-        provider: "openai",
-        apiKey: "sk-empresa",
-        model: "gpt-4o-mini",
-        baseUrl: null,
-        enabled: true,
-      },
-      groqDefaults
-    );
+    const r = pickAiConfig({
+      provider: "openai",
+      apiKey: "sk-empresa",
+      model: "gpt-4o-mini",
+      baseUrl: null,
+      enabled: true,
+    });
     expect(r).toEqual({
       provider: "openai",
       apiKey: "sk-empresa",
@@ -36,44 +20,32 @@ describe("pickAiConfig", () => {
     });
   });
 
-  it("empresa desativada → cai no PADRÃO do sistema (Groq)", () => {
-    const r = pickAiConfig(
-      {
+  it("empresa DESATIVADA → null (NÃO cai em chave padrão)", () => {
+    expect(
+      pickAiConfig({
         provider: "openai",
         apiKey: "sk-empresa",
         model: "x",
         baseUrl: null,
         enabled: false,
-      },
-      groqDefaults
-    );
-    expect(r?.provider).toBe("openai_compatible");
-    expect(r?.apiKey).toBe("gsk_teste");
-    expect(r?.baseUrl).toBe("https://api.groq.com/openai/v1");
-    expect(r?.model).toBe("llama-3.3-70b-versatile");
+      })
+    ).toBeNull();
   });
 
-  it("sem empresa → PADRÃO do sistema", () => {
-    const r = pickAiConfig(null, groqDefaults);
-    expect(r?.apiKey).toBe("gsk_teste");
+  it("empresa ativa mas SEM chave → null", () => {
+    expect(
+      pickAiConfig({
+        provider: "openai",
+        apiKey: null,
+        model: "x",
+        baseUrl: null,
+        enabled: true,
+      })
+    ).toBeNull();
   });
 
-  it("provider inválido no padrão → openai_compatible", () => {
-    const r = pickAiConfig(null, { ...groqDefaults, provider: "xpto" });
-    expect(r?.provider).toBe("openai_compatible");
-  });
-
-  it("sem padrão mas com Anthropic legado → Claude", () => {
-    const r = pickAiConfig(null, { ...noDefaults, anthropicKey: "sk-ant" });
-    expect(r).toEqual({
-      provider: "anthropic",
-      apiKey: "sk-ant",
-      model: "claude-haiku-4-5",
-      baseUrl: null,
-    });
-  });
-
-  it("nada configurado → null", () => {
-    expect(pickAiConfig(null, noDefaults)).toBeNull();
+  it("sem config da empresa (null/undefined) → null", () => {
+    expect(pickAiConfig(null)).toBeNull();
+    expect(pickAiConfig(undefined)).toBeNull();
   });
 });

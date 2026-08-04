@@ -140,9 +140,13 @@ export default function Privacidade() {
         </li>
         <li>
           <strong>Provedor de IA</strong> (Anthropic, OpenAI ou compatível) —
-          apenas se a empresa contratante ativar o assistente. Nesse caso, dados
-          da frota consultados durante a conversa são enviados ao provedor
-          escolhido pela contratante.
+          apenas se a empresa contratante{" "}
+          <strong>ativar o assistente e configurar a própria chave</strong> do
+          provedor. Sem essa ativação, o assistente fica indisponível e{" "}
+          <strong>nenhum dado é enviado a qualquer provedor de IA</strong> (não
+          há chave padrão do sistema). Quando ativo, os dados da frota
+          consultados durante a conversa são enviados ao provedor escolhido pela
+          contratante.
         </li>
       </ul>
 
