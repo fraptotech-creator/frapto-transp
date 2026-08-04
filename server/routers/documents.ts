@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { activeOrgProcedure, router } from "../_core/trpc";
+import {
+  activeOrgProcedure,
+  activeOrgOwnerProcedure,
+  router,
+} from "../_core/trpc";
 import {
   getDocuments,
   getDocumentById,
@@ -30,9 +34,9 @@ export const documentsRouter = router({
     configured: isStorageConfigured(),
   })),
 
-  list: activeOrgProcedure.query(({ ctx }) => getDocuments(ctx.orgId)),
+  list: activeOrgOwnerProcedure.query(({ ctx }) => getDocuments(ctx.orgId)),
 
-  upload: activeOrgProcedure
+  upload: activeOrgOwnerProcedure
     .input(
       z.object({
         fileName: z.string().min(1).max(200),
@@ -132,7 +136,7 @@ export const documentsRouter = router({
       }
     }),
 
-  downloadUrl: activeOrgProcedure
+  downloadUrl: activeOrgOwnerProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const doc = await getDocumentById(ctx.orgId, input.id);
@@ -150,7 +154,7 @@ export const documentsRouter = router({
     }),
 
   // URL para VISUALIZAR no navegador (inline), sem baixar.
-  viewUrl: activeOrgProcedure
+  viewUrl: activeOrgOwnerProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const doc = await getDocumentById(ctx.orgId, input.id);
@@ -163,7 +167,7 @@ export const documentsRouter = router({
       return { url: await getViewUrl(doc.arquivoKey) };
     }),
 
-  delete: activeOrgProcedure
+  delete: activeOrgOwnerProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const doc = await getDocumentById(ctx.orgId, input.id);

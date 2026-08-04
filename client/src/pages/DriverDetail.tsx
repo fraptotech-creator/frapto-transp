@@ -20,7 +20,9 @@ export default function DriverDetail() {
   const [, params] = useRoute("/drivers/:id");
   const driverId = params?.id ? parseInt(params.id) : null;
 
-  const { data: driver, isLoading } = trpc.drivers.getById.useQuery(
+  // PII (CPF/CNH/telefone/e-mail/endereço) só para o DONO — piiById dá 403 a
+  // outros papéis (a tela de detalhe é de gestão do cadastro).
+  const { data: driver, isLoading } = trpc.drivers.piiById.useQuery(
     { id: driverId! },
     { enabled: !!driverId }
   );

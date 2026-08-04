@@ -13,8 +13,27 @@ import {
   InsertTrip,
   InsertMaintenance,
   InsertTripPosition,
+  piiExportAudit,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
+
+// Registra uma exportação de PII (metadados só — sem PII). Não bloqueia o fluxo
+// se o banco estiver indisponível (best-effort de trilha), mas loga o motivo.
+export async function recordPiiExport(params: {
+  orgId: number;
+  actorOpenId: string;
+  exportType: string;
+  recordCount: number;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(piiExportAudit).values({
+    orgId: params.orgId,
+    actorOpenId: params.actorOpenId,
+    exportType: params.exportType,
+    recordCount: params.recordCount,
+  });
+}
 
 // ─── Veículos ────────────────────────────────────────────────────────────────
 

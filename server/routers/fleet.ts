@@ -2,7 +2,12 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
-import { activeOrgProcedure, router } from "../_core/trpc";
+import {
+  activeOrgProcedure,
+  activeOrgOwnerProcedure,
+  router,
+} from "../_core/trpc";
+import { toDriverPublic, toDriverPii } from "../_core/driverDto";
 import { gerarTokenReset, expiraEmAtivacao } from "../_core/passwordReset";
 import {
   getVehicles,
@@ -39,6 +44,7 @@ import {
   resetOilChange,
   getExpenses,
   getRevenues,
+  recordPiiExport,
 } from "../db";
 import { isOilChange, computeOilStatus } from "../_core/oil";
 import {
@@ -185,28 +191,45 @@ async function emitirTokenAtivacao(openId: string): Promise<string> {
   return token;
 }
 
-// O trackingToken é uma CREDENCIAL bearer (posta em /api/track sem cookie) —
-// vive só no aparelho do motorista. NUNCA deve ir pro browser da gestão. Strip
-// antes de devolver ao cliente (o app do motorista lê o token por caminho
-// próprio: ensureTrackingToken / /api/track/login).
-function stripDriverSecret<T extends { trackingToken?: string | null }>(
-  d: T
-): Omit<T, "trackingToken"> {
-  const { trackingToken: _omit, ...rest } = d;
-  return rest;
-}
-
 export const driversRouter = router({
+  // OPERACIONAL (qualquer papel de gestão): sem PII e sem credencial de rastreio.
+  // Suficiente para atribuir motorista a viagem e para alertas de CNH.
   list: activeOrgProcedure.query(async ({ ctx }) =>
-    (await getDrivers(ctx.orgId)).map(stripDriverSecret)
+    (await getDrivers(ctx.orgId)).map(toDriverPublic)
   ),
 
   getById: activeOrgProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       const d = await getDriverById(ctx.orgId, input.id);
-      return d ? stripDriverSecret(d) : d;
+      return d ? toDriverPublic(d) : d;
     }),
+
+  // PII (apenas DONO): cadastro completo p/ visualização/edição. Ainda SEM a
+  // credencial de rastreio (token/hash/expiração/rotação/revogação). member→403.
+  pii: activeOrgOwnerProcedure.query(async ({ ctx }) =>
+    (await getDrivers(ctx.orgId)).map(toDriverPii)
+  ),
+
+  piiById: activeOrgOwnerProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const d = await getDriverById(ctx.orgId, input.id);
+      return d ? toDriverPii(d) : d;
+    }),
+
+  // EXPORTAÇÃO de PII (apenas DONO): gera só os campos autorizados e registra um
+  // evento de auditoria MÍNIMO (ator, org, tipo, quantidade) — sem PII no log.
+  exportPii: activeOrgOwnerProcedure.mutation(async ({ ctx }) => {
+    const rows = (await getDrivers(ctx.orgId)).map(toDriverPii);
+    await recordPiiExport({
+      orgId: ctx.orgId,
+      actorOpenId: ctx.user.openId,
+      exportType: "drivers",
+      recordCount: rows.length,
+    });
+    return { rows };
+  }),
 
   create: activeOrgProcedure
     .input(
@@ -272,7 +295,7 @@ export const driversRouter = router({
       // Devolve o TOKEN de ativação (não a senha): o gestor compartilha um link
       // de uso único para o motorista criar a própria senha.
       const activationToken = await emitirTokenAtivacao(openId);
-      return { ...stripDriverSecret(driver), username, activationToken };
+      return { ...toDriverPii(driver), username, activationToken };
     }),
 
   // Informa o usuário (apelido) de login do motorista, se já houver.
@@ -380,7 +403,9 @@ export const driversRouter = router({
         updateData.telefone = normalizeOptionalPhone(rest.telefone);
       }
       const d = await updateDriver(ctx.orgId, id, updateData);
-      return d ? stripDriverSecret(d) : d;
+      // Resposta OPERACIONAL (sem PII): a edição já tem os dados que enviou; não
+      // devolvemos PII de outros campos aqui.
+      return d ? toDriverPublic(d) : d;
     }),
 
   delete: activeOrgProcedure

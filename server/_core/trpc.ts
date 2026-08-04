@@ -167,3 +167,18 @@ export const activeOrgProcedure = orgProcedure.use(async opts => {
   }
   return next({ ctx: { ...ctx, org } });
 });
+
+// PII/documentos/exportação: assinatura ativa E papel DONO (default-deny). Um
+// MEMBER recebe 403 aqui — não lê/baixa/exporta PII (CPF/CNH/telefone/e-mail/
+// endereço) nem documentos. A permissão vem do papel validado no servidor, NÃO
+// da UI. (Se um dia precisar delegar, criar capability persistida default-deny.)
+export const activeOrgOwnerProcedure = activeOrgProcedure.use(async opts => {
+  const { ctx, next } = opts;
+  if (ctx.user.orgRole !== "owner") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Apenas o dono da organização pode acessar dados pessoais.",
+    });
+  }
+  return next({ ctx });
+});

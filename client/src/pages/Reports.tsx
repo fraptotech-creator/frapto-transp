@@ -81,6 +81,9 @@ const formatDateTimeBR = (d: any) =>
 export default function Reports() {
   const { data: vehicles } = trpc.vehicles.list.useQuery();
   const { data: drivers } = trpc.drivers.list.useQuery();
+  // Exportação de PII de motoristas: SÓ pelo servidor (owner-only + auditoria);
+  // o cliente não tem mais a PII em drivers.list (DTO operacional).
+  const exportDriversPii = trpc.drivers.exportPii.useMutation();
   const { data: trips } = trpc.trips.list.useQuery();
   const { data: maintenances } = trpc.maintenance.list.useQuery();
 
@@ -194,30 +197,9 @@ export default function Reports() {
         })),
       };
     }
-    if (reportType === "motoristas") {
-      // Portabilidade (LGPD): é o cadastro com os dados pessoais. O
-      // trackingToken NÃO entra — o servidor já o remove em drivers.list
-      // (stripDriverSecret), e ele não deve sair do sistema de forma alguma.
-      return {
-        title: "Relatório de Motoristas",
-        filename: "motoristas",
-        rows: drivers.map((d: any) => ({
-          ID: d.id,
-          Nome: d.nome,
-          CPF: formatCpf(d.cpf),
-          CNH: d.cnh,
-          CategoriaCNH: d.cnhCategoria,
-          VencimentoCNH: formatDateBR(d.cnhVencimento),
-          Telefone: formatPhone(d.telefone),
-          Email: d.email ?? "",
-          Endereco: d.endereco ?? "",
-          Status: d.status,
-          Disponivel: d.disponibilidade ? "Sim" : "Não",
-          DataAdmissao: formatDateBR(d.dataAdmissao),
-          Observacoes: d.observacoes ?? "",
-        })),
-      };
-    }
+    // "motoristas" (PII) NÃO é montado no cliente: vai pelo servidor
+    // (handleExport → drivers.exportPii, owner-only + auditoria). O DTO
+    // operacional de drivers.list não tem CPF/CNH/telefone/e-mail/endereço.
     if (reportType === "viagens") {
       return {
         title: "Relatório de Viagens",
@@ -389,12 +371,10 @@ export default function Reports() {
     }
   };
 
-  const handleExport = (reportType: string, fmt: "csv" | "pdf") => {
-    const rep = buildReport(reportType);
-    if (!rep) {
-      toast.error("Carregando dados, tente novamente em alguns instantes.");
-      return;
-    }
+  const exportRows = (
+    rep: { title: string; filename: string; rows: Record<string, any>[] },
+    fmt: "csv" | "pdf"
+  ) => {
     if (rep.rows.length === 0) {
       toast.error("Não há dados para exportar.");
       return;
@@ -407,6 +387,51 @@ export default function Reports() {
     ) {
       toast.success("Abrindo PDF para impressão/salvamento…");
     }
+  };
+
+  const handleExport = async (reportType: string, fmt: "csv" | "pdf") => {
+    // Motoristas (PII): busca do SERVIDOR (owner-only + auditoria). O cliente
+    // não tem mais a PII localmente.
+    if (reportType === "motoristas") {
+      let data: { rows: any[] };
+      try {
+        data = await exportDriversPii.mutateAsync();
+      } catch {
+        toast.error(
+          "Apenas o dono da empresa pode exportar dados pessoais dos motoristas."
+        );
+        return;
+      }
+      exportRows(
+        {
+          title: "Relatório de Motoristas",
+          filename: "motoristas",
+          rows: data.rows.map((d: any) => ({
+            ID: d.id,
+            Nome: d.nome,
+            CPF: formatCpf(d.cpf),
+            CNH: d.cnh,
+            CategoriaCNH: d.cnhCategoria,
+            VencimentoCNH: formatDateBR(d.cnhVencimento),
+            Telefone: formatPhone(d.telefone),
+            Email: d.email ?? "",
+            Endereco: d.endereco ?? "",
+            Status: d.status,
+            Disponivel: d.disponibilidade ? "Sim" : "Não",
+            DataAdmissao: formatDateBR(d.dataAdmissao),
+            Observacoes: d.observacoes ?? "",
+          })),
+        },
+        fmt
+      );
+      return;
+    }
+    const rep = buildReport(reportType);
+    if (!rep) {
+      toast.error("Carregando dados, tente novamente em alguns instantes.");
+      return;
+    }
+    exportRows(rep, fmt);
   };
 
   const handlePrint = () => window.print();

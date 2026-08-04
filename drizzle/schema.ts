@@ -76,6 +76,20 @@ export const stripeCheckoutIntents = mysqlTable("stripe_checkout_intents", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+// Auditoria MÍNIMA de exportação de PII: quem (openId do ator), qual org, que
+// tipo de exportação, quando e QUANTOS registros. NUNCA grava PII (sem CPF/CNH/
+// e-mail/endereço/telefone/token) — só metadados para trilha.
+export const piiExportAudit = mysqlTable("pii_export_audit", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  actorOpenId: varchar("actorOpenId", { length: 64 }).notNull(),
+  exportType: varchar("exportType", { length: 40 }).notNull(),
+  recordCount: int("recordCount").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PiiExportAudit = typeof piiExportAudit.$inferSelect;
+
 /**
  * Usuário. Login por email+senha (passwordHash). Pertence a uma organização.
  * openId é o identificador de sessão (único). email é a chave de login (único).

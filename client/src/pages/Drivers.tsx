@@ -12,7 +12,9 @@ import { Users, Phone, CreditCard, User, Search } from "lucide-react";
 
 export default function Drivers() {
   const [, setLocation] = useLocation();
-  const { data: drivers, isLoading } = trpc.drivers.list.useQuery();
+  // Tela de GESTÃO do cadastro (mostra CPF/telefone) → PII, só para o DONO.
+  // Para outros papéis o servidor responde 403 (default-deny).
+  const { data: drivers, isLoading } = trpc.drivers.pii.useQuery();
   const [buscaNome, setBuscaNome] = useState("");
   const motoristasFiltrados = (drivers ?? []).filter((d: any) =>
     contemTexto(d.nome, buscaNome)
