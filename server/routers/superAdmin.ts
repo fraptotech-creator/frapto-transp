@@ -45,9 +45,10 @@ export const superAdminRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: decisao.motivo });
       }
       await updateOrganization(input.orgId, decisao.patch);
-      // Ação privilegiada: deixa rastro de QUEM mexeu em QUAL empresa.
+      // Ação privilegiada: deixa rastro de QUEM mexeu em QUAL empresa. Usa o
+      // openId (id opaco), não o e-mail (PII), para identificar o ator.
       console.info(
-        `[SuperAdmin] ${ctx.user.email} ${input.acao} acesso da org ${input.orgId} (${org?.name ?? "?"})`
+        `[SuperAdmin] actor=${ctx.user.openId} ${input.acao} acesso da org ${input.orgId} (${org?.name ?? "?"})`
       );
       return { ok: true as const, acao: input.acao };
     }),

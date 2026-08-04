@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { maskPii } from "./maskPii";
 
 export type NotificationPayload = {
   title: string;
@@ -55,6 +56,8 @@ export async function notifyOwner(
   payload: NotificationPayload
 ): Promise<boolean> {
   const { title, content } = validatePayload(payload);
-  console.log(`[Notification] (owner) ${title}: ${content}`);
+  // Mascara PII antes de logar: o conteúdo é texto livre (admin) e pode conter
+  // e-mail/telefone/CPF/CNH.
+  console.log(`[Notification] (owner) ${maskPii(title)}: ${maskPii(content)}`);
   return true;
 }

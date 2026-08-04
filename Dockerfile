@@ -41,6 +41,11 @@ USER node
 # Railway injeta PORT automaticamente.
 EXPOSE 3000
 
+# HEALTHCHECK do container = LIVENESS (/api/ping): responde se o PROCESSO está de
+# pé, SEM depender do banco. De propósito diferente do healthcheck do Railway,
+# que usa READINESS (/api/ready, com SELECT 1) para promover/rotear o deploy. Se
+# o container usasse /api/ready, um blip do banco marcaria o container como
+# unhealthy e causaria restart em cascata — errado para liveness. Ver DEPLOY.md.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3000) + '/api/ping', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 

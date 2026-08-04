@@ -97,8 +97,17 @@ e Cloudflare R2, respectivamente.)
   `AI_CONFIG_ENCRYPTION_KEY`). Confirme `NODE_ENV=production` no painel (já setado).
 - **IP real:** `trust proxy=1` — o XFF forjado pelo cliente é ignorado (verificado em pentest). Se um
   dia houver **múltiplas réplicas**, migrar rate-limit/semáforo de memória para store compartilhado.
-- **Apex → www:** apontar `fraptotransp.com.br` (apex) ao serviço no Railway (DNS). O app já redireciona
-  301 o apex para `https://www.fraptotransp.com.br`; sem o apontamento no DNS, o apex nem chega ao app.
+- **Apex → www (PENDENTE de DNS do usuário):** validação de fora em 2026-08-03 mostrou
+  `https://fraptotransp.com.br` **não resolvendo/conectando** (`http=000`) — o apex NÃO está apontado ao
+  Railway. O app já faz o 301 apex→`https://www.fraptotransp.com.br` (middleware em `_core/index.ts`), mas
+  isso só vale depois que o apex chegar ao serviço. AÇÃO do usuário: no provedor de DNS, apontar o apex ao
+  Railway (registro ALIAS/ANAME/A conforme o provedor) e adicionar o domínio `fraptotransp.com.br` no
+  serviço do Railway; então revalidar de fora (`curl -sI https://fraptotransp.com.br` deve dar 301 → www).
+  `https://www.fraptotransp.com.br` responde 200 normalmente.
+- **Healthcheck: LIVENESS × READINESS.** O `HEALTHCHECK` do Docker usa `/api/ping` (liveness — o processo
+  está de pé, sem depender do banco); o healthcheck do Railway usa `/api/ready` (readiness — `SELECT 1`).
+  Diferença PROPOSITAL: se o container usasse `/api/ready`, um blip do banco o marcaria unhealthy e
+  causaria restart em cascata. `/api/ready` é resistente a carga (cache curto + single-flight).
 - **DMARC (evoluir por etapas, sem quebrar e-mail legítimo):** manter SPF/DKIM do Resend e adicionar o
   TXT `_dmarc.fraptotransp.com.br`:
   1. `v=DMARC1; p=none; rua=mailto:fraptotech@gmail.com` — coletar/analisar relatórios;
