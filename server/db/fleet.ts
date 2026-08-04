@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { tripKmToAccrue, accrueOdometerCore } from "../_core/odometer";
 import { hashTrackingToken, TRACKING_TOKEN_TTL_MS } from "../_core/tracking";
@@ -346,23 +346,66 @@ export async function issueTrackingToken(
 
 // Migração LAZY: um aparelho legado (token em claro) que ainda pinga vira hash
 // no primeiro uso — mesmo token, agora guardado como hash + ganha expiração.
+// Executor da migração LAZY do token legado → hash. Existe para tornar o
+// invariante testável sem banco real (mesmo padrão dos outros cores).
+export interface TokenMigrateExecutor {
+  // COMPARE-AND-SWAP: migra para hash(token) SÓ se a linha AINDA tiver
+  // trackingToken == token (o legado que foi autenticado) E trackingTokenHash
+  // IS NULL (ainda não migrado/rotacionado). Retorna linhas afetadas.
+  casMigrate(orgId: number, driverId: number, token: string): Promise<number>;
+}
+
+// Orquestração PURA: só considera migrado quando o CAS afeta exatamente 1 linha.
+export async function migrateTrackingTokenToHashCore(
+  exec: TokenMigrateExecutor,
+  orgId: number,
+  driverId: number,
+  token: string
+): Promise<boolean> {
+  return (await exec.casMigrate(orgId, driverId, token)) === 1;
+}
+
+// Migração LAZY do token legado (valor em claro) para o HASH — CONDICIONADA
+// (CAS) ao token legado autenticado e a hash ainda nula. Assim um login
+// concorrente (issueTrackingToken já gravou o hash NOVO e zerou o claro) NÃO é
+// sobrescrito pelo token antigo: o WHERE não casa (trackingToken já é null),
+// afeta 0 linhas e o token novo permanece. Retorna true se migrou nesta chamada.
 export async function migrateTrackingTokenToHash(
   orgId: number,
   driverId: number,
   token: string
-) {
+): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) return false;
   const now = new Date();
-  await db
-    .update(drivers)
-    .set({
-      trackingToken: null,
-      trackingTokenHash: hashTrackingToken(token),
-      trackingTokenExpiresAt: new Date(now.getTime() + TRACKING_TOKEN_TTL_MS),
-      trackingTokenRotatedAt: now,
-    })
-    .where(and(eq(drivers.orgId, orgId), eq(drivers.id, driverId)));
+  return migrateTrackingTokenToHashCore(
+    {
+      async casMigrate(orgId, driverId, token) {
+        const res = await db
+          .update(drivers)
+          .set({
+            trackingToken: null,
+            trackingTokenHash: hashTrackingToken(token),
+            trackingTokenExpiresAt: new Date(
+              now.getTime() + TRACKING_TOKEN_TTL_MS
+            ),
+            trackingTokenRotatedAt: now,
+          })
+          .where(
+            and(
+              eq(drivers.orgId, orgId),
+              eq(drivers.id, driverId),
+              eq(drivers.trackingToken, token),
+              isNull(drivers.trackingTokenHash)
+            )
+          );
+        return (res[0] as { affectedRows?: number })?.affectedRows ?? 0;
+      },
+    },
+    orgId,
+    driverId,
+    token
+  );
 }
 
 // Revoga o token (logout do app / reset pelo admin): marca revogação e zera
