@@ -6,6 +6,7 @@ import { Loader2, Send, User, Sparkles } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Streamdown } from "streamdown";
 import { safeAiUrl } from "@/lib/aiSafeUrl";
+import { neutralizeMermaidFences } from "@/lib/aiSafeMarkdown";
 
 /**
  * Message type matching server-side LLM Message interface
@@ -273,15 +274,17 @@ export function AIChatBox({
                               chegam ao DOM. urlTransform saneia as URLs (so
                               https, mailto, tel). controls=false desliga o
                               exportador CSV das tabelas (evita formula
-                              injection). Markdown, tabelas e codigo seguem
-                              renderizando (remark-gfm + componentes do
-                              Streamdown, que nao dependem de rehype-raw). */}
+                              injection). neutralizeMermaidFences reescreve
+                              ```mermaid -> ```text: o Streamdown NAO renderiza o
+                              diagrama (que usa dangerouslySetInnerHTML) — vira
+                              bloco de codigo inerte. Markdown, tabelas e codigo
+                              seguem renderizando (remark-gfm). */}
                           <Streamdown
                             rehypePlugins={[]}
                             controls={false}
                             urlTransform={safeAiUrl}
                           >
-                            {message.content}
+                            {neutralizeMermaidFences(message.content)}
                           </Streamdown>
                         </div>
                       ) : (

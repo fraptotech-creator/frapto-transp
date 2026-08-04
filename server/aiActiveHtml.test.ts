@@ -94,18 +94,14 @@ describe("saída da IA — sem HTML ativo no DOM (Lote A)", () => {
   });
 });
 
-// COBERTURA para o upgrade DEFERIDO (item 5): o `rehypePlugins={[]}` barra HTML
-// cru, mas NÃO desabilita o Mermaid. No Streamdown 1.4.0 o Mermaid é decidido
-// DENTRO do componente `code` (language === "mermaid"), independente de
-// rehypePlugins e sem prop para desligar — ou seja, um bloco ```mermaid vindo da
-// saída NÃO-confiável da IA é um caminho ALCANÇÁVEL até a cadeia
-// mermaid→DOMPurify (as 4 vulns altas do audit). Estes testes fixam o fato ANTES
-// da correção real (upgrade controlado de streamdown/mermaid/dompurify, em PR
-// próprio): o fence de mermaid ATRAVESSA o rehypePlugins=[] intacto (no
-// react-markdown vira um <code class="language-mermaid">; no Streamdown viraria
-// um diagrama vivo). react-markdown por si NÃO renderiza Mermaid — por isso a
-// mitigação não pode depender de rehypePlugins.
-describe("saída da IA — Mermaid é caminho alcançável (advisory DEFERIDO, item 5)", () => {
+// FATO (motiva o item 6): `rehypePlugins={[]}` barra HTML cru mas NÃO desabilita
+// o Mermaid — no Streamdown o Mermaid é decidido DENTRO do componente `code`
+// (language === "mermaid"), independente de rehypePlugins. Um bloco ```mermaid
+// cru ATRAVESSA o motor markdown intacto. A CORREÇÃO (item 6) é neutralizar o
+// fence ANTES do Streamdown (neutralizeMermaidFences: ```mermaid → ```text),
+// provada em aiSafeMarkdown.test.ts. Estes testes fixam o comportamento CRU do
+// react-markdown (sem a neutralização), que a correção depende de contornar.
+describe("saída da IA — Mermaid cru atravessa o react-markdown (motiva item 6)", () => {
   it("bloco ```mermaid NÃO é neutralizado por rehypePlugins=[] (fence sobrevive)", () => {
     const { container } = renderAi("```mermaid\ngraph TD; A-->B;\n```");
     // o conteúdo mermaid atravessa intacto (Streamdown o renderizaria como
