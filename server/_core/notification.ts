@@ -1,5 +1,4 @@
 import { TRPCError } from "@trpc/server";
-import { maskPii } from "./maskPii";
 
 export type NotificationPayload = {
   title: string;
@@ -56,8 +55,11 @@ export async function notifyOwner(
   payload: NotificationPayload
 ): Promise<boolean> {
   const { title, content } = validatePayload(payload);
-  // Mascara PII antes de logar: o conteúdo é texto livre (admin) e pode conter
-  // e-mail/telefone/CPF/CNH.
-  console.log(`[Notification] (owner) ${maskPii(title)}: ${maskPii(content)}`);
+  // NÃO logar título/conteúdo livres: são texto de admin e podem conter PII
+  // (nome, endereço, CPF, e-mail...). Só METADADOS técnicos (tamanhos). O ponto
+  // de troca futuro (email/Slack) recebe o conteúdo real, mas o LOG não.
+  console.log(
+    `[Notification] (owner) title=${title.length}c content=${content.length}c`
+  );
   return true;
 }
