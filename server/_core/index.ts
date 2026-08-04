@@ -26,7 +26,7 @@ import { decideBoot } from "./bootGuard";
 import { mountTrpcPipeline } from "./trpcPipeline";
 import { reportFatalStartup } from "./fatalStartup";
 import { installGracefulShutdown } from "./shutdown";
-import { checkReady } from "./health";
+import { createReadiness } from "./health";
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
 
@@ -35,6 +35,18 @@ import { sql } from "drizzle-orm";
 // passar de 2s → healthcheck flaparia com 503 espúrio). 5s « healthcheckTimeout
 // (30s) e « connectTimeout do pool (10s). Medido: conexão quente ~0,6s.
 const READY_TIMEOUT_MS = 5000;
+
+// Instância única: cache curto + single-flight (burst de sondas → 1 SELECT 1;
+// sem acúmulo de consultas pendentes). getDb null → runQuery lança → não pronto.
+const readiness = createReadiness({
+  runQuery: async () => {
+    const db = await getDb();
+    if (!db) throw new Error("db unavailable");
+    return db.execute(sql`select 1`);
+  },
+  now: () => Date.now(),
+  timeoutMs: READY_TIMEOUT_MS,
+});
 // Encerramento gracioso: deadline de drenagem alinhado ao drainingSeconds=30 do
 // railway.json — força a saída ANTES do SIGKILL do Railway. Ops dentro deste
 // prazo (upload: teto de leitura 30s + R2/DB; IA: timeout 60s no pior caso)
@@ -198,10 +210,7 @@ async function startServer() {
   // com try/catch próprio (não pode rejeitar — não é async montado inseguro).
   app.get("/api/ready", async (_req, res) => {
     try {
-      const db = await getDb();
-      const pronto = db
-        ? await checkReady(() => db.execute(sql`select 1`), READY_TIMEOUT_MS)
-        : false;
+      const pronto = await readiness.check();
       res.status(pronto ? 200 : 503).json({ ready: pronto });
     } catch {
       res.status(503).json({ ready: false });
