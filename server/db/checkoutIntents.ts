@@ -18,40 +18,39 @@ export type CheckoutClaim =
   | { action: "reuse"; key: string; url: string | null }
   | { action: "create"; key: string };
 
-// Intenção "em progresso" (sem url) por mais que isto = tentativa abandonada
-// (réplica caiu no meio) → pode recriar.
-export const CHECKOUT_INTENT_STALE_MS = 2 * 60 * 1000;
-
-// Decisão PURA de reuso × recriação (testável sem banco):
+// Decisão PURA de reuso × recriação (testável sem banco). O invariante crítico:
+// NUNCA trocar de idempotency key só porque a URL local está nula (crash antes do
+// finalize) — re-chamar o Stripe com a MESMA chave RECUPERA a sessão original
+// (idempotência), sem abrir uma segunda. Só cria chave nova quando há PROVA de
+// expiração (uma url que existiu e passou da validade — a sessão antiga não é
+// mais pagável):
 //   - sem linha → cria (chave nova);
-//   - sessão ainda válida (url + não expirada) → reutiliza a MESMA url (nenhuma
-//     nova sessão Stripe);
-//   - em progresso RECENTE (sem url, outra réplica criando agora) → reutiliza a
-//     CHAVE (Stripe dedupe → mesma sessão), ainda sem url;
-//   - expirada ou abandonada → cria (chave nova).
+//   - url válida (não expirada) → reutiliza a MESMA url (nenhuma nova sessão);
+//   - url EXPIRADA (prova) → cria (chave nova; a antiga expirou, não é pagável);
+//   - sem url (em progresso / crash antes do finalize, qualquer idade) →
+//     REUTILIZA a chave (recuperação autoritativa via Stripe), nunca cria K2.
 export function decideCheckoutIntent(
   existing: CheckoutIntentRow | undefined,
   now: Date,
-  newKey: string,
-  staleMs: number
+  newKey: string
 ): CheckoutClaim {
   if (!existing) return { action: "create", key: newKey };
   const t = now.getTime();
-  if (
-    existing.sessionUrl &&
-    existing.expiresAt &&
-    existing.expiresAt.getTime() > t
-  ) {
-    return {
-      action: "reuse",
-      key: existing.idempotencyKey,
-      url: existing.sessionUrl,
-    };
+  if (existing.sessionUrl && existing.expiresAt) {
+    return existing.expiresAt.getTime() > t
+      ? {
+          action: "reuse",
+          key: existing.idempotencyKey,
+          url: existing.sessionUrl,
+        }
+      : { action: "create", key: newKey }; // expiração COMPROVADA → K2 seguro
   }
-  if (!existing.sessionUrl && t - existing.createdAt.getTime() < staleMs) {
-    return { action: "reuse", key: existing.idempotencyKey, url: null };
-  }
-  return { action: "create", key: newKey };
+  // sem url (ou sem expiresAt conhecido): recupera a MESMA chave — nada de K2.
+  return {
+    action: "reuse",
+    key: existing.idempotencyKey,
+    url: existing.sessionUrl ?? null,
+  };
 }
 
 // Executor mínimo (injetável p/ teste sem banco). insertNew devolve false quando
@@ -73,10 +72,10 @@ export interface CheckoutIntentExecutor {
 //      — se outra réplica recriou antes (affected 0), re-lê e reusa a chave dela.
 export async function claimCheckoutIntentCore(
   exec: CheckoutIntentExecutor,
-  params: { orgId: number; newKey: string; now: Date; staleMs: number },
+  params: { orgId: number; newKey: string; now: Date },
   maxTries = 3
 ): Promise<{ key: string; url: string | null }> {
-  const { orgId, newKey, now, staleMs } = params;
+  const { orgId, newKey, now } = params;
   if (await exec.insertNew(orgId, newKey, now))
     return { key: newKey, url: null };
   for (let i = 0; i < maxTries; i++) {
@@ -87,7 +86,7 @@ export async function claimCheckoutIntentCore(
       }
       continue;
     }
-    const dec = decideCheckoutIntent(row, now, newKey, staleMs);
+    const dec = decideCheckoutIntent(row, now, newKey);
     if (dec.action === "reuse") return { key: dec.key, url: dec.url };
     const afetadas = await exec.recreate(
       orgId,
@@ -158,17 +157,11 @@ function realExecutor(
 export async function claimCheckoutIntent(
   orgId: number,
   newKey: string,
-  now: Date,
-  staleMs: number = CHECKOUT_INTENT_STALE_MS
+  now: Date
 ): Promise<{ key: string; url: string | null }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return claimCheckoutIntentCore(realExecutor(db), {
-    orgId,
-    newKey,
-    now,
-    staleMs,
-  });
+  return claimCheckoutIntentCore(realExecutor(db), { orgId, newKey, now });
 }
 
 // Grava a url/expiração da sessão criada — CAS: só se a chave ainda for a nossa
