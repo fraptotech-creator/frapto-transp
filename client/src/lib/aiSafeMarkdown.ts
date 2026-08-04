@@ -6,11 +6,13 @@
 // diagrama, sem dangerouslySetInnerHTML). Não é sanitização caseira de HTML — só
 // troca o rótulo da linguagem do fence. O restante do Markdown segue igual.
 //
-// Casa a LINHA de abertura de um fence (3+ crases, com indentação opcional)
-// cujo info-string começa por "mermaid" (ex.: ```mermaid, ~~~mermaid não é
-// suportado pelo Streamdown, então cobrimos crases). Preserva a indentação e as
-// crases; troca só o "mermaid".
-const MERMAID_FENCE = /^(\s*`{3,})[ \t]*mermaid\b[^\n]*$/gim;
+// Casa a LINHA de abertura de um fence de código cujo info-string começa por
+// "mermaid" — cobrindo AMBOS os delimitadores do CommonMark/remark: crases
+// (```) e tils (~~~), 3 ou mais, com indentação opcional. Preserva o
+// delimitador e a indentação (grupo 1); troca só o rótulo "mermaid" por "text".
+// O fence de fechamento (mesmo delimitador) não é tocado. `\b` evita casar
+// "mermaidX"; `[^\n]*` engole atributos no info-string (ex.: ```mermaid foo).
+const MERMAID_FENCE = /^(\s*(?:`{3,}|~{3,}))[ \t]*mermaid\b[^\n]*$/gim;
 
 export function neutralizeMermaidFences(md: string): string {
   if (!md) return md;

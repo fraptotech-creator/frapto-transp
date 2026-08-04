@@ -15,5 +15,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
+    // Inline o streamdown para o Vite transformar seus imports (ex.: katex.min.css),
+    // permitindo testar o componente REAL no jsdom (senão o Node externaliza o
+    // node_modules e falha em "Unknown file extension .css").
+    server: { deps: { inline: ["streamdown"] } },
   },
 });
