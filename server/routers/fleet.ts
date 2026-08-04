@@ -231,7 +231,7 @@ export const driversRouter = router({
     return { rows };
   }),
 
-  create: activeOrgProcedure
+  create: activeOrgOwnerProcedure
     .input(
       z.object({
         nome: z.string().min(1),
@@ -309,7 +309,7 @@ export const driversRouter = router({
   // Define/renomeia o usuário de acesso do motorista. Se ainda não tem login,
   // CRIA o acesso (senha inicial padrão, troca obrigatória). Serve para dar
   // acesso a motoristas cadastrados antes do recurso existir.
-  setLogin: activeOrgProcedure
+  setLogin: activeOrgOwnerProcedure
     .input(
       z.object({ driverId: z.number(), username: z.string().min(3).max(64) })
     )
@@ -351,7 +351,7 @@ export const driversRouter = router({
 
   // Admin reseta a senha do motorista para a padrão (e o obriga a trocar);
   // derruba qualquer sessão ativa dele.
-  resetPassword: activeOrgProcedure
+  resetPassword: activeOrgOwnerProcedure
     .input(z.object({ driverId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const user = await getDriverUser(ctx.orgId, input.driverId);
@@ -374,7 +374,7 @@ export const driversRouter = router({
       return { activationToken } as const;
     }),
 
-  update: activeOrgProcedure
+  update: activeOrgOwnerProcedure
     .input(
       z.object({
         id: z.number(),
@@ -408,7 +408,32 @@ export const driversRouter = router({
       return d ? toDriverPublic(d) : d;
     }),
 
-  delete: activeOrgProcedure
+  // Mutation OPERACIONAL estreita (member pode): allowlist RÍGIDA — só status e
+  // disponibilidade. NÃO aceita o objeto de update completo, então CPF/CNH/
+  // e-mail/telefone/endereço/credencial/driverId de outra org não têm por onde
+  // entrar (zod ignora chaves fora do schema; e só status/disponibilidade são
+  // repassados ao updateDriver). Escopo por ctx.orgId (isolamento cross-tenant).
+  setOperational: activeOrgProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        status: z
+          .enum(["disponivel", "viagem", "descansando", "inativo"])
+          .optional(),
+        disponibilidade: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const patch: Partial<InsertDriver> = {};
+      if (input.status !== undefined) patch.status = input.status;
+      if (input.disponibilidade !== undefined) {
+        patch.disponibilidade = input.disponibilidade;
+      }
+      const d = await updateDriver(ctx.orgId, input.id, patch);
+      return d ? toDriverPublic(d) : d;
+    }),
+
+  delete: activeOrgOwnerProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       // Apaga também o login vinculado (se houver).
