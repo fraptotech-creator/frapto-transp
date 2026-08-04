@@ -64,39 +64,62 @@ describe("createReadiness — resistente a carga (item 5)", () => {
     expect(calls).toBe(2);
   });
 
-  it("banco lento → 503 (false) e NÃO acumula consultas pendentes", async () => {
+  it("query que NUNCA resolve + timeout + TTL + novas sondas → 1 query física", async () => {
     const c = clock();
     let calls = 0;
     const r = createReadiness({
       runQuery: () => {
         calls++;
-        return new Promise(() => {}); // nunca resolve
+        return new Promise(() => {}); // nunca resolve nem rejeita
       },
       now: c.now,
       timeoutMs: 20,
-      cacheTtlMs: 1500,
+      cacheTtlMs: 100,
     });
-    const results = await Promise.all(
+    const burst = await Promise.all(
       Array.from({ length: 50 }, () => r.check())
     );
-    expect(results.every(x => x === false)).toBe(true);
-    expect(calls).toBe(1); // single-flight: uma só consulta pendente, não 50
+    expect(burst.every(x => x === false)).toBe(true); // 503 (timeout)
+    // avança além do TTL e sonda de novo — NÃO pode abrir 2ª query física
+    c.advance(500);
+    expect(await r.check()).toBe(false);
+    expect(await r.check()).toBe(false);
+    expect(calls).toBe(1); // a query pendente é reusada; jamais uma segunda
   });
 
-  it("após recuperação do banco, volta a 200 (true)", async () => {
+  it("erro do banco → 503 sem detalhes (false)", async () => {
     const c = clock();
-    let ok = false;
     const r = createReadiness({
       runQuery: async () => {
-        if (!ok) throw new Error("down");
-        return [];
+        throw new Error("ECONNREFUSED host=segredo");
       },
       now: c.now,
       cacheTtlMs: 1000,
     });
-    expect(await r.check()).toBe(false);
-    ok = true;
-    c.advance(1500); // expira o cache do estado ruim
-    expect(await r.check()).toBe(true);
+    expect(await r.check()).toBe(false); // boolean, sem vazar a causa
+  });
+
+  it("ao ENCERRAR a query (reject) e recuperar o banco, volta a 200", async () => {
+    const c = clock();
+    let mode: "hang-then-reject" | "ok" = "hang-then-reject";
+    let rejectFirst: (() => void) | null = null;
+    const r = createReadiness({
+      runQuery: () => {
+        if (mode === "ok") return Promise.resolve([]);
+        return new Promise((_res, rej) => {
+          rejectFirst = () => rej(new Error("cancelada"));
+        });
+      },
+      now: c.now,
+      timeoutMs: 20,
+      cacheTtlMs: 100,
+    });
+    expect(await r.check()).toBe(false); // pendente → 503
+    rejectFirst?.(); // a query física é encerrada (cancelada/erro)
+    await Promise.resolve();
+    await Promise.resolve();
+    mode = "ok";
+    c.advance(500); // além do TTL
+    expect(await r.check()).toBe(true); // nova query física → 200
   });
 });

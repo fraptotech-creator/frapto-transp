@@ -41,27 +41,54 @@ export interface Readiness {
 
 // Readiness RESISTENTE A CARGA para o probe do Railway:
 //   - CACHE curto: um resultado recente serve o burst de sondas sem nova query;
-//   - SINGLE-FLIGHT: sondas simultâneas compartilham UMA execução (100 req → 1
-//     SELECT 1) — não acumula consultas pendentes no pool;
+//   - UMA query FÍSICA por vez: inFlight guarda a PRÓPRIA query, viva até
+//     resolver/rejeitar (NÃO é limpa no timeout do race). Enquanto pendente,
+//     toda sonda corre contra um timeout POR CHAMADA e responde 503 sem abrir
+//     outra query — nem depois do TTL. Só quando a query física settla (resolve
+//     ou rejeita) o cache é gravado e o slot liberado; a próxima sonda (após o
+//     TTL) inicia uma nova. Assim, mesmo sem cancelamento no driver, há no
+//     máximo UMA query física ativa.
 //   - TIMEOUT sanitizado (o caller responde 503 sem detalhe interno).
-// O cache + single-flight SÃO a proteção de taxa (não bloqueiam a sonda
-// legítima). checkReady nunca lança → o estado é sempre boolean.
 export function createReadiness(deps: ReadinessDeps): Readiness {
   const ttl = deps.cacheTtlMs ?? 1500;
   const timeoutMs = deps.timeoutMs ?? 5000;
   let cache: { ok: boolean; at: number } | null = null;
   let inFlight: Promise<boolean> | null = null;
+
+  const startPhysicalQuery = (): Promise<boolean> => {
+    const p = deps
+      .runQuery()
+      .then(
+        () => true,
+        () => false
+      )
+      .then(ok => {
+        cache = { ok, at: deps.now() };
+        if (inFlight === p) inFlight = null; // só libera ao SETTLE de verdade
+        return ok;
+      });
+    inFlight = p;
+    return p;
+  };
+
   return {
     async check() {
       const t = deps.now();
       if (cache && t - cache.at < ttl) return cache.ok;
-      if (inFlight) return inFlight; // single-flight: reusa a execução em curso
-      inFlight = checkReady(deps.runQuery, timeoutMs).then(ok => {
-        cache = { ok, at: deps.now() };
-        inFlight = null;
-        return ok;
+      // No máximo UMA query física: reusa a pendente ou inicia uma.
+      const q = inFlight ?? startPhysicalQuery();
+      // Timeout POR CHAMADA: se a query ainda não settlou, responde 503 (false)
+      // SEM abrir outra query e SEM soltar o inFlight (ela segue viva).
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<boolean>(resolve => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+        timer.unref?.();
       });
-      return inFlight;
+      try {
+        return await Promise.race([q, timeout]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     },
   };
 }
