@@ -89,6 +89,16 @@ tocar em nenhum major. Baixo risco, alto valor.
 
 Recomendação: **B1 agora** (fecha as 17 dompurify), **B2 depois** em sub-sessão.
 
+- **B3 (PR SEPARADO — as 6 moderate restantes):** resolução compatível das 3 que
+  sobraram no subtree, via `pnpm.overrides` (sem trocar o streamdown de major):
+  `mdast-util-to-hast → >=13.2.1`, `mermaid → >=11.15.0`, `uuid → >=11.1.1`.
+  Antes do merge: `pnpm install --frozen-lockfile` → `pnpm check` → `pnpm test` →
+  `pnpm build` → `pnpm audit --prod --json` (registrar a nova contagem) → **teste
+  de Markdown/Mermaid** (`streamdownMermaid.test.ts` + render real) confirmando que
+  a neutralização e o Markdown seguem intactos. NÃO misturar com o major do
+  streamdown (B2). Se algum override quebrar tipos/build, cair para o mínimo que
+  fecha a advisory sem regressão.
+
 ### Trilha C — majors pesados, DEFERIDOS (cada um em sessão própria com teste de feature)
 
 Não misturar: `express` 4→5 (middleware/rotas), `vite` 7→8, `vitest` 2→4,
