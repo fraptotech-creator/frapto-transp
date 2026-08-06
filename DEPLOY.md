@@ -141,3 +141,20 @@ e Cloudflare R2, respectivamente.)
   1. `v=DMARC1; p=none; rua=mailto:fraptotech@gmail.com` — coletar/analisar relatórios;
   2. `p=quarantine; pct=25` e aumentar o `pct` gradualmente;
   3. `p=reject` quando todas as fontes legítimas estiverem alinhadas.
+
+## Acesso manual do super-admin (bloqueio/liberação de qualquer empresa)
+
+No painel `/plataforma` o super-admin pode **Bloquear / Desbloquear / Liberar** o acesso de QUALQUER
+empresa — inclusive as que assinam pelo Stripe. Isso grava a coluna `organizations.accessOverride`
+(`active` / `blocked` / vazio), **separada** do `subscriptionStatus`:
+
+- `blocked` → corta o acesso mesmo com o Stripe ativo (kill switch);
+- `active` → concede acesso sem Stripe (cortesia / pagamento por fora);
+- vazio → "automático": segue a assinatura do Stripe.
+
+O webhook do Stripe **nunca** escreve em `accessOverride`, então o bloqueio manual **não é desfeito** por
+um evento do Stripe. A decisão final de acesso é `temAcesso(org)` (`server/_core/subscription.ts`), usada
+em TODOS os gates (tRPC `activeOrgProcedure`, caminho do motorista e `/api/track`).
+
+> ⚠️ **Bloquear NÃO cancela a cobrança do Stripe.** Corta só o acesso. Para parar de cobrar um assinante
+> do Stripe, cancele a assinatura no painel do Stripe (o painel avisa isso no diálogo de bloqueio).
