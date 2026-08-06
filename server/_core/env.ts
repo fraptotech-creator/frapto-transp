@@ -24,14 +24,6 @@ export const ENV = {
     process.env.EMAIL_REMETENTE ?? "nao-responda@fraptotransp.com.br",
   // Assistente de IA (Anthropic Claude) — fallback legado.
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-  // Padrão de IA do SISTEMA (grátis pra todos): só a chave é obrigatória; o
-  // resto já aponta pro Groq (OpenAI-compatível, rápido, sem cartão). Cada
-  // empresa pode trocar em Configurações.
-  defaultAiKey: process.env.DEFAULT_AI_KEY ?? "",
-  defaultAiProvider: process.env.DEFAULT_AI_PROVIDER ?? "openai_compatible",
-  defaultAiBaseUrl:
-    process.env.DEFAULT_AI_BASE_URL ?? "https://api.groq.com/openai/v1",
-  defaultAiModel: process.env.DEFAULT_AI_MODEL ?? "llama-3.3-70b-versatile",
   // Chave (32 bytes base64) para cifrar a apiKey de IA de cada empresa em
   // repouso (AES-256-GCM). Vazia = escrita cifrada indisponível (fail-closed).
   aiConfigEncryptionKey: process.env.AI_CONFIG_ENCRYPTION_KEY ?? "",
