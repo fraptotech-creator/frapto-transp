@@ -1,20 +1,36 @@
-// A saída do assistente é conteúdo NÃO-confiável. O Streamdown processa fences
-// ```mermaid num componente especial que renderiza SVG via dangerouslySetInnerHTML
-// (cadeia mermaid→DOMPurify com advisories). Como a IA de frota não precisa de
-// diagramas, NEUTRALIZAMOS o fence ANTES de renderizar: reescrevemos a linguagem
-// `mermaid` para `text`, então o Streamdown mostra um bloco de código INERTE (sem
-// diagrama, sem dangerouslySetInnerHTML). Não é sanitização caseira de HTML — só
-// troca o rótulo da linguagem do fence. O restante do Markdown segue igual.
+// A saída do assistente é conteúdo NÃO-confiável. O Streamdown renderiza fences
+// `mermaid` num componente que injeta SVG via dangerouslySetInnerHTML (cadeia
+// mermaid→DOMPurify, com advisories). A IA de frota não precisa de diagramas.
 //
-// Casa a LINHA de abertura de um fence de código cujo info-string começa por
-// "mermaid" — cobrindo AMBOS os delimitadores do CommonMark/remark: crases
-// (```) e tils (~~~), 3 ou mais, com indentação opcional. Preserva o
-// delimitador e a indentação (grupo 1); troca só o rótulo "mermaid" por "text".
-// O fence de fechamento (mesmo delimitador) não é tocado. `\b` evita casar
-// "mermaidX"; `[^\n]*` engole atributos no info-string (ex.: ```mermaid foo).
-const MERMAID_FENCE = /^(\s*(?:`{3,}|~{3,}))[ \t]*mermaid\b[^\n]*$/gim;
+// Correção ESTRUTURAL (não regex por linha, que não cobre blockquote/listas): um
+// remark plugin que opera no AST (mdast) e reescreve a linguagem de QUALQUER nó
+// `code` mermaid para "text", ANTES da renderização. Por ser no AST, cobre todos
+// os containers (raiz, blockquote, lista, aninhados) sem sanitização caseira nem
+// patch em node_modules. O Streamdown então mostra um bloco de código INERTE
+// (nunca o componente Mermaid). Markdown, tabelas, links e código comum seguem.
 
-export function neutralizeMermaidFences(md: string): string {
-  if (!md) return md;
-  return md.replace(MERMAID_FENCE, "$1text");
+// Nó mínimo do mdast que precisamos (evita depender de @types/mdast /
+// unist-util-visit). Só lemos type/lang e descemos por children.
+interface MdastNodeLike {
+  type: string;
+  lang?: string | null;
+  children?: MdastNodeLike[];
+}
+
+export function remarkNeutralizeMermaid() {
+  return (tree: MdastNodeLike): void => {
+    const walk = (node: MdastNodeLike): void => {
+      if (
+        node.type === "code" &&
+        typeof node.lang === "string" &&
+        node.lang.trim().toLowerCase() === "mermaid"
+      ) {
+        node.lang = "text";
+      }
+      if (node.children) {
+        for (const child of node.children) walk(child);
+      }
+    };
+    walk(tree);
+  };
 }

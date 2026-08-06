@@ -4,9 +4,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Loader2, Send, User, Sparkles } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { Streamdown } from "streamdown";
+import { Streamdown, defaultRemarkPlugins } from "streamdown";
 import { safeAiUrl } from "@/lib/aiSafeUrl";
-import { neutralizeMermaidFences } from "@/lib/aiSafeMarkdown";
+import { remarkNeutralizeMermaid } from "@/lib/aiSafeMarkdown";
+
+// remarkPlugins do Streamdown são SUBSTITUÍDOS quando passados (não mesclados),
+// então preservamos os defaults (ex.: remark-gfm p/ tabelas) e ADICIONAMOS o
+// neutralizador de Mermaid — que roda no AST e cobre todos os containers.
+const ASSISTANT_REMARK_PLUGINS = [
+  ...Object.values(defaultRemarkPlugins),
+  remarkNeutralizeMermaid,
+];
 
 /**
  * Message type matching server-side LLM Message interface
@@ -274,17 +282,20 @@ export function AIChatBox({
                               chegam ao DOM. urlTransform saneia as URLs (so
                               https, mailto, tel). controls=false desliga o
                               exportador CSV das tabelas (evita formula
-                              injection). neutralizeMermaidFences reescreve
-                              ```mermaid -> ```text: o Streamdown NAO renderiza o
-                              diagrama (que usa dangerouslySetInnerHTML) — vira
-                              bloco de codigo inerte. Markdown, tabelas e codigo
-                              seguem renderizando (remark-gfm). */}
+                              injection). remarkNeutralizeMermaid (no AST)
+                              reescreve a linguagem de QUALQUER no `code` mermaid
+                              p/ "text" — em raiz, blockquote, lista, aninhado —
+                              entao o Streamdown NAO aciona o componente Mermaid
+                              (dangerouslySetInnerHTML): vira codigo inerte.
+                              Markdown, tabelas e codigo seguem (remark-gfm nos
+                              defaults preservados). */}
                           <Streamdown
                             rehypePlugins={[]}
+                            remarkPlugins={ASSISTANT_REMARK_PLUGINS}
                             controls={false}
                             urlTransform={safeAiUrl}
                           >
-                            {neutralizeMermaidFences(message.content)}
+                            {message.content}
                           </Streamdown>
                         </div>
                       ) : (
