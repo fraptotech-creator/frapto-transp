@@ -7,7 +7,7 @@ import {
   trackingTokenBloqueado,
   type TripRef,
 } from "../_core/tracking";
-import { assinaturaAtiva } from "../_core/subscription";
+import { temAcesso } from "../_core/subscription";
 import { toSafeLogError } from "../_core/safeLog";
 import {
   getDriverByTrackingToken,
@@ -61,7 +61,7 @@ export async function handleTrackLogin(req: Request, res: Response) {
     // Gate de assinatura: sem pagamento em dia, nem emite token de rastreio.
     // Sem isto o app nativo era um bypass do paywall (grava GPS de graça).
     const org = await getOrganization(user.orgId);
-    if (!assinaturaAtiva(org?.subscriptionStatus)) {
+    if (!temAcesso(org)) {
       res.status(402).json({ error: "assinatura inativa" });
       return;
     }
@@ -106,7 +106,7 @@ export async function handleTrackIngest(req: Request, res: Response) {
     // assinatura vale para TODA borda, não só o tRPC. A org sai do registro do
     // token (fail-closed), nunca do cliente.
     const org = await getOrganization(driver.orgId);
-    if (!assinaturaAtiva(org?.subscriptionStatus)) {
+    if (!temAcesso(org)) {
       res.status(402).json({ error: "assinatura inativa" });
       return;
     }

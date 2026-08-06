@@ -56,6 +56,12 @@ export async function listOrgsWithStatsForSuperAdmin() {
     name: o.name,
     email: donos.find(d => d.orgId === o.id)?.email ?? null,
     subscriptionStatus: o.subscriptionStatus,
+    // Override manual do admin (null = segue o Stripe). A UI usa para rotular
+    // "Bloqueado/Liberado manualmente" e decidir qual botão mostrar.
+    accessOverride: o.accessOverride,
+    // Booleano (não vaza o ID): a org assina pelo Stripe? A UI avisa que
+    // bloquear aqui NÃO para a cobrança do Stripe.
+    hasStripeSubscription: Boolean(o.stripeSubscriptionId),
     planName: o.planName,
     trialEndsAt: o.trialEndsAt,
     currentPeriodEnd: o.currentPeriodEnd,

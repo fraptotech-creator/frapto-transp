@@ -1,36 +1,27 @@
-// Liberação/bloqueio MANUAL de acesso pelo dono da plataforma — para quem paga
-// por fora do Stripe (PIX, transferência, etc.).
+// Controle de acesso MANUAL do dono da plataforma (super-admin), para QUALQUER
+// empresa — inclusive as que assinam pelo Stripe.
 //
-// Decisão PURA (entra o estado da empresa, sai o que gravar). O efeito no banco
-// fica na borda, no router.
+// Decisão PURA (entra a ação, sai o que gravar). O efeito no banco fica na borda,
+// no router. Grava a coluna `accessOverride` — SEPARADA do subscriptionStatus —
+// justamente para o webhook do Stripe NUNCA desfazer o bloqueio manual:
+//   - accessOverride "blocked" → corta o acesso mesmo com Stripe ativo;
+//   - accessOverride "active"  → concede acesso sem Stripe (cortesia/pgto por fora);
+//   - accessOverride null      → "automático": volta a seguir o Stripe.
 //
-// INVARIANTE que protege o negócio: NÃO deixa mexer à mão em empresa que tem
-// assinatura no Stripe. Dois motivos concretos:
-//   1. O webhook (applySubscription em _core/stripe.ts) reescreve o
-//      subscriptionStatus no próximo evento — a liberação manual seria desfeita
-//      sozinha, sem aviso, e pareceria "bug do sistema".
-//   2. Bloquear à mão quem paga por Stripe TIRA o acesso mas NÃO cancela a
-//      cobrança — o cliente continuaria pagando sem poder usar.
-// Nesses casos o certo é resolver no painel do Stripe. Erro visível > efeito
-// silencioso e errado.
+// ⚠️ Bloquear aqui tira o ACESSO, mas NÃO cancela a cobrança do Stripe. Para
+// parar de cobrar um assinante do Stripe, cancele no painel do Stripe.
 
-export type AcaoAcesso = "liberar" | "bloquear";
+export type AcaoAcesso = "liberar" | "bloquear" | "desbloquear";
 
 export interface OrgParaAcesso {
-  stripeSubscriptionId?: string | null;
+  id?: number;
 }
 
-export type PatchAcesso = {
-  subscriptionStatus: "active" | "canceled";
-  planName: string | null;
-};
+export type PatchAcesso = { accessOverride: "active" | "blocked" | null };
 
 export type DecisaoAcesso =
   | { ok: true; patch: PatchAcesso }
   | { ok: false; motivo: string };
-
-// Marca o que foi liberado na mão, para diferenciar de assinante do Stripe.
-export const PLANO_MANUAL = "Manual (liberado pelo admin)";
 
 export function decidirMudancaAcesso(
   org: OrgParaAcesso | null | undefined,
@@ -39,23 +30,12 @@ export function decidirMudancaAcesso(
   if (!org) {
     return { ok: false, motivo: "Empresa não encontrada." };
   }
-  if (org.stripeSubscriptionId) {
-    return {
-      ok: false,
-      motivo:
-        "Esta empresa assina pelo Stripe. Libere ou cancele pelo painel do " +
-        "Stripe: mudar aqui seria desfeito pelo webhook, e bloquear aqui " +
-        "tiraria o acesso sem parar a cobrança.",
-    };
+  if (acao === "bloquear") {
+    return { ok: true, patch: { accessOverride: "blocked" } };
   }
   if (acao === "liberar") {
-    return {
-      ok: true,
-      patch: { subscriptionStatus: "active", planName: PLANO_MANUAL },
-    };
+    return { ok: true, patch: { accessOverride: "active" } };
   }
-  return {
-    ok: true,
-    patch: { subscriptionStatus: "canceled", planName: null },
-  };
+  // desbloquear = volta ao automático (segue o Stripe).
+  return { ok: true, patch: { accessOverride: null } };
 }

@@ -1,31 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { decidirMudancaAcesso, PLANO_MANUAL } from "./_core/superAdminAccess";
+import { decidirMudancaAcesso } from "./_core/superAdminAccess";
 
-const SEM_STRIPE = { stripeSubscriptionId: null };
+const ORG = { id: 1 };
 
 describe("decidirMudancaAcesso", () => {
-  it("liberar deixa a empresa ativa e marcada como manual", () => {
-    const d = decidirMudancaAcesso(SEM_STRIPE, "liberar");
-    expect(d).toEqual({
+  it("bloquear grava override 'blocked' (kill switch, vence o Stripe)", () => {
+    expect(decidirMudancaAcesso(ORG, "bloquear")).toEqual({
       ok: true,
-      patch: { subscriptionStatus: "active", planName: PLANO_MANUAL },
+      patch: { accessOverride: "blocked" },
     });
   });
 
-  it("bloquear encerra o acesso e limpa o plano", () => {
-    const d = decidirMudancaAcesso(SEM_STRIPE, "bloquear");
-    expect(d).toEqual({
+  it("liberar grava override 'active' (acesso sem Stripe)", () => {
+    expect(decidirMudancaAcesso(ORG, "liberar")).toEqual({
       ok: true,
-      patch: { subscriptionStatus: "canceled", planName: null },
+      patch: { accessOverride: "active" },
     });
   });
 
-  it("RECUSA mexer em quem assina pelo Stripe (weblook desfaria / cobrança seguiria)", () => {
-    const comStripe = { stripeSubscriptionId: "sub_123" };
-    for (const acao of ["liberar", "bloquear"] as const) {
-      const d = decidirMudancaAcesso(comStripe, acao);
-      expect(d.ok).toBe(false);
-      if (!d.ok) expect(d.motivo).toMatch(/Stripe/);
+  it("desbloquear limpa o override (volta a seguir o Stripe)", () => {
+    expect(decidirMudancaAcesso(ORG, "desbloquear")).toEqual({
+      ok: true,
+      patch: { accessOverride: null },
+    });
+  });
+
+  it("funciona para QUALQUER empresa, inclusive assinante do Stripe", () => {
+    // O override é coluna SEPARADA — o webhook não o desfaz —, então não há mais
+    // motivo para recusar orgs com assinatura no Stripe.
+    for (const acao of ["liberar", "bloquear", "desbloquear"] as const) {
+      expect(decidirMudancaAcesso(ORG, acao).ok).toBe(true);
     }
   });
 
@@ -34,16 +38,9 @@ describe("decidirMudancaAcesso", () => {
     expect(decidirMudancaAcesso(undefined, "bloquear").ok).toBe(false);
   });
 
-  it("stripeSubscriptionId vazio NÃO conta como assinante do Stripe", () => {
-    // Empresa que só abriu checkout e desistiu continua liberável na mão.
-    expect(
-      decidirMudancaAcesso({ stripeSubscriptionId: "" }, "liberar").ok
-    ).toBe(true);
-  });
-
-  it("liberar é idempotente (repetir dá o mesmo resultado)", () => {
-    const a = decidirMudancaAcesso(SEM_STRIPE, "liberar");
-    const b = decidirMudancaAcesso(SEM_STRIPE, "liberar");
-    expect(a).toEqual(b);
+  it("é idempotente (repetir dá o mesmo resultado)", () => {
+    expect(decidirMudancaAcesso(ORG, "bloquear")).toEqual(
+      decidirMudancaAcesso(ORG, "bloquear")
+    );
   });
 });

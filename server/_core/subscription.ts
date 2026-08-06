@@ -10,3 +10,22 @@
 export function assinaturaAtiva(status: string | null | undefined): boolean {
   return status === "active" || status === "trialing";
 }
+
+// Override MANUAL do super-admin, independente do Stripe. O webhook NUNCA escreve
+// nele, então o bloqueio manual não é desfeito por um evento do Stripe.
+export type AccessOverride = "active" | "blocked" | null | undefined;
+
+export interface OrgAcesso {
+  subscriptionStatus?: string | null;
+  accessOverride?: AccessOverride;
+}
+
+// Decisão FINAL de acesso (o que TODOS os gates devem usar). Ordem:
+//   1. override "blocked" → NEGA, mesmo com Stripe ativo (kill switch do admin).
+//   2. override "active"  → CONCEDE, sem depender do Stripe (cortesia/pgto por fora).
+//   3. sem override       → segue a assinatura do Stripe (fail-closed).
+export function temAcesso(org: OrgAcesso | null | undefined): boolean {
+  if (org?.accessOverride === "blocked") return false;
+  if (org?.accessOverride === "active") return true;
+  return assinaturaAtiva(org?.subscriptionStatus);
+}

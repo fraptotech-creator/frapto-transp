@@ -39,6 +39,7 @@ import { enviarEmail } from "../_core/email";
 import { emailRecuperacaoSenha } from "../_core/emailTemplates";
 import { setResetToken, consumeResetToken } from "../db";
 import { isSuperAdmin } from "../_core/superAdmin";
+import { temAcesso } from "../_core/subscription";
 import { SENHA_MIN } from "../_core/passwordPolicy";
 import { ENV } from "../_core/env";
 
@@ -336,7 +337,10 @@ export const billingRouter = router({
     const status = org?.subscriptionStatus ?? "none";
     return {
       status,
-      active: status === "active" || status === "trialing",
+      // Acesso EFETIVO (respeita o override manual do admin, não só o Stripe).
+      active: temAcesso(org),
+      // Bloqueio manual pelo admin (para a UI distinguir "assine" de "suspenso").
+      blocked: org?.accessOverride === "blocked",
       currentPeriodEnd: org?.currentPeriodEnd ?? null,
       configured: isStripeConfigured(),
       // Só existe portal do Stripe se a empresa já virou cliente lá. Sem isso,

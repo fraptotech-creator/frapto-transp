@@ -28,14 +28,14 @@ export const superAdminRouter = router({
     };
   }),
 
-  // Libera/bloqueia acesso NA MÃO (cliente que pagou por fora do Stripe).
-  // A regra de quando pode está em _core/superAdminAccess.ts (pura, testada);
-  // aqui só o efeito.
+  // Libera/bloqueia/desbloqueia acesso NA MÃO para QUALQUER empresa (grava o
+  // accessOverride, separado do Stripe). A regra pura está em
+  // _core/superAdminAccess.ts (testada); aqui só o efeito.
   setAccess: superAdminProcedure
     .input(
       z.object({
         orgId: z.number().int().positive(),
-        acao: z.enum(["liberar", "bloquear"]),
+        acao: z.enum(["liberar", "bloquear", "desbloquear"]),
       })
     )
     .mutation(async ({ input, ctx }) => {
