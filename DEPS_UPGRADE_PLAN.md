@@ -5,6 +5,19 @@ Regra do projeto: upgrade de deps é **PR/sessão dedicada**, em branch própria
 e **validação ao vivo** após deploy. **Nunca** `pnpm audit --fix --force` (quebra
 o `--frozen-lockfile` do deploy). Este arquivo é o PLANO; o upgrade vai à parte.
 
+## STATUS — Trilha A + B1 EXECUTADAS (2026-08-06)
+
+Aplicadas e gate verde (tsc 0 · 508/508 · build): `@trpc/* 11.6→11.18`,
+`express-rate-limit 8.5→8.6`, e overrides `path-to-regexp 0.1.13`, `qs 6.15.3`,
+`body-parser 1.20.6`, `dompurify 3.4.13`. **Auditoria 38 → 12** (5→2 high,
+27→10 moderate, 6→0 low). As 12 restantes são só: (a) subtree
+`streamdown→mermaid` (mermaid:4, lodash-es:3, mdast-util-to-hast, uuid) —
+**INERTE** (mermaid neutralizado), sai na **Trilha B2** (streamdown v2); e
+(b) `lodash` via `recharts` (3) — **sem patch upstream**, sai só na **Trilha C**
+(recharts 3). **Deferido (rotina, não-segurança):** patches `stripe 22.4`,
+`zod 4.4`, `drizzle-kit 0.31.10`, `@anthropic-ai/sdk 0.115` — bump quando
+conveniente (evitados agora p/ não mexer no Stripe às vésperas do teste de compra).
+
 ## Retrato da auditoria — 2026-08-06 (`pnpm audit --prod`)
 
 **38 vulnerabilidades: 5 high · 27 moderate · 6 low.** Onde moram (o que muda a
