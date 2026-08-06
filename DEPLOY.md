@@ -123,7 +123,7 @@ e Cloudflare R2, respectivamente.)
   `v3a3fe7s.up.railway.app`, verificado via API 2026-08-06). Logo, o apex **não** pode ser apontado ao
   Railway só pelo Registro.br. Não é bloqueador de venda — www-only é suficiente.
   **Receita para habilitar o apex depois (Cloudflare grátis, sem custo):**
-  1. Criar conta grátis no Cloudflare → *Add site* `fraptotransp.com.br` (plano Free).
+  1. Criar conta grátis no Cloudflare → _Add site_ `fraptotransp.com.br` (plano Free).
   2. Conferir que o import trouxe o CNAME `www`→`zpwqz8ig.up.railway.app` e o TXT `_dmarc`
      (`v=DMARC1; p=none;`). Não há MX (domínio não recebe e-mail) — inbound não quebra.
   3. No Registro.br, trocar os nameservers para os 2 do Cloudflare.

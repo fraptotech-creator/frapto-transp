@@ -34,6 +34,7 @@ prioridade):
   recharts) — é o que prioriza.
 
 ### Cobertura de segurança já no lugar (defesa não depende do upgrade)
+
 - `remarkNeutralizeMermaid` desabilita o Mermaid (acima).
 - `server/aiActiveHtml.test.ts`: HTML cru e URL perigosa (`javascript:`/`data:`)
   NÃO chegam ao DOM (react-markdown com `rehypePlugins=[]` + `urlTransform=safeAiUrl`).
@@ -41,17 +42,18 @@ prioridade):
 
 ### As 5 HIGH
 
-| Pacote | Vuln | Patched | Caminho | Exploitável | Ação |
-|---|---|---|---|---|---|
-| `@trpc/server` | `>=11.0.0 <11.8.0` | `>=11.8.0` | nosso servidor tRPC | **Sim** | minor `@trpc/* → 11.18.0` |
-| `ip-address` | `<=10.3.0` | `>=10.3.1` | `express-rate-limit@8.5.2` | Baixa | minor `express-rate-limit → 8.6.2` |
-| `path-to-regexp` | `<0.1.13` | `>=0.1.13` | `express@4.21.2` | Baixa (rotas simples) | override → `0.1.13` |
-| `lodash-es` | `<=4.17.23` | `>=4.18.0` | `streamdown→mermaid→…` | **Não** (mermaid off) | cai com upgrade streamdown |
-| `lodash` | `<=4.17.23` | `>=4.18.0` | `recharts@2.15.4` | Baixa (client) | **sem patch upstream** (4.18.0 não existe) → recharts 3 (major, adiar) |
+| Pacote           | Vuln               | Patched    | Caminho                    | Exploitável           | Ação                                                                   |
+| ---------------- | ------------------ | ---------- | -------------------------- | --------------------- | ---------------------------------------------------------------------- |
+| `@trpc/server`   | `>=11.0.0 <11.8.0` | `>=11.8.0` | nosso servidor tRPC        | **Sim**               | minor `@trpc/* → 11.18.0`                                              |
+| `ip-address`     | `<=10.3.0`         | `>=10.3.1` | `express-rate-limit@8.5.2` | Baixa                 | minor `express-rate-limit → 8.6.2`                                     |
+| `path-to-regexp` | `<0.1.13`          | `>=0.1.13` | `express@4.21.2`           | Baixa (rotas simples) | override → `0.1.13`                                                    |
+| `lodash-es`      | `<=4.17.23`        | `>=4.18.0` | `streamdown→mermaid→…`     | **Não** (mermaid off) | cai com upgrade streamdown                                             |
+| `lodash`         | `<=4.17.23`        | `>=4.18.0` | `recharts@2.15.4`          | Baixa (client)        | **sem patch upstream** (4.18.0 não existe) → recharts 3 (major, adiar) |
 
 ## Estratégia — 3 trilhas, da menor à maior risco
 
 ### Trilha A — cirúrgica, baixo risco (recomendada primeiro)
+
 Minors dentro do mesmo major + patches. Fecha 2 das 5 HIGH e várias moderate.
 Cada bump: `pnpm install` → tsc + testes + build → commit próprio.
 
@@ -68,6 +70,7 @@ Cada bump: `pnpm install` → tsc + testes + build → commit próprio.
 tocar em nenhum major. Baixo risco, alto valor.
 
 ### Trilha B — subtree Streamdown/Mermaid/DOMPurify (superfície XSS da pendência)
+
 - **B1 (barato, sem major):** `pnpm.overrides` forçando `dompurify → >=3.4.8` no
   subtree do mermaid → limpa as 17 advisories do dompurify sem tocar no streamdown.
   Belt-and-suspenders (o mermaid já está off). Validar build + `streamdownMermaid.test.ts` verdes.
@@ -81,6 +84,7 @@ tocar em nenhum major. Baixo risco, alto valor.
 Recomendação: **B1 agora** (fecha as 17 dompurify), **B2 depois** em sub-sessão.
 
 ### Trilha C — majors pesados, DEFERIDOS (cada um em sessão própria com teste de feature)
+
 Não misturar: `express` 4→5 (middleware/rotas), `vite` 7→8, `vitest` 2→4,
 `typescript` 5.9→7 (port novo — muito arriscado), `openai` 6→7,
 `recharts` 2→3 (fecha o HIGH do lodash, mas mexe nos gráficos),
@@ -93,6 +97,7 @@ com `recharts@3`. Até lá: aceitar e documentar (é client, `_.template` não r
 input do usuário → risco baixo).
 
 ## Verificação obrigatória por bump
+
 - Local: `pnpm install` (na branch, atualiza o lock) → `pnpm check` (tsc 0) →
   `pnpm test` (508+) → `pnpm build`.
 - CI: passa com `--frozen-lockfile` (lock novo commitado).
