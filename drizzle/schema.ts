@@ -30,6 +30,11 @@ export const organizations = mysqlTable("organizations", {
   ])
     .default("none")
     .notNull(),
+  // Override de acesso MANUAL do super-admin (independente do Stripe). Vazio =
+  // segue o Stripe (subscriptionStatus). "blocked" corta o acesso mesmo pagando;
+  // "active" concede acesso sem Stripe (cortesia/pagamento por fora). O webhook
+  // do Stripe NUNCA escreve aqui — por isso o bloqueio manual não é desfeito.
+  accessOverride: mysqlEnum("accessOverride", ["active", "blocked"]),
   planName: varchar("planName", { length: 100 }),
   trialEndsAt: timestamp("trialEndsAt"),
   currentPeriodEnd: timestamp("currentPeriodEnd"),

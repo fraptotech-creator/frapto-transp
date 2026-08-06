@@ -1,0 +1,1 @@
+ALTER TABLE `organizations` ADD `accessOverride` enum('active','blocked');
