@@ -114,13 +114,24 @@ e Cloudflare R2, respectivamente.)
   `AI_CONFIG_ENCRYPTION_KEY`). Confirme `NODE_ENV=production` no painel (já setado).
 - **IP real:** `trust proxy=1` — o XFF forjado pelo cliente é ignorado (verificado em pentest). Se um
   dia houver **múltiplas réplicas**, migrar rate-limit/semáforo de memória para store compartilhado.
-- **Apex → www (PENDENTE de DNS do usuário):** validação de fora em 2026-08-03 mostrou
-  `https://fraptotransp.com.br` **não resolvendo/conectando** (`http=000`) — o apex NÃO está apontado ao
-  Railway. O app já faz o 301 apex→`https://www.fraptotransp.com.br` (middleware em `_core/index.ts`), mas
-  isso só vale depois que o apex chegar ao serviço. AÇÃO do usuário: no provedor de DNS, apontar o apex ao
-  Railway (registro ALIAS/ANAME/A conforme o provedor) e adicionar o domínio `fraptotransp.com.br` no
-  serviço do Railway; então revalidar de fora (`curl -sI https://fraptotransp.com.br` deve dar 301 → www).
-  `https://www.fraptotransp.com.br` responde 200 normalmente.
+- **Apex → www — DECISÃO: só `www` no lançamento (apex adiado por escolha, 2026-08-06).**
+  `https://www.fraptotransp.com.br` responde **200 com certificado válido**; use-o em marketing/links. O
+  apex `https://fraptotransp.com.br` **não resolve** (sem registro DNS). O app já faz o 301
+  apex→www (middleware em `_core/index.ts`) — o código está pronto, falta só o DNS chegar nele.
+  **Por que adiado:** o DNS está no **Registro.br** (nameservers `d.sec.dns.br`/`e.sec.dns.br`), que **não
+  suporta CNAME/ALIAS/ANAME no apex**; e o Railway exige **CNAME no apex** (`fraptotransp.com.br` →
+  `v3a3fe7s.up.railway.app`, verificado via API 2026-08-06). Logo, o apex **não** pode ser apontado ao
+  Railway só pelo Registro.br. Não é bloqueador de venda — www-only é suficiente.
+  **Receita para habilitar o apex depois (Cloudflare grátis, sem custo):**
+  1. Criar conta grátis no Cloudflare → *Add site* `fraptotransp.com.br` (plano Free).
+  2. Conferir que o import trouxe o CNAME `www`→`zpwqz8ig.up.railway.app` e o TXT `_dmarc`
+     (`v=DMARC1; p=none;`). Não há MX (domínio não recebe e-mail) — inbound não quebra.
+  3. No Registro.br, trocar os nameservers para os 2 do Cloudflare.
+  4. Cloudflare → DNS: adicionar `fraptotransp.com.br` **no serviço do Railway** de novo (para reemitir o
+     alvo/cert) e criar **CNAME `@` → o alvo apex do Railway, Proxied (nuvem laranja)** — o Cloudflare
+     achata o CNAME do apex. Manter o `www` como está.
+  5. Cloudflare → SSL/TLS → **Full (strict)**.
+  6. Revalidar de fora: `curl -sI https://fraptotransp.com.br` deve dar **301 → www**.
 - **Healthcheck: LIVENESS × READINESS.** O `HEALTHCHECK` do Docker usa `/api/ping` (liveness — o processo
   está de pé, sem depender do banco); o healthcheck do Railway usa `/api/ready` (readiness — `SELECT 1`).
   Diferença PROPOSITAL: se o container usasse `/api/ready`, um blip do banco o marcaria unhealthy e
