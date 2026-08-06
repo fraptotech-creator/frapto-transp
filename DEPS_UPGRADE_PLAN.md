@@ -5,18 +5,24 @@ Regra do projeto: upgrade de deps é **PR/sessão dedicada**, em branch própria
 e **validação ao vivo** após deploy. **Nunca** `pnpm audit --fix --force` (quebra
 o `--frozen-lockfile` do deploy). Este arquivo é o PLANO; o upgrade vai à parte.
 
-## STATUS — Trilha A + B1 EXECUTADAS (2026-08-06)
+## STATUS — Trilha A + B1 + lodash EXECUTADAS (2026-08-06)
 
-Aplicadas e gate verde (tsc 0 · 508/508 · build): `@trpc/* 11.6→11.18`,
+Aplicadas e gate verde (tsc 0 · 508/508 · build · prettier): `@trpc/* 11.6→11.18`,
 `express-rate-limit 8.5→8.6`, e overrides `path-to-regexp 0.1.13`, `qs 6.15.3`,
-`body-parser 1.20.6`, `dompurify 3.4.13`. **Auditoria 38 → 12** (5→2 high,
-27→10 moderate, 6→0 low). As 12 restantes são só: (a) subtree
-`streamdown→mermaid` (mermaid:4, lodash-es:3, mdast-util-to-hast, uuid) —
-**INERTE** (mermaid neutralizado), sai na **Trilha B2** (streamdown v2); e
-(b) `lodash` via `recharts` (3) — **sem patch upstream**, sai só na **Trilha C**
-(recharts 3). **Deferido (rotina, não-segurança):** patches `stripe 22.4`,
-`zod 4.4`, `drizzle-kit 0.31.10`, `@anthropic-ai/sdk 0.115` — bump quando
-conveniente (evitados agora p/ não mexer no Stripe às vésperas do teste de compra).
+`body-parser 1.20.6`, `dompurify 3.4.13`, **`lodash 4.18.1` + `lodash-es 4.18.1`**.
+**Auditoria 38 → 6** (5→**0** high, 27→**6** moderate, 6→**0** low, 0 critical).
+
+> CORREÇÃO: uma versão anterior deste plano afirmou que "lodash 4.18.0 não existe".
+> **Estava errado** — o registro tem `lodash@4.18.1` e `lodash-es@4.18.1` (fix do
+> CVE-2026-4800 / GHSA-r5fr-rjxr-66jc, patched `>=4.18.0`). As 2 HIGH foram
+> **fechadas** via override, sem quebrar o gate. Não foi preciso aceite de risco.
+
+As **6 restantes são todas moderate e todas no subtree `streamdown→mermaid`**
+(mermaid:4, mdast-util-to-hast:1, uuid:1) — **INERTES** (mermaid neutralizado no
+AST), saem na **Trilha B2** (streamdown v2). **Deferido (rotina, não-segurança):**
+patches `stripe 22.4`, `zod 4.4`, `drizzle-kit 0.31.10`, `@anthropic-ai/sdk 0.115`
+— bump quando conveniente (evitados agora p/ não mexer no Stripe às vésperas do
+teste de compra).
 
 ## Retrato da auditoria — 2026-08-06 (`pnpm audit --prod`)
 
@@ -42,13 +48,13 @@ prioridade):
 
 ### As 5 HIGH
 
-| Pacote           | Vuln               | Patched    | Caminho                    | Exploitável           | Ação                                                                   |
-| ---------------- | ------------------ | ---------- | -------------------------- | --------------------- | ---------------------------------------------------------------------- |
-| `@trpc/server`   | `>=11.0.0 <11.8.0` | `>=11.8.0` | nosso servidor tRPC        | **Sim**               | minor `@trpc/* → 11.18.0`                                              |
-| `ip-address`     | `<=10.3.0`         | `>=10.3.1` | `express-rate-limit@8.5.2` | Baixa                 | minor `express-rate-limit → 8.6.2`                                     |
-| `path-to-regexp` | `<0.1.13`          | `>=0.1.13` | `express@4.21.2`           | Baixa (rotas simples) | override → `0.1.13`                                                    |
-| `lodash-es`      | `<=4.17.23`        | `>=4.18.0` | `streamdown→mermaid→…`     | **Não** (mermaid off) | cai com upgrade streamdown                                             |
-| `lodash`         | `<=4.17.23`        | `>=4.18.0` | `recharts@2.15.4`          | Baixa (client)        | **sem patch upstream** (4.18.0 não existe) → recharts 3 (major, adiar) |
+| Pacote           | Vuln               | Patched    | Caminho                    | Exploitável           | Ação                                                |
+| ---------------- | ------------------ | ---------- | -------------------------- | --------------------- | --------------------------------------------------- |
+| `@trpc/server`   | `>=11.0.0 <11.8.0` | `>=11.8.0` | nosso servidor tRPC        | **Sim**               | minor `@trpc/* → 11.18.0`                           |
+| `ip-address`     | `<=10.3.0`         | `>=10.3.1` | `express-rate-limit@8.5.2` | Baixa                 | minor `express-rate-limit → 8.6.2`                  |
+| `path-to-regexp` | `<0.1.13`          | `>=0.1.13` | `express@4.21.2`           | Baixa (rotas simples) | override → `0.1.13`                                 |
+| `lodash-es`      | `<=4.17.23`        | `>=4.18.0` | `streamdown→mermaid→…`     | **Não** (mermaid off) | cai com upgrade streamdown                          |
+| `lodash`         | `<=4.17.23`        | `>=4.18.0` | `recharts@2.15.4`          | Baixa (client)        | **FECHADA** — override `lodash 4.18.1` (gate verde) |
 
 ## Estratégia — 3 trilhas, da menor à maior risco
 
@@ -92,9 +98,9 @@ Não misturar: `express` 4→5 (middleware/rotas), `vite` 7→8, `vitest` 2→4,
 `lucide-react` 0.453→1, `nanoid` 5→6, `react-resizable-panels` 3→4,
 `@vitejs/plugin-react` 5→6, `@types/node` 24→26, `pnpm` 10→11.
 
-`lodash` (recharts) HIGH **não tem patch upstream** (não existe 4.18.0) — só sai
-com `recharts@3`. Até lá: aceitar e documentar (é client, `_.template` não recebe
-input do usuário → risco baixo).
+`lodash`/`lodash-es` HIGH já **FECHADAS** via override `4.18.1` (ver STATUS no
+topo) — não dependem mais do `recharts@3`. O upgrade de `recharts` fica deferido
+por outros motivos (major, mexe nos gráficos), não pela segurança do lodash.
 
 ## Verificação obrigatória por bump
 
