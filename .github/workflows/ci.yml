@@ -73,3 +73,35 @@ jobs:
 
       - name: Docker build (imagem de produção, lockfile congelado, sem segredos)
         run: docker build -t frapto-transp:ci .
+
+  # Deploy para PRODUÇÃO só DEPOIS de gate E docker verdes (needs: [gate, docker]).
+  # O Railway NÃO faz mais auto-deploy de `main` (o trigger foi desligado): a
+  # promoção é feita AQUI, então nada vai ao ar antes de docker=success. Restrito a
+  # push na main (pull_request nunca faz deploy). Segredo RAILWAY_TOKEN é um token
+  # de PROJETO escopado (Settings do repo → Secrets), nunca versionado nem impresso.
+  deploy-production:
+    needs: [gate, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      # `railway up` sobe o código deste commit e o Railway o constrói pelo
+      # Dockerfile (builder do railway.json) — a MESMA imagem validada no job
+      # docker. --ci espera o build concluir e propaga falha (deploy quebrado
+      # falha o workflow). O token de projeto já escopa projeto+ambiente.
+      - name: Deploy to Railway (production)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --ci --service 22e4b94b-e262-4601-8760-2f40b50b4a45
