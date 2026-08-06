@@ -1,50 +1,92 @@
 # Plano de upgrade de dependências (PR próprio — sem upgrade às cegas)
 
-`pnpm audit --prod` em `498ab98`+: **35 vulnerabilidades (4 altas, 25 moderadas, 6 baixas)**.
-Este documento é o PLANO; o upgrade em si vai num **PR separado**, com `--frozen-lockfile`,
-testes, build e validação ao vivo. Nada de bump cego do lockfile.
+Regra do projeto: upgrade de deps é **PR/sessão dedicada**, em branch própria, com
+**gate verde** (tsc + 508 testes + prettier + build), CI com `--frozen-lockfile`
+e **validação ao vivo** após deploy. **Nunca** `pnpm audit --fix --force` (quebra
+o `--frozen-lockfile` do deploy). Este arquivo é o PLANO; o upgrade vai à parte.
 
-## Cobertura criada ANTES (nesta rodada)
+## Retrato da auditoria — 2026-08-06 (`pnpm audit --prod`)
 
-- `server/aiActiveHtml.test.ts`: HTML cru e URL perigosa (javascript:/data:) NÃO chegam ao DOM
-  (motor react-markdown com `rehypePlugins=[]` + `urlTransform=safeAiUrl`) **e** um fence de mermaid
-  ATRAVESSA `rehypePlugins=[]` intacto — ou seja, **`rehypePlugins=[]` NÃO desabilita o Mermaid** (no
-  Streamdown 1.4.0 o Mermaid é decidido dentro do componente `code`, quando `language==="mermaid"`, sem
-  prop para desligar). Logo a saída não-confiável da IA é um caminho ALCANÇÁVEL até mermaid→DOMPurify.
+**38 vulnerabilidades: 5 high · 27 moderate · 6 low.** Onde moram (o que muda a
+prioridade):
 
-## Altas (4) — versão corrigida × caminho real
+- **~24 estão no subtree `streamdown → mermaid`** (`dompurify` 17×, `mermaid` 4×,
+  `lodash-es` 3×, `uuid`, `mdast-util-to-hast`…). **Inertes no runtime**: o app já
+  neutraliza o Mermaid **estruturalmente** — `remarkNeutralizeMermaid`
+  (`client/src/lib/aiSafeMarkdown.ts`) reescreve `lang mermaid→text` no AST antes
+  do render, provado com o Streamdown REAL em `server/streamdownMermaid.test.ts`.
+  O mermaid **nunca executa** em produção → essas advisories são dívida de
+  higiene, não caminho aberto.
+- **O restante está no caminho de request vivo** (tRPC, express, rate-limit,
+  recharts) — é o que prioriza.
 
-| Pacote           | Advisory                    | Corrigido                 | Caminho                                     | Risco real                                                                                                                                                                                                                                             |
-| ---------------- | --------------------------- | ------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@trpc/server`   | prototype pollution         | `>=11.8.0` (temos 11.6.0) | `@trpc/client@11.6.0 > @trpc/server@11.6.0` | Servidor recebe JSON não-confiável — **corrigir** (bump @trpc/\* juntos p/ 11.8.x).                                                                                                                                                                    |
-| `path-to-regexp` | ReDoS                       | `>=0.1.13` (temos 0.1.12) | `express@4.21.2 > path-to-regexp@0.1.12`    | Transitiva do Express 4; ReDoS em rotas — bump express p/ patch de 4.21.x que traga 0.1.13, ou override.                                                                                                                                               |
-| `lodash-es`      | code injection `_.template` | `>=4.18.0`                | `streamdown > mermaid@11.12.0 > ...`        | ⚠️ **4.18.0 NÃO existe** (lodash parou no 4.17.21). Só explora via `_.template` com input não-confiável — o mermaid não passa entrada de usuário ao `_.template`. Some junto com o upgrade do mermaid (menos deps lodash) — não há "fix version" real. |
-| `lodash`         | code injection `_.template` | `>=4.18.0`                | `recharts@2.15.4 > lodash@4.17.21`          | Idem — sem fix version real; recharts não usa `_.template` com input do usuário. Reavaliar no bump do recharts.                                                                                                                                        |
+### Cobertura de segurança já no lugar (defesa não depende do upgrade)
+- `remarkNeutralizeMermaid` desabilita o Mermaid (acima).
+- `server/aiActiveHtml.test.ts`: HTML cru e URL perigosa (`javascript:`/`data:`)
+  NÃO chegam ao DOM (react-markdown com `rehypePlugins=[]` + `urlTransform=safeAiUrl`).
+- O upgrade abaixo **reduz superfície**; não é o que segura o XSS hoje.
 
-## Moderadas relevantes
+### As 5 HIGH
 
-- `qs` (arrayLimit bypass) `>=6.14.1` via `express > body-parser > qs@6.13.0` → bump express/body-parser.
-- `mdast-util-to-hast` `>=13.2.1` via `streamdown > react-markdown` → cai no upgrade do streamdown.
-- `dompurify` (várias: XSS, FORBID_TAGS/SAFE_FOR_TEMPLATES bypass, prototype pollution) `>=3.3.2/3.4.0`
-  via `streamdown > mermaid` → **é a cadeia do caminho alcançável do Mermaid**; prioridade junto do mermaid.
-- `uuid` `>=11.1.1` (buffer bounds) — transitiva; baixa exposição.
+| Pacote | Vuln | Patched | Caminho | Exploitável | Ação |
+|---|---|---|---|---|---|
+| `@trpc/server` | `>=11.0.0 <11.8.0` | `>=11.8.0` | nosso servidor tRPC | **Sim** | minor `@trpc/* → 11.18.0` |
+| `ip-address` | `<=10.3.0` | `>=10.3.1` | `express-rate-limit@8.5.2` | Baixa | minor `express-rate-limit → 8.6.2` |
+| `path-to-regexp` | `<0.1.13` | `>=0.1.13` | `express@4.21.2` | Baixa (rotas simples) | override → `0.1.13` |
+| `lodash-es` | `<=4.17.23` | `>=4.18.0` | `streamdown→mermaid→…` | **Não** (mermaid off) | cai com upgrade streamdown |
+| `lodash` | `<=4.17.23` | `>=4.18.0` | `recharts@2.15.4` | Baixa (client) | **sem patch upstream** (4.18.0 não existe) → recharts 3 (major, adiar) |
 
-## Sequência do PR (mínima e compatível, testada)
+## Estratégia — 3 trilhas, da menor à maior risco
 
-1. **Cadeia Streamdown/Mermaid/DOMPurify** (fecha o caminho alcançável da IA + várias moderadas):
-   - bump `streamdown` para a versão que traga `mermaid>=` com `dompurify>=3.4.0` e `mdast-util-to-hast>=13.2.1`;
-   - rodar `server/aiActiveHtml.test.ts` (a cobertura já existe) — HTML/URL continuam fora do DOM;
-   - **avaliar desabilitar o Mermaid** no `AIChatBox` (a IA de frota não precisa de diagramas) como
-     defesa-em-profundidade, independente da versão — decidir no PR com teste do caminho de render.
-2. **@trpc/\* → 11.8.x** (client+server juntos; a API do adapter/httpLink é estável no 11.x) — rodar a
-   suíte do pipeline (`trpcPipeline.test.ts`) e as procedures.
-3. **express/body-parser** para o patch que traga `path-to-regexp>=0.1.13` e `qs>=6.14.1` — Express 4.x;
-   validar a cadeia `/api/trpc`, `/api/track`, webhook e o 413/parser.
-4. **recharts / uuid** — reavaliar; lodash só sai de fato ao trocar quem o traz (sem fix version própria).
+### Trilha A — cirúrgica, baixo risco (recomendada primeiro)
+Minors dentro do mesmo major + patches. Fecha 2 das 5 HIGH e várias moderate.
+Cada bump: `pnpm install` → tsc + testes + build → commit próprio.
 
-Cada passo: `pnpm install --frozen-lockfile` → `pnpm check` → `pnpm test` → `pnpm build` → CI (inclui
-Docker) → deploy → `/api/ping` e `/api/ready` 200 → sondas. Um passo por commit; revert por commit se
-o gate quebrar. **Não** introduzir `db:migrate` automático no boot.
+1. `@trpc/client` + `@trpc/react-query` + `@trpc/server` **11.6.0 → 11.18.0**
+   (fecha HIGH `@trpc/server`; mesmo major, API estável).
+2. `express-rate-limit` **8.5.2 → 8.6.2** (fecha HIGH `ip-address`; mesmo major).
+3. `stripe` **22.3.0 → 22.4.0**, `drizzle-kit` **0.31.5 → 0.31.10**,
+   `zod` **4.1.12 → 4.4.3**, `@anthropic-ai/sdk` **0.110 → 0.115** (patch/minor).
+4. **Overrides** (`pnpm.overrides`) para transitivas do express 4 sem trocar major:
+   `path-to-regexp` → `0.1.13`, e revisar `qs`/`body-parser` para as patched.
+   Validar boot + rotas (`/api/ping`, `/api/ready`, `/api/trpc`, `/api/track`, webhook, 413).
+
+**Ganho:** fecha `@trpc/server` e `ip-address` (HIGH) + moderadas do express, sem
+tocar em nenhum major. Baixo risco, alto valor.
+
+### Trilha B — subtree Streamdown/Mermaid/DOMPurify (superfície XSS da pendência)
+- **B1 (barato, sem major):** `pnpm.overrides` forçando `dompurify → >=3.4.8` no
+  subtree do mermaid → limpa as 17 advisories do dompurify sem tocar no streamdown.
+  Belt-and-suspenders (o mermaid já está off). Validar build + `streamdownMermaid.test.ts` verdes.
+- **B2 (correto, major):** `streamdown` **1.4.0 → 2.5.0**. Puxa mermaid/dompurify
+  novos e limpa quase todo o subtree. **Exige reverificar** (testes reais como rede):
+  (a) `remarkNeutralizeMermaid` ainda neutraliza; (b) export `defaultRemarkPlugins`
+  ainda existe; (c) props `rehypePlugins`/`urlTransform` honradas; (d) seletores
+  `data-streamdown='...'`/`data-code-block-container` dos testes; (e) css do katex
+  inline no vitest. **Sub-sessão focada.**
+
+Recomendação: **B1 agora** (fecha as 17 dompurify), **B2 depois** em sub-sessão.
+
+### Trilha C — majors pesados, DEFERIDOS (cada um em sessão própria com teste de feature)
+Não misturar: `express` 4→5 (middleware/rotas), `vite` 7→8, `vitest` 2→4,
+`typescript` 5.9→7 (port novo — muito arriscado), `openai` 6→7,
+`recharts` 2→3 (fecha o HIGH do lodash, mas mexe nos gráficos),
+`react-day-picker` 9→10, `superjson` 1→2, `cookie` 1→2, `framer-motion` 12→13,
+`lucide-react` 0.453→1, `nanoid` 5→6, `react-resizable-panels` 3→4,
+`@vitejs/plugin-react` 5→6, `@types/node` 24→26, `pnpm` 10→11.
+
+`lodash` (recharts) HIGH **não tem patch upstream** (não existe 4.18.0) — só sai
+com `recharts@3`. Até lá: aceitar e documentar (é client, `_.template` não recebe
+input do usuário → risco baixo).
+
+## Verificação obrigatória por bump
+- Local: `pnpm install` (na branch, atualiza o lock) → `pnpm check` (tsc 0) →
+  `pnpm test` (508+) → `pnpm build`.
+- CI: passa com `--frozen-lockfile` (lock novo commitado).
+- Ao vivo pós-deploy: `/api/ping` e `/api/ready` 200, boot sem erro novo, fluxo
+  tocado exercitado. Rodar `pnpm audit --prod` de novo p/ confirmar a queda.
+- Um passo por commit; revert por commit se o gate quebrar. **Não** pôr
+  `db:migrate` no boot.
 
 ## Migração 0005 — evidência (read-only, banco real `test`)
 
