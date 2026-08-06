@@ -41,9 +41,16 @@ function formatDate(d: Date | string | null | undefined) {
   return dt.toLocaleDateString("pt-BR");
 }
 
-// Mesma regra do paywall no servidor: só active/trialing dão acesso.
-function liberada(status: string | null | undefined) {
-  return status === "active" || status === "trialing";
+// Espelha temAcesso do servidor: override manual vence o Stripe.
+function acessoEfetivo(o: {
+  subscriptionStatus: string | null;
+  accessOverride: "active" | "blocked" | null;
+}) {
+  if (o.accessOverride === "blocked") return false;
+  if (o.accessOverride === "active") return true;
+  return (
+    o.subscriptionStatus === "active" || o.subscriptionStatus === "trialing"
+  );
 }
 
 export default function PlatformAdmin() {
@@ -51,7 +58,8 @@ export default function PlatformAdmin() {
   const [confirmando, setConfirmando] = useState<{
     orgId: number;
     nome: string;
-    acao: "liberar" | "bloquear";
+    acao: "liberar" | "bloquear" | "desbloquear";
+    hasStripe: boolean;
   } | null>(null);
   const utils = trpc.useUtils();
   const { data, isLoading, error } = trpc.superAdmin.overview.useQuery();
@@ -61,12 +69,13 @@ export default function PlatformAdmin() {
       toast.success(
         res.acao === "liberar"
           ? "Acesso liberado. A empresa já pode usar o sistema."
-          : "Acesso bloqueado."
+          : res.acao === "bloquear"
+            ? "Acesso bloqueado."
+            : "Desbloqueado. A empresa volta a seguir o Stripe."
       );
       utils.superAdmin.overview.invalidate();
       setConfirmando(null);
     },
-    // Erro mais provável: empresa que assina pelo Stripe (recusado no servidor).
     onError: e => toast.error(e.message),
   });
 
@@ -179,6 +188,16 @@ export default function PlatformAdmin() {
                       <Badge variant={corAssinatura(o.subscriptionStatus)}>
                         {rotuloAssinatura(o.subscriptionStatus)}
                       </Badge>
+                      {o.accessOverride === "blocked" && (
+                        <div className="mt-1 text-xs text-destructive">
+                          bloqueado no admin
+                        </div>
+                      )}
+                      {o.accessOverride === "active" && (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          liberado no admin
+                        </div>
+                      )}
                     </td>
                     <td className="py-2 pr-4">{o.planName ?? "—"}</td>
                     <td className="py-2 pr-4 text-right">{o.usuarios}</td>
@@ -187,7 +206,22 @@ export default function PlatformAdmin() {
                     <td className="py-2 pr-4 text-right">{o.viagens}</td>
                     <td className="py-2 pr-4">{formatDate(o.createdAt)}</td>
                     <td className="py-2 text-right whitespace-nowrap">
-                      {liberada(o.subscriptionStatus) ? (
+                      {o.accessOverride === "blocked" ? (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            setConfirmando({
+                              orgId: o.id,
+                              nome: o.name,
+                              acao: "desbloquear",
+                              hasStripe: o.hasStripeSubscription,
+                            })
+                          }
+                        >
+                          <Check className="h-4 w-4 mr-1" />
+                          Desbloquear
+                        </Button>
+                      ) : acessoEfetivo(o) ? (
                         <Button
                           size="sm"
                           variant="outline"
@@ -196,6 +230,7 @@ export default function PlatformAdmin() {
                               orgId: o.id,
                               nome: o.name,
                               acao: "bloquear",
+                              hasStripe: o.hasStripeSubscription,
                             })
                           }
                         >
@@ -210,6 +245,7 @@ export default function PlatformAdmin() {
                               orgId: o.id,
                               nome: o.name,
                               acao: "liberar",
+                              hasStripe: o.hasStripeSubscription,
                             })
                           }
                         >
@@ -245,13 +281,25 @@ export default function PlatformAdmin() {
             <AlertDialogTitle>
               {confirmando?.acao === "liberar"
                 ? `Liberar ${confirmando?.nome}?`
-                : `Bloquear ${confirmando?.nome}?`}
+                : confirmando?.acao === "bloquear"
+                  ? `Bloquear ${confirmando?.nome}?`
+                  : `Desbloquear ${confirmando?.nome}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmando?.acao === "liberar"
                 ? "A empresa passa a usar o sistema sem pagar pelo Stripe — use para quem pagou direto a você. Fica marcada como liberação manual."
-                : "A empresa perde o acesso ao sistema imediatamente. Os dados dela não são apagados e você pode liberar de novo depois."}
+                : confirmando?.acao === "bloquear"
+                  ? "A empresa perde o acesso ao sistema imediatamente. Os dados dela não são apagados e você pode desbloquear depois."
+                  : "Remove o bloqueio/liberação manual: a empresa volta a seguir a assinatura do Stripe."}
             </AlertDialogDescription>
+            {confirmando?.acao === "bloquear" && confirmando?.hasStripe && (
+              <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                ⚠️ Esta empresa assina pelo Stripe. Bloquear aqui corta o{" "}
+                <strong>acesso</strong>, mas{" "}
+                <strong>não cancela a cobrança</strong>. Para parar de cobrar,
+                cancele a assinatura no painel do Stripe.
+              </div>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={setAccess.isPending}>
@@ -261,14 +309,20 @@ export default function PlatformAdmin() {
               disabled={setAccess.isPending}
               onClick={e => {
                 e.preventDefault(); // fecha só depois do sucesso
-                if (confirmando) setAccess.mutate(confirmando);
+                if (confirmando)
+                  setAccess.mutate({
+                    orgId: confirmando.orgId,
+                    acao: confirmando.acao,
+                  });
               }}
             >
               {setAccess.isPending
                 ? "Aplicando..."
                 : confirmando?.acao === "liberar"
                   ? "Liberar"
-                  : "Bloquear"}
+                  : confirmando?.acao === "bloquear"
+                    ? "Bloquear"
+                    : "Desbloquear"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
