@@ -31,15 +31,32 @@ vá em **Configurações → Assistente de IA** e escolha o provedor (Claude / G
 compatível-OpenAI), cole a chave e o modelo. (Se preferir via env, `ANTHROPIC_API_KEY`
 ainda funciona como fallback do provedor Anthropic.)
 
-## Migração do banco (schema Drizzle)
+## Migração do banco (schema Drizzle) — VERSIONADA, nunca `push` em produção
 
-Com a `DATABASE_URL` de produção no ambiente local (ou via Railway CLI):
+⚠️ **`pnpm db:push` é só para protótipo LOCAL** (schema-first, sem histórico e
+pode DERRUBAR tabela) — **nunca** contra produção. O fluxo de produção é
+versionado (`drizzle/migrations/*.sql`), aplicado num passo controlado FORA do
+boot. Detalhes e baselining: `drizzle/MIGRATIONS.md`.
 
-```bash
-pnpm db:push   # drizzle-kit push — aplica o schema.ts direto (banco novo)
-```
+Runbook do OPERADOR (janela controlada, a partir de um checkout do SHA aprovado
+que contenha `drizzle/`, com `DATABASE_URL` injetada por meio seguro do Railway —
+**nunca** copie o valor para log/arquivo/chat):
 
-Cria as tabelas: users, vehicles, drivers, trips, maintenance, notifications, expenses, revenues, documents.
+1. **Revise o SQL** das migrações pendentes no PR (é o que vai rodar).
+2. **Backup/snapshot** do banco confirmado e leitura de `__drizzle_migrations`
+   (estado atual). Se a tabela não existir, o banco ainda não foi adotado no
+   fluxo → faça o **baselining** documentado em `MIGRATIONS.md` (registrar as
+   migrações já refletidas como aplicadas), **sem** `db:push`.
+3. `pnpm db:migrate` **uma única vez** (usa `DATABASE_URL`; **não** rode no boot,
+   nem com múltiplas réplicas em paralelo).
+4. Confirme por **leitura apenas** (sem PII/valores): entradas no journal,
+   existência e colunas das tabelas afetadas.
+5. **Repita** `pnpm db:migrate` e comprove **no-op** (idempotência).
+6. Anexe só resultado estrutural/timestamps — jamais URL, senha, token ou dado
+   de cliente.
+
+> NÃO adicione `db:migrate` ao comando de inicialização (`node dist/index.js`):
+> falha parcial ou corrida entre réplicas derrubaria o deploy.
 
 ## Validação ao vivo (fazer após o 1º deploy)
 
