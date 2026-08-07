@@ -94,8 +94,11 @@ jobs:
         with:
           node-version: 22
 
+      # Versão PINADA da CLI (não usar latest sem pin: um major novo poderia
+      # mudar flags/comportamento do `railway up` e quebrar o deploy sem aviso).
+      # Atualizar conscientemente. Última revisada: 5.30.4 (2026-08-07).
       - name: Install Railway CLI
-        run: npm i -g @railway/cli
+        run: npm i -g @railway/cli@5.30.4
 
       # `railway up` sobe o código deste commit e o Railway o constrói pelo
       # Dockerfile (builder do railway.json) — a MESMA imagem validada no job
