@@ -5,6 +5,10 @@ Regra do projeto: upgrade de deps é **PR/sessão dedicada**, em branch própria
 e **validação ao vivo** após deploy. **Nunca** `pnpm audit --fix --force` (quebra
 o `--frozen-lockfile` do deploy). Este arquivo é o PLANO; o upgrade vai à parte.
 
+> Nota (2026-08-07): deploy de produção agora é **CI-gated** — job
+> `deploy-production` no `ci.yml` (needs: [gate, docker]); o auto-deploy direto do
+> Railway foi desligado. Nada é promovido antes de `docker=success`.
+
 ## STATUS — Trilha A + B1 + lodash EXECUTADAS (2026-08-06)
 
 Aplicadas e gate verde (tsc 0 · 508/508 · build · prettier): `@trpc/* 11.6→11.18`,
