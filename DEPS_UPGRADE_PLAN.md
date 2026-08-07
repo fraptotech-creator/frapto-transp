@@ -21,12 +21,13 @@ Aplicadas e gate verde (tsc 0 · 508/508 · build · prettier): `@trpc/* 11.6→
 > CVE-2026-4800 / GHSA-r5fr-rjxr-66jc, patched `>=4.18.0`). As 2 HIGH foram
 > **fechadas** via override, sem quebrar o gate. Não foi preciso aceite de risco.
 
-As **6 restantes são todas moderate e todas no subtree `streamdown→mermaid`**
-(mermaid:4, mdast-util-to-hast:1, uuid:1) — **INERTES** (mermaid neutralizado no
-AST), saem na **Trilha B2** (streamdown v2). **Deferido (rotina, não-segurança):**
-patches `stripe 22.4`, `zod 4.4`, `drizzle-kit 0.31.10`, `@anthropic-ai/sdk 0.115`
-— bump quando conveniente (evitados agora p/ não mexer no Stripe às vésperas do
-teste de compra).
+> ATUALIZAÇÃO 2026-08-07: o audit de `main` subiu de 6 → **11** (novas advisories
+> do `mermaid`). Contagem REAL na `main` agora: **0 critical / 0 high / 10 moderate
+> / 1 low** (11 total), TODAS no subtree `streamdown→mermaid` (mermaid:9,
+> mdast-util-to-hast:1, uuid:1) — **inertes** (mermaid neutralizado no AST). A
+> **Trilha B3** (PR separado, abaixo) fecha as 11 → **0** com overrides pinados,
+> sem trocar o Streamdown de major. **Deferido (rotina, não-segurança):** patches
+> `stripe 22.4`, `zod 4.4`, `drizzle-kit 0.31.10`, `@anthropic-ai/sdk 0.115`.
 
 ## Retrato da auditoria — 2026-08-06 (`pnpm audit --prod`)
 
@@ -93,15 +94,13 @@ tocar em nenhum major. Baixo risco, alto valor.
 
 Recomendação: **B1 agora** (fecha as 17 dompurify), **B2 depois** em sub-sessão.
 
-- **B3 (PR SEPARADO — as 6 moderate restantes):** resolução compatível das 3 que
-  sobraram no subtree, via `pnpm.overrides` (sem trocar o streamdown de major):
-  `mdast-util-to-hast → >=13.2.1`, `mermaid → >=11.15.0`, `uuid → >=11.1.1`.
-  Antes do merge: `pnpm install --frozen-lockfile` → `pnpm check` → `pnpm test` →
-  `pnpm build` → `pnpm audit --prod --json` (registrar a nova contagem) → **teste
-  de Markdown/Mermaid** (`streamdownMermaid.test.ts` + render real) confirmando que
-  a neutralização e o Markdown seguem intactos. NÃO misturar com o major do
-  streamdown (B2). Se algum override quebrar tipos/build, cair para o mínimo que
-  fecha a advisory sem regressão.
+- **B3 ✅ FEITA (PR #1, 2026-08-07) — fecha as 11 restantes → 0:** overrides
+  PINADOS `mermaid 11.16.1`, `mdast-util-to-hast 13.2.1`, `uuid 11.1.1` (sem trocar
+  o streamdown de major). Gate verde: tsc 0 · **517/517** · build · Mermaid
+  neutralizado com Streamdown REAL (raiz/tilde/blockquote/lista, 8/8) · **`pnpm
+audit --prod` = 0** (0/0/0/0). PR: fraptotech-creator/frapto-transp#1 (aguarda
+  merge). Depois do merge, o subtree do mermaid fica limpo; **B2** (major do
+  streamdown) deixa de ser necessário só por segurança.
 
 ### Trilha C — majors pesados, DEFERIDOS (cada um em sessão própria com teste de feature)
 
