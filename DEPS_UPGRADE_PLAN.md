@@ -98,9 +98,9 @@ Recomendação: **B1 agora** (fecha as 17 dompurify), **B2 depois** em sub-sess�
   PINADOS `mermaid 11.16.1`, `mdast-util-to-hast 13.2.1`, `uuid 11.1.1` (sem trocar
   o streamdown de major). Gate verde: tsc 0 · **517/517** · build · Mermaid
   neutralizado com Streamdown REAL (raiz/tilde/blockquote/lista, 8/8) · **`pnpm
-audit --prod` = 0** (0/0/0/0). PR: fraptotech-creator/frapto-transp#1 (aguarda
-  merge). Depois do merge, o subtree do mermaid fica limpo; **B2** (major do
-  streamdown) deixa de ser necessário só por segurança.
+audit --prod` = 0** (0/0/0/0). PR #1 **MERGEADO** (squash → main `a049433`, deploy
+  CI-gated SUCCESS); **audit da `main` agora 0/0/0/0**. **B2** (major do streamdown)
+  deixa de ser necessário só por segurança.
 
 ### Trilha C — majors pesados, DEFERIDOS (cada um em sessão própria com teste de feature)
 
