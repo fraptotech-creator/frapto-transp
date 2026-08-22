@@ -19,7 +19,13 @@ export default function TripTracking() {
   );
 
   const { data: route, isLoading: routeLoading } = trpc.geo.route.useQuery(
-    { origem: trip?.origem ?? "", destino: trip?.destino ?? "" },
+    {
+      origem: trip?.origem ?? "",
+      destino: trip?.destino ?? "",
+      paradas: ((trip?.paradas as { endereco: string }[] | null) ?? []).map(
+        p => p.endereco
+      ),
+    },
     { enabled: !!trip?.origem && !!trip?.destino }
   );
 
@@ -90,6 +96,17 @@ export default function TripTracking() {
       overlay.current.addLayer(line);
       overlay.current.addLayer(origem);
       overlay.current.addLayer(destino);
+      // Paradas intermediárias (roxo), numeradas na ordem da rota.
+      (route.stops ?? []).forEach((s, i) => {
+        overlay.current!.addLayer(
+          L.circleMarker([s.lat, s.lng], {
+            color: "#a855f7",
+            fillColor: "#a855f7",
+            fillOpacity: 1,
+            radius: 7,
+          }).bindPopup(`Parada ${i + 1}`)
+        );
+      });
     }
 
     if (hasTrack) {
