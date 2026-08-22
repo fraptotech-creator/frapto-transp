@@ -16,9 +16,9 @@ export function isOilChange(tipo: string | null | undefined): boolean {
 }
 
 export type OilInput = {
-  quilometragem: number | null | undefined;
-  kmUltimaTrocaOleo: number | null | undefined;
-  intervaloTrocaOleoKm: number | null | undefined;
+  quilometragem?: number | null;
+  kmUltimaTrocaOleo?: number | null;
+  intervaloTrocaOleoKm?: number | null;
 };
 
 export type OilStatus = {
@@ -29,7 +29,12 @@ export type OilStatus = {
   status: "ok" | "proxima" | "vencida";
 };
 
-export function computeOilStatus(v: OilInput): OilStatus {
+export function computeOilStatus(
+  v: OilInput,
+  // % do intervalo em que o alerta "próxima" começa. Default 10 (compatível com
+  // o comportamento anterior). Configurável por empresa via notification_settings.
+  percentAlerta = 10
+): OilStatus {
   const intervalo =
     v.intervaloTrocaOleoKm && v.intervaloTrocaOleoKm > 0
       ? v.intervaloTrocaOleoKm
@@ -39,8 +44,9 @@ export function computeOilStatus(v: OilInput): OilStatus {
   const kmDesdeTroca = Math.max(0, km - ultima);
   const proximaTrocaKm = ultima + intervalo;
   const kmRestante = proximaTrocaKm - km;
-  // Alerta quando falta ≤ 10% do intervalo (mínimo 1 km).
-  const limiteAlerta = Math.max(1, Math.round(intervalo * 0.1));
+  // Alerta quando falta ≤ percentAlerta% do intervalo (mínimo 1 km).
+  const pct = percentAlerta > 0 ? percentAlerta : 10;
+  const limiteAlerta = Math.max(1, Math.round(intervalo * (pct / 100)));
   const status =
     kmRestante <= 0 ? "vencida" : kmRestante <= limiteAlerta ? "proxima" : "ok";
   return { intervalo, kmDesdeTroca, proximaTrocaKm, kmRestante, status };
