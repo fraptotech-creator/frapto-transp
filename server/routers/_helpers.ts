@@ -298,11 +298,20 @@ Regras: baseie-se SÓ nos dados retornados pelas ferramentas; nunca invente
 números, nomes ou datas. Se algo não existir nos dados, diga que não há esse
 registro. Valores em reais (R$) e datas no formato brasileiro.`;
 
-// Decisão PURA de qual IA usar (testável), FAIL-CLOSED: usa SOMENTE a config da
-// PRÓPRIA empresa, e apenas se ATIVA e com chave. NÃO existe mais fallback para
-// uma chave-padrão do sistema (Groq/Anthropic): a IA acessa dados do cliente
-// (LGPD/consentimento), então sem config ativa da org NÃO se chama provedor nem
-// se expõem ferramentas de dados — o caller trata o null como erro controlado.
+// Normaliza a string do provider-padrão (env) para o enum; qualquer valor
+// desconhecido cai em openai_compatible (o caso mais comum p/ chave grátis).
+const coerceProvider = (p: string): AiProvider =>
+  p === "anthropic" || p === "openai" || p === "openai_compatible"
+    ? p
+    : "openai_compatible";
+
+// Decisão PURA de qual IA usar (testável): 1º a config da EMPRESA (se ATIVA e
+// com chave); 2º a CHAVE-PADRÃO do sistema (grátis, ex.: Groq); 3º o Anthropic
+// legado. `defaults` é OPCIONAL — sem ele o comportamento é FAIL-CLOSED (null).
+// ATENÇÃO LGPD: quando o fallback padrão é usado, os dados reais da empresa
+// passam por uma chave COMPARTILHADA do sistema (não a da própria org). Isso é
+// intencional (o admin do sistema optou por oferecer a IA grátis); a decisão
+// consciente está em ENV.defaultAi* / ANTHROPIC_API_KEY.
 export function pickAiConfig(
   orgCfg:
     | {
@@ -313,7 +322,14 @@ export function pickAiConfig(
         enabled: boolean;
       }
     | null
-    | undefined
+    | undefined,
+  defaults?: {
+    key: string;
+    provider: string;
+    model: string;
+    baseUrl: string;
+    anthropicKey: string;
+  }
 ): AiRuntimeConfig | null {
   if (orgCfg && orgCfg.enabled && orgCfg.apiKey) {
     return {
@@ -321,6 +337,23 @@ export function pickAiConfig(
       apiKey: orgCfg.apiKey,
       model: orgCfg.model ?? "",
       baseUrl: orgCfg.baseUrl,
+    };
+  }
+  // Sem config própria da org: cai na chave-padrão do sistema, se houver.
+  if (defaults?.key) {
+    return {
+      provider: coerceProvider(defaults.provider),
+      apiKey: defaults.key,
+      model: defaults.model || "",
+      baseUrl: defaults.baseUrl || null,
+    };
+  }
+  if (defaults?.anthropicKey) {
+    return {
+      provider: "anthropic",
+      apiKey: defaults.anthropicKey,
+      model: "claude-haiku-4-5",
+      baseUrl: null,
     };
   }
   return null;
@@ -346,5 +379,11 @@ export async function resolveAiConfig(
       });
     }
   }
-  return pickAiConfig(cfg);
+  return pickAiConfig(cfg, {
+    key: ENV.defaultAiKey,
+    provider: ENV.defaultAiProvider,
+    model: ENV.defaultAiModel,
+    baseUrl: ENV.defaultAiBaseUrl,
+    anthropicKey: ENV.anthropicApiKey,
+  });
 }
