@@ -199,6 +199,12 @@ export const drivers = mysqlTable(
       .default("disponivel")
       .notNull(),
     disponibilidade: boolean("disponibilidade").default(true).notNull(),
+    // Vínculo do motorista: CONTRATADO (efetivo) ou FREELANCER (autônomo/diária).
+    // Escolhido no cadastro; exibido na lista junto da disponibilidade. Default
+    // "contratado" preserva o comportamento histórico.
+    vinculo: mysqlEnum("vinculo", ["contratado", "freelancer"])
+      .default("contratado")
+      .notNull(),
     endereco: text("endereco"),
     dataAdmissao: timestamp("dataAdmissao").defaultNow().notNull(),
     observacoes: text("observacoes"),

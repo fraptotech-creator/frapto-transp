@@ -22,6 +22,7 @@ export interface DriverPublic {
   nome: string;
   status: Driver["status"];
   disponibilidade: boolean;
+  vinculo: Driver["vinculo"];
   cnhCategoria: string;
   cnhVencimento: Date;
   dataAdmissao: Date;
@@ -38,6 +39,7 @@ export function toDriverPublic(d: Driver): DriverPublic {
     nome: d.nome,
     status: d.status,
     disponibilidade: d.disponibilidade,
+    vinculo: d.vinculo,
     cnhCategoria: d.cnhCategoria,
     cnhVencimento: d.cnhVencimento,
     dataAdmissao: d.dataAdmissao,

@@ -78,6 +78,13 @@
       "when": 1787398286415,
       "tag": "0010_right_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1787399984104,
+      "tag": "0011_ordinary_iron_fist",
+      "breakpoints": true
     }
   ]
 }

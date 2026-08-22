@@ -1,0 +1,1 @@
+ALTER TABLE `drivers` ADD `vinculo` enum('contratado','freelancer') DEFAULT 'contratado' NOT NULL;
