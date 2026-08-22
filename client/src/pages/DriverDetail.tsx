@@ -93,9 +93,21 @@ export default function DriverDetail() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Informações Gerais</CardTitle>
-            <Badge className={getStatusBadge(driver.status)}>
-              {driver.status.charAt(0).toUpperCase() + driver.status.slice(1)}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className={
+                  driver.vinculo === "freelancer"
+                    ? "border-amber-500/40 text-amber-500"
+                    : "border-blue-500/40 text-blue-500"
+                }
+              >
+                {driver.vinculo === "freelancer" ? "Freelancer" : "Contratado"}
+              </Badge>
+              <Badge className={getStatusBadge(driver.status)}>
+                {driver.status.charAt(0).toUpperCase() + driver.status.slice(1)}
+              </Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">

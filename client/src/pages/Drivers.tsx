@@ -110,12 +110,25 @@ export default function Drivers() {
                     >
                       <User className={`w-6 h-6 ${statusInfo.text}`} />
                     </div>
-                    <span
-                      className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl ${statusInfo.bg} ${statusInfo.text} shadow-sm`}
-                    >
-                      {driver.status.charAt(0).toUpperCase() +
-                        driver.status.slice(1)}
-                    </span>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span
+                        className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl ${statusInfo.bg} ${statusInfo.text} shadow-sm`}
+                      >
+                        {driver.status.charAt(0).toUpperCase() +
+                          driver.status.slice(1)}
+                      </span>
+                      <span
+                        className={`text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-xl border shadow-sm ${
+                          driver.vinculo === "freelancer"
+                            ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                            : "bg-blue-500/15 text-blue-300 border-blue-500/30"
+                        }`}
+                      >
+                        {driver.vinculo === "freelancer"
+                          ? "Freelancer"
+                          : "Contratado"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="space-y-4">
