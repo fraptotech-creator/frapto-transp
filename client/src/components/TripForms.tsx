@@ -44,6 +44,7 @@ import {
   ArrowDown,
   X,
   Route,
+  Users,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -149,6 +150,36 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
       return c;
     });
 
+  // Lista de passageiros — só para veículo de PASSAGEIROS (ônibus/van). O tipo
+  // vem do veículo selecionado (capacidadeTipo). Estado local; salvo só quando
+  // o veículo for de passageiros (senão a lista é limpa no submit).
+  type Passageiro = { nome: string; documento?: string; telefone?: string };
+  const [passageiros, setPassageiros] = React.useState<Passageiro[]>(
+    () => (trip?.passageiros as Passageiro[] | null) ?? []
+  );
+  const veiculoIdSel = form.watch("veiculoId");
+  const veiculoSelecionado = (vehicles ?? []).find(
+    (v: any) => String(v.id) === veiculoIdSel
+  ) as any;
+  const ehVeiculoPassageiros =
+    veiculoSelecionado?.capacidadeTipo === "passageiros";
+  const capacidadePassageiros: number | null =
+    veiculoSelecionado?.capacidadePassageiros ?? null;
+  const passageirosLimpos = () =>
+    passageiros
+      .map(p => ({
+        nome: p.nome.trim(),
+        documento: p.documento?.trim() || undefined,
+        telefone: p.telefone?.trim() || undefined,
+      }))
+      .filter(p => p.nome);
+  const addPassageiro = () =>
+    setPassageiros(p => [...p, { nome: "", documento: "", telefone: "" }]);
+  const setPassageiroAt = (i: number, patch: Partial<Passageiro>) =>
+    setPassageiros(p => p.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  const removePassageiro = (i: number) =>
+    setPassageiros(p => p.filter((_, k) => k !== i));
+
   const [otimizando, setOtimizando] = React.useState(false);
   const otimizarParadas = async () => {
     const origem = form.getValues("origem");
@@ -236,6 +267,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
         origem: values.origem,
         destino: values.destino,
         paradas: paradasLimpas().map(endereco => ({ endereco })),
+        passageiros: ehVeiculoPassageiros ? passageirosLimpos() : [],
         dataPartida: new Date(values.dataPartida),
         previsaoChegada: values.previsaoChegada
           ? new Date(values.previsaoChegada)
@@ -257,6 +289,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
         origem: values.origem,
         destino: values.destino,
         paradas: paradasLimpas().map(endereco => ({ endereco })),
+        passageiros: ehVeiculoPassageiros ? passageirosLimpos() : [],
         dataPartida: new Date(values.dataPartida),
         previsaoChegada: values.previsaoChegada
           ? new Date(values.previsaoChegada)
@@ -452,6 +485,93 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
             </div>
           )}
         </div>
+
+        {/* Lista de passageiros — só aparece se o veículo selecionado for de
+            passageiros (ônibus/van). Veículo de carga não mostra esta seção. */}
+        {ehVeiculoPassageiros && (
+          <div className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <FormLabel className="flex items-center gap-1">
+                <Users className="w-3 h-3 text-emerald-400" /> Lista de
+                passageiros
+                <span
+                  className={`ml-2 text-xs font-normal ${
+                    capacidadePassageiros != null &&
+                    passageirosLimpos().length > capacidadePassageiros
+                      ? "text-amber-400"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {passageirosLimpos().length}
+                  {capacidadePassageiros != null
+                    ? ` / ${capacidadePassageiros}`
+                    : ""}
+                </span>
+              </FormLabel>
+              <button
+                type="button"
+                onClick={addPassageiro}
+                className="text-xs text-emerald-500 hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Adicionar passageiro
+              </button>
+            </div>
+            {capacidadePassageiros != null &&
+              passageirosLimpos().length > capacidadePassageiros && (
+                <p className="text-xs text-amber-400">
+                  A lista excede a capacidade do veículo (
+                  {capacidadePassageiros} lugares).
+                </p>
+              )}
+            {passageiros.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhum passageiro. Clique em "Adicionar passageiro".
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {passageiros.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-5 text-right">
+                      {i + 1}
+                    </span>
+                    <Input
+                      value={p.nome}
+                      onChange={e =>
+                        setPassageiroAt(i, { nome: e.target.value })
+                      }
+                      placeholder="Nome do passageiro"
+                      className="flex-[2]"
+                    />
+                    <Input
+                      value={p.documento ?? ""}
+                      onChange={e =>
+                        setPassageiroAt(i, { documento: e.target.value })
+                      }
+                      placeholder="Documento (opcional)"
+                      className="flex-1"
+                    />
+                    <Input
+                      value={p.telefone ?? ""}
+                      onChange={e =>
+                        setPassageiroAt(i, { telefone: e.target.value })
+                      }
+                      placeholder="Telefone (opcional)"
+                      className="flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePassageiro(i)}
+                      className="p-1 text-rose-400 hover:text-rose-300"
+                      aria-label="Remover passageiro"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <FormField
