@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { resolverDisponibilidade } from "@/lib/driverAvailability";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Calendar, Phone, Mail, AlertCircle } from "lucide-react";
 import { DriverDialog } from "@/components/DriverForms";
@@ -40,6 +41,8 @@ export default function DriverDetail() {
       descansando:
         "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
       inativo: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      indisponivel:
+        "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
     };
     return badges[status] || badges.disponivel;
   };
@@ -104,9 +107,18 @@ export default function DriverDetail() {
               >
                 {driver.vinculo === "freelancer" ? "Freelancer" : "Contratado"}
               </Badge>
-              <Badge className={getStatusBadge(driver.status)}>
-                {driver.status.charAt(0).toUpperCase() + driver.status.slice(1)}
-              </Badge>
+              {(() => {
+                const disp = resolverDisponibilidade(driver, new Date());
+                return (
+                  <Badge
+                    className={getStatusBadge(disp.chaveCor)}
+                    title={disp.motivo ?? undefined}
+                  >
+                    {disp.rotulo}
+                    {disp.motivo ? ` · ${disp.motivo}` : ""}
+                  </Badge>
+                );
+              })()}
             </div>
           </div>
         </CardHeader>

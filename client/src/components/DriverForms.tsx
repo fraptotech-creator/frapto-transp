@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -57,6 +58,7 @@ const driverSchema = z.object({
   cnhCategoria: z.string().min(1, "A categoria é obrigatória."),
   cnhVencimento: z.string().min(1, "O vencimento da CNH é obrigatório."),
   vinculo: z.enum(["contratado", "freelancer"]),
+  disponibilidade: z.boolean(),
   endereco: z.string().optional(),
   observacoes: z.string().optional(),
   // Login do motorista (só no cadastro).
@@ -189,6 +191,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
         ? new Date(driver.cnhVencimento).toISOString().split("T")[0]
         : "",
       vinculo: driver?.vinculo || "contratado",
+      disponibilidade: driver?.disponibilidade ?? true,
       endereco: driver?.endereco || "",
       observacoes: driver?.observacoes || "",
       username: "",
@@ -388,6 +391,28 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
                 </SelectContent>
               </Select>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="disponibilidade"
+          render={({ field }) => (
+            <FormItem className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <FormLabel>Disponível para viagens</FormLabel>
+                <p className="text-xs text-muted-foreground">
+                  Desligue para marcar o motorista como indisponível. Obs.: se a
+                  CNH estiver vencida, ele aparece como indisponível
+                  automaticamente.
+                </p>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
             </FormItem>
           )}
         />
