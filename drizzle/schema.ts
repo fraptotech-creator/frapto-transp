@@ -481,3 +481,29 @@ export const aiConfig = mysqlTable("ai_config", {
 
 export type AiConfig = typeof aiConfig.$inferSelect;
 export type InsertAiConfig = typeof aiConfig.$inferInsert;
+
+// Configuração de NOTIFICAÇÕES/alertas — uma por organização (editável por
+// OWNER). Define quando cada alerta aparece (dias antes do vencimento) e o %
+// do intervalo para o alerta de óleo. Sem linha = usa os defaults do código
+// (DEFAULT_NOTIFICATION_SETTINGS em _core/notifications.ts).
+export const notificationSettings = mysqlTable("notification_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull().unique(),
+  cnhEnabled: boolean("cnhEnabled").default(true).notNull(),
+  cnhDiasAntes: int("cnhDiasAntes").default(30).notNull(),
+  crlvEnabled: boolean("crlvEnabled").default(true).notNull(),
+  crlvDiasAntes: int("crlvDiasAntes").default(30).notNull(),
+  manutencaoEnabled: boolean("manutencaoEnabled").default(true).notNull(),
+  manutencaoDiasAntes: int("manutencaoDiasAntes").default(7).notNull(),
+  oleoEnabled: boolean("oleoEnabled").default(true).notNull(),
+  oleoPercentAntes: int("oleoPercentAntes").default(10).notNull(),
+  documentosEnabled: boolean("documentosEnabled").default(true).notNull(),
+  documentosDiasAntes: int("documentosDiasAntes").default(30).notNull(),
+  urgenciaAltaDiasAntes: int("urgenciaAltaDiasAntes").default(7).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NotificationSettingsRow = typeof notificationSettings.$inferSelect;
+export type InsertNotificationSettings =
+  typeof notificationSettings.$inferInsert;
