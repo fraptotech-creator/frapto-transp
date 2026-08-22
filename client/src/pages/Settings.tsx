@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import AssinaturaCard from "@/components/AssinaturaCard";
+import NotificacoesCard from "@/components/NotificacoesCard";
 import {
   Card,
   CardContent,
@@ -100,7 +101,7 @@ export default function Settings() {
         <div>
           <h1 className="text-2xl font-bold">Configurações</h1>
           <p className="text-sm text-muted-foreground">
-            Provedor de IA do assistente de frota
+            Assistente de IA, notificações e assinatura
           </p>
         </div>
       </div>
@@ -194,6 +195,8 @@ export default function Settings() {
           </Button>
         </CardContent>
       </Card>
+
+      <NotificacoesCard />
 
       <AssinaturaCard />
     </div>
