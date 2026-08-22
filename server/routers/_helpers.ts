@@ -88,6 +88,23 @@ export const parseRequiredNumericString = (value: string): string => {
   return parsed;
 };
 
+// Inteiro NÃO-negativo OPCIONAL (ex.: nº de passageiros de ônibus/van). Ausente
+// → null (campo opcional). Presente-e-inválido (negativo, NaN, fracionário ou
+// absurdo) → erro VISÍVEL, nunca lixo no banco.
+export const parseIntOrNull = (
+  value: string | null | undefined
+): number | null => {
+  if (value == null || String(value).trim() === "") return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > 100000) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Quantidade inválida (informe um inteiro entre 0 e 100000).",
+    });
+  }
+  return n;
+};
+
 // Valida que os IDs referenciados pertencem à MESMA org — impede referência
 // órfã a veículo/motorista/viagem de outra empresa (defesa explícita de tenant).
 export async function assertRefsOwned(

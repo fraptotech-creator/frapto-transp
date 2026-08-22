@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseNumericString,
   parseRequiredNumericString,
+  parseIntOrNull,
 } from "./routers/_helpers";
 
 describe("parseNumericString (não-negativo, finito, com teto)", () => {
@@ -44,5 +45,24 @@ describe("parseRequiredNumericString", () => {
   });
   it("aceita válido", () => {
     expect(parseRequiredNumericString("42.5")).toBe("42.5");
+  });
+});
+
+describe("parseIntOrNull (passageiros — inteiro não-negativo opcional)", () => {
+  it("ausente vira null", () => {
+    expect(parseIntOrNull(undefined)).toBeNull();
+    expect(parseIntOrNull(null)).toBeNull();
+    expect(parseIntOrNull("")).toBeNull();
+    expect(parseIntOrNull("  ")).toBeNull();
+  });
+  it("inteiro válido passa como número", () => {
+    expect(parseIntOrNull("45")).toBe(45);
+    expect(parseIntOrNull("0")).toBe(0);
+  });
+  it("REJEITA fracionário, negativo, NaN e absurdo", () => {
+    expect(() => parseIntOrNull("45.5")).toThrow(/inválid/i);
+    expect(() => parseIntOrNull("-1")).toThrow(/inválid/i);
+    expect(() => parseIntOrNull("abc")).toThrow(/inválid/i);
+    expect(() => parseIntOrNull("100001")).toThrow(/inválid/i);
   });
 });
