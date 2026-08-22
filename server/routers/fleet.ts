@@ -472,6 +472,18 @@ const paradasSchema = z
   .array(z.object({ endereco: z.string().min(1).max(120) }))
   .max(25);
 
+// Lista de passageiros (viagem em veículo de passageiros). documento/telefone
+// opcionais. Teto de sanidade generoso (ônibus grande).
+const passageirosSchema = z
+  .array(
+    z.object({
+      nome: z.string().min(1).max(120),
+      documento: z.string().max(40).optional(),
+      telefone: z.string().max(30).optional(),
+    })
+  )
+  .max(120);
+
 export const tripsRouter = router({
   list: activeOrgProcedure.query(({ ctx }) => getTrips(ctx.orgId)),
 
@@ -499,6 +511,7 @@ export const tripsRouter = router({
         origem: z.string().min(1),
         destino: z.string().min(1),
         paradas: paradasSchema.optional(),
+        passageiros: passageirosSchema.optional(),
         dataPartida: z.date(),
         previsaoChegada: z.date().optional(),
         distancia: z.string().optional(),
@@ -521,6 +534,7 @@ export const tripsRouter = router({
         origem: input.origem,
         destino: input.destino,
         paradas: input.paradas ?? null,
+        passageiros: input.passageiros ?? null,
         dataPartida: input.dataPartida,
         previsaoChegada: input.previsaoChegada ?? null,
         status: "planejada",
@@ -543,6 +557,7 @@ export const tripsRouter = router({
         origem: z.string().optional(),
         destino: z.string().optional(),
         paradas: paradasSchema.optional(),
+        passageiros: passageirosSchema.optional(),
         dataPartida: z.date().optional(),
         previsaoChegada: z.date().optional(),
         dataChegada: z.date().optional(),
