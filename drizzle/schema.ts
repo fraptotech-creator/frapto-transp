@@ -265,6 +265,12 @@ export const trips = mysqlTable(
     // junto da viagem). Vazio/null = rota direta origem→destino (como antes).
     // A ordem aqui é a que vale (otimizada por proximidade OU ajustada à mão).
     paradas: json("paradas").$type<{ endereco: string }[]>(),
+    // Lista de passageiros — só faz sentido em veículo de PASSAGEIROS (ônibus/
+    // van). JSON (editada junto da viagem). Vazio/null = sem lista (carga).
+    passageiros:
+      json("passageiros").$type<
+        { nome: string; documento?: string; telefone?: string }[]
+      >(),
     dataPartida: timestamp("dataPartida").notNull(),
     // Previsão de chegada no cliente (planejada); dataChegada é a chegada REAL.
     previsaoChegada: timestamp("previsaoChegada"),
