@@ -64,7 +64,11 @@ import type {
   InsertTrip,
   InsertMaintenance,
 } from "../../drizzle/schema";
-import { parseNumericString, assertRefsOwned } from "./_helpers";
+import {
+  parseNumericString,
+  parseIntOrNull,
+  assertRefsOwned,
+} from "./_helpers";
 import {
   onlyDigits,
   normalizePlaca,
@@ -115,7 +119,9 @@ export const vehiclesRouter = router({
         modelo: z.string().min(1),
         ano: z.number(),
         tipo: z.enum(["caminhao", "van", "onibus", "carro"]),
+        capacidadeTipo: z.enum(["peso", "passageiros"]).optional(),
         capacidadeCarga: z.string().optional(),
+        capacidadePassageiros: z.string().optional(),
         quilometragem: z.number().int().min(0).optional(),
         intervaloTrocaOleoKm: z.number().int().min(0).optional(),
         crlvVencimento: z.date().optional(),
@@ -135,7 +141,9 @@ export const vehiclesRouter = router({
         intervaloTrocaOleoKm: input.intervaloTrocaOleoKm || 10000,
         // Veículo novo: assume óleo em dia → conta a partir do km inicial.
         kmUltimaTrocaOleo: input.quilometragem ?? 0,
+        capacidadeTipo: input.capacidadeTipo ?? "peso",
         capacidadeCarga: parseNumericString(input.capacidadeCarga),
+        capacidadePassageiros: parseIntOrNull(input.capacidadePassageiros),
         crlvVencimento: input.crlvVencimento || null,
         seguroVencimento: input.seguroVencimento || null,
         observacoes: input.observacoes || null,
@@ -152,7 +160,9 @@ export const vehiclesRouter = router({
         ano: z.number().optional(),
         tipo: z.enum(["caminhao", "van", "onibus", "carro"]).optional(),
         status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
+        capacidadeTipo: z.enum(["peso", "passageiros"]).optional(),
         capacidadeCarga: z.string().optional(),
+        capacidadePassageiros: z.string().optional(),
         quilometragem: z.number().int().min(0).optional(),
         intervaloTrocaOleoKm: z.number().int().min(0).optional(),
         crlvVencimento: z.date().optional(),
@@ -161,10 +171,15 @@ export const vehiclesRouter = router({
       })
     )
     .mutation(({ ctx, input }) => {
-      const { id, capacidadeCarga, ...rest } = input;
+      const { id, capacidadeCarga, capacidadePassageiros, ...rest } = input;
       const updateData: Partial<InsertVehicle> = { ...rest };
       if (capacidadeCarga !== undefined) {
         updateData.capacidadeCarga = parseNumericString(capacidadeCarga);
+      }
+      if (capacidadePassageiros !== undefined) {
+        updateData.capacidadePassageiros = parseIntOrNull(
+          capacidadePassageiros
+        );
       }
       if (rest.placa !== undefined) {
         updateData.placa = normalizePlaca(rest.placa);

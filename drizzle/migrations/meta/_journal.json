@@ -71,6 +71,13 @@
       "when": 1787396089740,
       "tag": "0009_breezy_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1787398286415,
+      "tag": "0010_right_exiles",
+      "breakpoints": true
     }
   ]
 }

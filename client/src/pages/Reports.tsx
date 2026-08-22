@@ -191,7 +191,10 @@ export default function Reports() {
           Tipo: v.tipo,
           Status: v.status,
           Quilometragem: v.quilometragem ?? "",
+          CapacidadeTipo:
+            v.capacidadeTipo === "passageiros" ? "passageiros" : "peso",
           CapacidadeCargaKg: v.capacidadeCarga ?? "",
+          CapacidadePassageiros: v.capacidadePassageiros ?? "",
           VencimentoCRLV: formatDateBR(v.crlvVencimento),
           VencimentoSeguro: formatDateBR(v.seguroVencimento),
         })),

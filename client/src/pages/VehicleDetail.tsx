@@ -123,15 +123,20 @@ export default function VehicleDetail() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-1">
-                Capacidade de Carga
+                {vehicle.capacidadeTipo === "passageiros"
+                  ? "Capacidade (passageiros)"
+                  : "Capacidade de Carga"}
               </p>
               <p className="font-medium">
-                {vehicle.capacidadeCarga
-                  ? parseFloat(
-                      vehicle.capacidadeCarga.toString()
-                    ).toLocaleString("pt-BR")
-                  : "N/A"}{" "}
-                kg
+                {vehicle.capacidadeTipo === "passageiros"
+                  ? vehicle.capacidadePassageiros != null
+                    ? `${vehicle.capacidadePassageiros} passageiros`
+                    : "N/A"
+                  : vehicle.capacidadeCarga
+                    ? `${parseFloat(
+                        vehicle.capacidadeCarga.toString()
+                      ).toLocaleString("pt-BR")} kg`
+                    : "N/A"}
               </p>
             </div>
             <div>

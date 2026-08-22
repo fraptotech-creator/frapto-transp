@@ -148,7 +148,14 @@ export const vehicles = mysqlTable(
     status: mysqlEnum("status", ["ativo", "manutencao", "inativo"])
       .default("ativo")
       .notNull(),
+    // Capacidade: por PESO (kg, caminhão) ou por PASSAGEIROS (ônibus/van). O tipo
+    // é escolhido no cadastro; cada modo usa seu campo. Default "peso" preserva o
+    // comportamento histórico (só capacidadeCarga existia).
+    capacidadeTipo: mysqlEnum("capacidadeTipo", ["peso", "passageiros"])
+      .default("peso")
+      .notNull(),
     capacidadeCarga: decimal("capacidadeCarga", { precision: 10, scale: 2 }),
+    capacidadePassageiros: int("capacidadePassageiros"),
     quilometragem: int("quilometragem").default(0),
     // Troca de óleo por km: intervalo (padrão 10.000) e o odômetro registrado
     // na última troca. Próxima troca = kmUltimaTrocaOleo + intervaloTrocaOleoKm.

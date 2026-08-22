@@ -55,7 +55,9 @@ const vehicleSchema = z.object({
     .min(1900, "Ano inválido.")
     .max(new Date().getFullYear(), "Ano inválido."),
   tipo: z.enum(["caminhao", "van", "onibus", "carro"]),
+  capacidadeTipo: z.enum(["peso", "passageiros"]),
   capacidadeCarga: z.string().optional(),
+  capacidadePassageiros: z.string().optional(),
   quilometragem: z.number().int().min(0),
   intervaloTrocaOleoKm: z.number().int().min(0),
   crlvVencimento: z.string().optional(),
@@ -82,7 +84,9 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
       modelo: vehicle?.modelo || "",
       ano: vehicle?.ano || new Date().getFullYear(),
       tipo: vehicle?.tipo || "caminhao",
+      capacidadeTipo: vehicle?.capacidadeTipo || "peso",
       capacidadeCarga: vehicle?.capacidadeCarga?.toString() || "",
+      capacidadePassageiros: vehicle?.capacidadePassageiros?.toString() || "",
       quilometragem: vehicle?.quilometragem ?? 0,
       intervaloTrocaOleoKm: vehicle?.intervaloTrocaOleoKm ?? 10000,
       crlvVencimento: vehicle?.crlvVencimento
@@ -117,9 +121,17 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
     },
   });
 
+  // Alterna o campo de capacidade (kg × passageiros) conforme a escolha.
+  const tipoCapacidade = form.watch("capacidadeTipo");
+
   const onSubmit = (values: VehicleFormValues) => {
+    const porPeso = values.capacidadeTipo === "peso";
     const dataToSubmit = {
       ...values,
+      // Só o campo do tipo escolhido vai preenchido; o outro é limpo (o servidor
+      // grava null) — um ônibus não guarda kg antigo, nem um caminhão passageiros.
+      capacidadeCarga: porPeso ? values.capacidadeCarga : "",
+      capacidadePassageiros: porPeso ? "" : values.capacidadePassageiros,
       crlvVencimento: values.crlvVencimento
         ? new Date(values.crlvVencimento)
         : undefined,
@@ -269,20 +281,65 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSuccess }) => {
             )}
           />
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
-            name="capacidadeCarga"
+            name="capacidadeTipo"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Capacidade de Carga (kg)</FormLabel>
-                <FormControl>
-                  <Input placeholder="10000" {...field} />
-                </FormControl>
+                <FormLabel>Medir capacidade por</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="peso">Peso (kg) — carga</SelectItem>
+                    <SelectItem value="passageiros">
+                      Passageiros — ônibus/van
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}
           />
+          {tipoCapacidade === "passageiros" ? (
+            <FormField
+              control={form.control}
+              name="capacidadePassageiros"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Quantidade de passageiros</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} placeholder="45" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : (
+            <FormField
+              control={form.control}
+              name="capacidadeCarga"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Capacidade de Carga (kg)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="10000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="crlvVencimento"
