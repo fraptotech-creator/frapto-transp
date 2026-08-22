@@ -467,6 +467,11 @@ export const driversRouter = router({
     }),
 });
 
+// Paradas intermediárias ORDENADAS de uma viagem (mesma ordem = ordem da rota).
+const paradasSchema = z
+  .array(z.object({ endereco: z.string().min(1).max(120) }))
+  .max(25);
+
 export const tripsRouter = router({
   list: activeOrgProcedure.query(({ ctx }) => getTrips(ctx.orgId)),
 
@@ -493,6 +498,7 @@ export const tripsRouter = router({
         veiculoId: z.number(),
         origem: z.string().min(1),
         destino: z.string().min(1),
+        paradas: paradasSchema.optional(),
         dataPartida: z.date(),
         previsaoChegada: z.date().optional(),
         distancia: z.string().optional(),
@@ -514,6 +520,7 @@ export const tripsRouter = router({
         veiculoId: input.veiculoId,
         origem: input.origem,
         destino: input.destino,
+        paradas: input.paradas ?? null,
         dataPartida: input.dataPartida,
         previsaoChegada: input.previsaoChegada ?? null,
         status: "planejada",
@@ -535,6 +542,7 @@ export const tripsRouter = router({
         veiculoId: z.number().optional(),
         origem: z.string().optional(),
         destino: z.string().optional(),
+        paradas: paradasSchema.optional(),
         dataPartida: z.date().optional(),
         previsaoChegada: z.date().optional(),
         dataChegada: z.date().optional(),

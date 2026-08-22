@@ -7,6 +7,7 @@ import {
   parseOrsGeocode,
   parseOrsDirections,
   candidateQueries,
+  ordenarPorProximidade,
   type LatLng,
   type ParsedRoute,
 } from "../_core/geo";
@@ -41,6 +42,7 @@ type RouteResult =
       ok: true;
       origin: LatLng;
       destination: LatLng;
+      stops: LatLng[];
       geometry: [number, number][];
       distanceKm: number;
       durationMin: number;
@@ -102,9 +104,12 @@ async function geocodeNominatim(q: string): Promise<LatLng | null> {
   }
 }
 
-async function routeOsrm(o: LatLng, d: LatLng): Promise<ParsedRoute | null> {
+// OSRM aceita N coordenadas no path (o1;p1;p2;…;d) — é assim que a rota passa
+// pelas paradas na ordem dada. Com 2 pontos, idêntico ao comportamento antigo.
+async function routeOsrm(coords: LatLng[]): Promise<ParsedRoute | null> {
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${o.lng},${o.lat};${d.lng},${d.lat}?overview=full&geometries=geojson`;
+    const path = coords.map(c => `${c.lng},${c.lat}`).join(";");
+    const url = `https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`;
     const res = await fetchTimeout(url, { headers: { "User-Agent": UA } });
     if (!res.ok) return null;
     return parseOsrm(await res.json());
@@ -141,12 +146,14 @@ async function geocode(q: string): Promise<LatLng | null> {
   return center;
 }
 
-async function traceRoute(o: LatLng, d: LatLng): Promise<ParsedRoute | null> {
-  if (ENV.orsApiKey) {
-    const viaOrs = await routeOrs(o, d);
+// Traça a rota passando por TODAS as coordenadas na ordem (mín. 2: origem/
+// destino). ORS só cobre o caso de 2 pontos (start/end) — com paradas, usa OSRM.
+async function traceRoute(coords: LatLng[]): Promise<ParsedRoute | null> {
+  if (coords.length === 2 && ENV.orsApiKey) {
+    const viaOrs = await routeOrs(coords[0], coords[1]);
     if (viaOrs) return viaOrs;
   }
-  return routeOsrm(o, d);
+  return routeOsrm(coords);
 }
 
 // Rota (origem→destino). Devolve os pontos, a geometria (para o Leaflet) e
@@ -157,26 +164,37 @@ export const geoRouter = router({
       z.object({
         origem: z.string().min(1).max(120),
         destino: z.string().min(1).max(120),
+        // Paradas ORDENADas entre origem e destino (opcional). Sem elas, a rota
+        // é direta origem→destino — idêntica ao comportamento anterior.
+        paradas: z.array(z.string().min(1).max(120)).max(25).optional(),
       })
     )
     .query(async ({ input }): Promise<RouteResult> => {
-      const key = `${input.origem}||${input.destino}`.toLowerCase();
+      const paradas = input.paradas ?? [];
+      const key =
+        `${input.origem}||${paradas.join("|")}||${input.destino}`.toLowerCase();
       const hit = cache.get(key);
       if (hit) return hit;
 
-      const [o, d] = await Promise.all([
+      const [o, d, ...stopsGeo] = await Promise.all([
         geocode(input.origem),
         geocode(input.destino),
+        ...paradas.map(p => geocode(p)),
       ]);
-      if (!o || !d) return { ok: false, reason: "geocode" };
+      if (!o || !d || stopsGeo.some(s => !s)) {
+        return { ok: false, reason: "geocode" };
+      }
+      const stops = stopsGeo as LatLng[];
 
-      const parsed = await traceRoute(o, d);
+      // Ordem do path: origem → paradas (na ordem dada) → destino.
+      const parsed = await traceRoute([o, ...stops, d]);
       if (!parsed) return { ok: false, reason: "route" };
 
       const result: RouteResult = {
         ok: true,
         origin: o,
         destination: d,
+        stops,
         geometry: parsed.geometry,
         distanceKm: parsed.distanceKm,
         durationMin: parsed.durationMin,
@@ -185,4 +203,32 @@ export const geoRouter = router({
       cache.set(key, result);
       return result;
     }),
+
+  // Sugere a ORDEM das paradas por proximidade (vizinho-mais-próximo a partir
+  // da origem). Não persiste — devolve a lista reordenada; a UI mostra e o
+  // usuário confirma/ajusta antes de salvar. Falha de geocode → ok:false.
+  optimizeStops: activeOrgProcedure
+    .input(
+      z.object({
+        origem: z.string().min(1).max(120),
+        paradas: z.array(z.string().min(1).max(120)).min(2).max(25),
+      })
+    )
+    .query(
+      async ({
+        input,
+      }): Promise<
+        { ok: true; paradas: string[] } | { ok: false; reason: "geocode" }
+      > => {
+        const [o, ...stopsGeo] = await Promise.all([
+          geocode(input.origem),
+          ...input.paradas.map(p => geocode(p)),
+        ]);
+        if (!o || stopsGeo.some(s => !s)) {
+          return { ok: false, reason: "geocode" };
+        }
+        const ordem = ordenarPorProximidade(o, stopsGeo as LatLng[]);
+        return { ok: true, paradas: ordem.map(i => input.paradas[i]) };
+      }
+    ),
 });
