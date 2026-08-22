@@ -10,7 +10,10 @@ const esc = (v: unknown) =>
 
 export function exportTablePDF(
   title: string,
-  rows: Record<string, unknown>[]
+  rows: Record<string, unknown>[],
+  // Linhas de contexto opcionais (ex.: veículo/motorista/rota do manifesto),
+  // impressas entre o título e a tabela. Cada item vira uma linha.
+  subtitle?: string[]
 ): boolean {
   if (!rows || rows.length === 0) return false;
   const headers = Object.keys(rows[0]);
@@ -21,7 +24,8 @@ export function exportTablePDF(
     *{box-sizing:border-box}
     body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111827}
     h1{font-size:18px;margin:0 0 2px}
-    .meta{color:#6b7280;font-size:11px;margin-bottom:14px}
+    .meta{color:#6b7280;font-size:11px;margin-bottom:6px}
+    .sub{font-size:12px;color:#374151;margin-bottom:14px;line-height:1.5}
     table{border-collapse:collapse;width:100%;font-size:12px}
     th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:left;vertical-align:top}
     th{background:#f3f4f6;font-weight:600}
@@ -30,6 +34,11 @@ export function exportTablePDF(
   </style></head><body>
     <h1>${esc(title)}</h1>
     <div class="meta">Frapto Transp · gerado em ${esc(geradoEm)}</div>
+    ${
+      subtitle && subtitle.length
+        ? `<div class="sub">${subtitle.map(s => esc(s)).join("<br>")}</div>`
+        : ""
+    }
     <table><thead><tr>${headers
       .map(h => `<th>${esc(h)}</th>`)
       .join("")}</tr></thead><tbody>${rows
