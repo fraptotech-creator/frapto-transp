@@ -22,7 +22,18 @@ export const ENV = {
   // Remetente. Precisa ser do domínio verificado no Resend, senão ele recusa.
   emailRemetente:
     process.env.EMAIL_REMETENTE ?? "nao-responda@fraptotransp.com.br",
-  // Assistente de IA (Anthropic Claude) — fallback legado.
+  // Assistente de IA — CHAVE-PADRÃO DO SISTEMA (fallback quando a empresa não
+  // configurou a própria). ATENÇÃO LGPD: a IA lê dados reais do cliente
+  // (veículos/motoristas/viagens/financeiro); com estas vars setadas, os dados
+  // de QUALQUER empresa sem config própria passam por esta chave compartilhada.
+  // Vazio = sem fallback (fail-closed, a org precisa configurar em Configurações).
+  // DEFAULT_AI_* costuma apontar p/ um provedor OpenAI-compatível grátis (Groq).
+  defaultAiKey: process.env.DEFAULT_AI_KEY ?? "",
+  defaultAiProvider: process.env.DEFAULT_AI_PROVIDER ?? "openai_compatible",
+  defaultAiBaseUrl:
+    process.env.DEFAULT_AI_BASE_URL ?? "https://api.groq.com/openai/v1",
+  defaultAiModel: process.env.DEFAULT_AI_MODEL ?? "llama-3.3-70b-versatile",
+  // Anthropic Claude — fallback legado (2ª opção de chave-padrão).
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   // Chave (32 bytes base64) para cifrar a apiKey de IA de cada empresa em
   // repouso (AES-256-GCM). Vazia = escrita cifrada indisponível (fail-closed).
