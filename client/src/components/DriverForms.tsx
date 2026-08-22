@@ -25,6 +25,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
 import { formatCpf, formatPhone } from "@/lib/format";
@@ -49,6 +56,7 @@ const driverSchema = z.object({
   cnh: z.string().min(1, "A CNH é obrigatória."),
   cnhCategoria: z.string().min(1, "A categoria é obrigatória."),
   cnhVencimento: z.string().min(1, "O vencimento da CNH é obrigatório."),
+  vinculo: z.enum(["contratado", "freelancer"]),
   endereco: z.string().optional(),
   observacoes: z.string().optional(),
   // Login do motorista (só no cadastro).
@@ -180,6 +188,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
       cnhVencimento: driver?.cnhVencimento
         ? new Date(driver.cnhVencimento).toISOString().split("T")[0]
         : "",
+      vinculo: driver?.vinculo || "contratado",
       endereco: driver?.endereco || "",
       observacoes: driver?.observacoes || "",
       username: "",
@@ -357,6 +366,31 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
             )}
           />
         </div>
+        <FormField
+          control={form.control}
+          name="vinculo"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Vínculo</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                defaultValue={field.value}
+                value={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="contratado">Contratado</SelectItem>
+                  <SelectItem value="freelancer">Freelancer</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <FormField
           control={form.control}
           name="endereco"
