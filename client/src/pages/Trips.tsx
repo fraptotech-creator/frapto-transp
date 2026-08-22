@@ -28,8 +28,10 @@ import {
   CheckCircle2,
   XCircle,
   Eye,
+  Users,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { ManifestoDialog } from "@/components/ManifestoDialog";
 
 export default function Trips() {
   const { data: trips, isLoading } = trpc.trips.list.useQuery();
@@ -37,6 +39,7 @@ export default function Trips() {
   const { data: drivers } = trpc.drivers.list.useQuery();
   const [, setLocation] = useLocation();
   const [statusFiltro, setStatusFiltro] = useState<TripStatusFilter>("todas");
+  const [manifestoTrip, setManifestoTrip] = useState<any | null>(null);
   const [filtroMes, setFiltroMes] = useState(""); // YYYY-MM
   const [filtroData, setFiltroData] = useState(""); // YYYY-MM-DD
 
@@ -359,6 +362,21 @@ export default function Trips() {
                         </Button>
                       )}
 
+                      {trip.passageiros?.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="rounded-full px-4 font-bold text-xs text-emerald-400 hover:bg-emerald-500/10"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setManifestoTrip(trip);
+                          }}
+                        >
+                          <Users className="w-3 h-3 mr-1" />
+                          MANIFESTO
+                        </Button>
+                      )}
+
                       <div onClick={e => e.stopPropagation()}>
                         <TripActions trip={trip} />
                       </div>
@@ -386,6 +404,12 @@ export default function Trips() {
           </p>
         </div>
       )}
+
+      <ManifestoDialog
+        trip={manifestoTrip}
+        open={!!manifestoTrip}
+        onOpenChange={o => !o && setManifestoTrip(null)}
+      />
     </div>
   );
 }
