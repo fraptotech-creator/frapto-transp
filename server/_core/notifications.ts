@@ -44,6 +44,28 @@ export const NOTIF_LIMITS = {
   oleoPercentMax: 50,
 } as const;
 
+// Mescla a linha do banco (pode ser parcial/ausente) com os defaults → sempre
+// um NotificationSettings completo. Fonte única de "defaults" para a borda.
+export function resolveNotificationSettings(
+  row: Partial<NotificationSettings> | null | undefined
+): NotificationSettings {
+  const d = DEFAULT_NOTIFICATION_SETTINGS;
+  if (!row) return { ...d };
+  return {
+    cnhEnabled: row.cnhEnabled ?? d.cnhEnabled,
+    cnhDiasAntes: row.cnhDiasAntes ?? d.cnhDiasAntes,
+    crlvEnabled: row.crlvEnabled ?? d.crlvEnabled,
+    crlvDiasAntes: row.crlvDiasAntes ?? d.crlvDiasAntes,
+    manutencaoEnabled: row.manutencaoEnabled ?? d.manutencaoEnabled,
+    manutencaoDiasAntes: row.manutencaoDiasAntes ?? d.manutencaoDiasAntes,
+    oleoEnabled: row.oleoEnabled ?? d.oleoEnabled,
+    oleoPercentAntes: row.oleoPercentAntes ?? d.oleoPercentAntes,
+    documentosEnabled: row.documentosEnabled ?? d.documentosEnabled,
+    documentosDiasAntes: row.documentosDiasAntes ?? d.documentosDiasAntes,
+    urgenciaAltaDiasAntes: row.urgenciaAltaDiasAntes ?? d.urgenciaAltaDiasAntes,
+  };
+}
+
 export type Urgencia = "alta" | "media";
 
 export interface Alerta {

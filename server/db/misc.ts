@@ -2,8 +2,10 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import {
   documents,
   aiConfig,
+  notificationSettings,
   InsertDocument,
   InsertAiConfig,
+  InsertNotificationSettings,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
 import { encryptAiKey, decryptAiKey } from "../_core/aiKeyCrypto";
@@ -107,4 +109,32 @@ export async function upsertAiConfig(
     .values({ orgId, ...dataToStore })
     .onDuplicateKeyUpdate({ set: dataToStore });
   return getAiConfig(orgId);
+}
+
+// ─── Config de NOTIFICAÇÕES (por organização) ────────────────────────────────
+
+// Linha crua (ou undefined se a org nunca configurou → o chamador aplica os
+// defaults via resolveNotificationSettings). Sem segredo: nada a mascarar.
+export async function getNotificationSettings(orgId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(notificationSettings)
+    .where(eq(notificationSettings.orgId, orgId))
+    .limit(1);
+  return result[0];
+}
+
+export async function upsertNotificationSettings(
+  orgId: number,
+  data: Partial<Omit<InsertNotificationSettings, "orgId">>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .insert(notificationSettings)
+    .values({ orgId, ...data })
+    .onDuplicateKeyUpdate({ set: data });
+  return getNotificationSettings(orgId);
 }
