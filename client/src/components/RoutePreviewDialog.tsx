@@ -29,7 +29,13 @@ export function RoutePreviewDialog({
     { enabled: open && !!tripId }
   );
   const { data: route, isLoading } = trpc.geo.route.useQuery(
-    { origem: trip?.origem ?? "", destino: trip?.destino ?? "" },
+    {
+      origem: trip?.origem ?? "",
+      destino: trip?.destino ?? "",
+      paradas: ((trip?.paradas as { endereco: string }[] | null) ?? []).map(
+        p => p.endereco
+      ),
+    },
     { enabled: open && !!trip?.origem && !!trip?.destino }
   );
 
@@ -59,6 +65,16 @@ export function RoutePreviewDialog({
     })
       .bindPopup("Destino")
       .addTo(map);
+    (route.stops ?? []).forEach((s, i) => {
+      L.circleMarker([s.lat, s.lng], {
+        color: "#a855f7",
+        fillColor: "#a855f7",
+        fillOpacity: 1,
+        radius: 7,
+      })
+        .bindPopup(`Parada ${i + 1}`)
+        .addTo(map);
+    });
     line.addTo(map);
     map.fitBounds(line.getBounds(), { padding: [30, 30] });
     // O container só ganha tamanho depois que o dialog abre → recalcula.

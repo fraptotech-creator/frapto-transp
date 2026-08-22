@@ -6,6 +6,8 @@ import {
   normalizeAddress,
   parseOrsGeocode,
   parseOrsDirections,
+  haversineKm,
+  ordenarPorProximidade,
 } from "./_core/geo";
 
 describe("parseOrsGeocode", () => {
@@ -118,5 +120,50 @@ describe("parseOsrm", () => {
     expect(
       parseOsrm({ routes: [{ geometry: { coordinates: [] } }] })
     ).toBeNull();
+  });
+});
+
+describe("haversineKm", () => {
+  it("mesmo ponto → 0", () => {
+    expect(haversineKm({ lat: -20, lng: -40 }, { lat: -20, lng: -40 })).toBe(0);
+  });
+  it("SP→RJ ≈ 360 km (ordem de grandeza)", () => {
+    const km = haversineKm(
+      { lat: -23.55, lng: -46.63 },
+      { lat: -22.91, lng: -43.2 }
+    );
+    expect(km).toBeGreaterThan(330);
+    expect(km).toBeLessThan(390);
+  });
+});
+
+describe("ordenarPorProximidade (vizinho-mais-próximo)", () => {
+  const origem = { lat: 0, lng: 0 };
+  it("ordena do mais perto ao mais longe a partir da origem", () => {
+    // idx0 longe (0,3), idx1 perto (0,1), idx2 médio (0,2)
+    const pontos = [
+      { lat: 0, lng: 3 },
+      { lat: 0, lng: 1 },
+      { lat: 0, lng: 2 },
+    ];
+    expect(ordenarPorProximidade(origem, pontos)).toEqual([1, 2, 0]);
+  });
+  it("empate resolve pelo menor índice", () => {
+    const pontos = [
+      { lat: 0, lng: 1 },
+      { lat: 0, lng: -1 }, // mesma distância da origem
+    ];
+    expect(ordenarPorProximidade(origem, pontos)).toEqual([0, 1]);
+  });
+  it("lista vazia → []", () => {
+    expect(ordenarPorProximidade(origem, [])).toEqual([]);
+  });
+  it("é uma permutação (não perde nem duplica paradas)", () => {
+    const pontos = Array.from({ length: 6 }, (_, i) => ({
+      lat: 0,
+      lng: (i * 37) % 11,
+    }));
+    const ordem = ordenarPorProximidade(origem, pontos);
+    expect([...ordem].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 });

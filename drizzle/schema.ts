@@ -9,6 +9,7 @@ import {
   boolean,
   unique,
   index,
+  json,
 } from "drizzle-orm/mysql-core";
 
 /**
@@ -260,6 +261,10 @@ export const trips = mysqlTable(
     veiculoId: int("veiculoId").notNull(),
     origem: varchar("origem", { length: 150 }).notNull(),
     destino: varchar("destino", { length: 150 }).notNull(),
+    // Paradas intermediárias ORDENADAS (X → paradas → Y). JSON (lista editada
+    // junto da viagem). Vazio/null = rota direta origem→destino (como antes).
+    // A ordem aqui é a que vale (otimizada por proximidade OU ajustada à mão).
+    paradas: json("paradas").$type<{ endereco: string }[]>(),
     dataPartida: timestamp("dataPartida").notNull(),
     // Previsão de chegada no cliente (planejada); dataChegada é a chegada REAL.
     previsaoChegada: timestamp("previsaoChegada"),

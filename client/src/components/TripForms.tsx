@@ -34,7 +34,17 @@ import {
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
 import { formatPlaca } from "@/lib/format";
-import { Trash2, Edit, MapPin, Navigation } from "lucide-react";
+import {
+  Trash2,
+  Edit,
+  MapPin,
+  Navigation,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  X,
+  Route,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -117,6 +127,52 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
     },
   });
 
+  // Paradas intermediárias (X → paradas → Y). Estado local: lista ORDENADA de
+  // endereços (a ordem aqui = ordem da rota). Vira {endereco}[] no submit.
+  const [paradas, setParadas] = React.useState<string[]>(() =>
+    ((trip?.paradas as { endereco: string }[] | null) ?? []).map(
+      p => p.endereco
+    )
+  );
+  const paradasLimpas = () => paradas.map(e => e.trim()).filter(Boolean);
+  const addParada = () => setParadas(p => [...p, ""]);
+  const setParadaAt = (i: number, v: string) =>
+    setParadas(p => p.map((x, k) => (k === i ? v : x)));
+  const removeParada = (i: number) =>
+    setParadas(p => p.filter((_, k) => k !== i));
+  const moveParada = (i: number, dir: -1 | 1) =>
+    setParadas(p => {
+      const j = i + dir;
+      if (j < 0 || j >= p.length) return p;
+      const c = [...p];
+      [c[i], c[j]] = [c[j], c[i]];
+      return c;
+    });
+
+  const [otimizando, setOtimizando] = React.useState(false);
+  const otimizarParadas = async () => {
+    const origem = form.getValues("origem");
+    const lista = paradasLimpas();
+    if (!origem || lista.length < 2) {
+      toast.error("Informe a origem e ao menos 2 paradas para otimizar.");
+      return;
+    }
+    setOtimizando(true);
+    try {
+      const r = await utils.geo.optimizeStops.fetch({ origem, paradas: lista });
+      if (r.ok) {
+        setParadas(r.paradas);
+        toast.success("Paradas ordenadas por proximidade.");
+      } else {
+        toast.error("Não foi possível otimizar. Confira os endereços.");
+      }
+    } catch {
+      toast.error("Falha ao otimizar as paradas.");
+    } finally {
+      setOtimizando(false);
+    }
+  };
+
   // Calcula a distância pela rota real (OpenStreetMap/OSRM) e preenche o campo.
   const [calculando, setCalculando] = React.useState(false);
   const calcularDistancia = async () => {
@@ -128,7 +184,11 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
     }
     setCalculando(true);
     try {
-      const r = await utils.geo.route.fetch({ origem, destino });
+      const r = await utils.geo.route.fetch({
+        origem,
+        destino,
+        paradas: paradasLimpas(),
+      });
       if (r.ok) {
         form.setValue("distancia", String(r.distanceKm));
         toast.success(`Distância: ${r.distanceKm} km (~${r.durationMin} min)`);
@@ -175,6 +235,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
         motoristaId: parseInt(values.motoristaId),
         origem: values.origem,
         destino: values.destino,
+        paradas: paradasLimpas().map(endereco => ({ endereco })),
         dataPartida: new Date(values.dataPartida),
         previsaoChegada: values.previsaoChegada
           ? new Date(values.previsaoChegada)
@@ -195,6 +256,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
         motoristaId: parseInt(values.motoristaId),
         origem: values.origem,
         destino: values.destino,
+        paradas: paradasLimpas().map(endereco => ({ endereco })),
         dataPartida: new Date(values.dataPartida),
         previsaoChegada: values.previsaoChegada
           ? new Date(values.previsaoChegada)
@@ -314,6 +376,81 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
               )}
             />
           </div>
+        </div>
+
+        {/* Paradas intermediárias (opcional). A rota passa por elas na ordem
+            listada; "Otimizar" ordena por proximidade; setas reordenam à mão. */}
+        <div className="rounded-lg border p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <FormLabel className="flex items-center gap-1">
+              <Route className="w-3 h-3 text-purple-400" /> Paradas no caminho
+            </FormLabel>
+            <div className="flex items-center gap-3">
+              {paradasLimpas().length >= 2 && (
+                <button
+                  type="button"
+                  onClick={otimizarParadas}
+                  disabled={otimizando}
+                  className="text-xs text-blue-500 hover:underline disabled:opacity-50"
+                >
+                  {otimizando ? "Otimizando…" : "Otimizar por proximidade"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={addParada}
+                className="text-xs text-emerald-500 hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Adicionar parada
+              </button>
+            </div>
+          </div>
+          {paradas.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Sem paradas — rota direta da origem ao destino.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {paradas.map((p, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-5 text-right">
+                    {i + 1}º
+                  </span>
+                  <Input
+                    value={p}
+                    onChange={e => setParadaAt(i, e.target.value)}
+                    placeholder="Cidade / endereço da parada"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => moveParada(i, -1)}
+                    disabled={i === 0}
+                    className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    aria-label="Mover para cima"
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveParada(i, 1)}
+                    disabled={i === paradas.length - 1}
+                    className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    aria-label="Mover para baixo"
+                  >
+                    <ArrowDown className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeParada(i)}
+                    className="p-1 text-rose-400 hover:text-rose-300"
+                    aria-label="Remover parada"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">

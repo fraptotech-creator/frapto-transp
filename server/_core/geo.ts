@@ -131,3 +131,45 @@ export function parseOrsDirections(json: unknown): ParsedRoute | null {
     durationMin: Math.round((Number.isFinite(durS) ? durS : 0) / 60),
   };
 }
+
+// ─── Paradas (waypoints) ─────────────────────────────────────────────────────
+
+// Distância em linha reta (km) entre dois pontos — base do "por aproximação".
+export function haversineKm(a: LatLng, b: LatLng): number {
+  const R = 6371;
+  const rad = (x: number) => (x * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Ordena os pontos por PROXIMIDADE (vizinho-mais-próximo): começa na origem,
+// escolhe sempre o ponto não-visitado mais próximo. Retorna os índices na nova
+// ordem (o destino é fixo no fim da rota e não entra aqui). Determinístico:
+// empate de distância resolve pelo menor índice.
+export function ordenarPorProximidade(
+  origem: LatLng,
+  pontos: LatLng[]
+): number[] {
+  const restantes = pontos.map((_, i) => i);
+  const ordem: number[] = [];
+  let atual = origem;
+  while (restantes.length > 0) {
+    let melhorK = 0;
+    let melhorD = Infinity;
+    for (let k = 0; k < restantes.length; k++) {
+      const d = haversineKm(atual, pontos[restantes[k]]);
+      if (d < melhorD) {
+        melhorD = d;
+        melhorK = k;
+      }
+    }
+    const idx = restantes.splice(melhorK, 1)[0];
+    ordem.push(idx);
+    atual = pontos[idx];
+  }
+  return ordem;
+}
