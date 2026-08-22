@@ -1,7 +1,16 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { activeOrgProcedure, orgOwnerProcedure, router } from "../_core/trpc";
-import { getAiConfig, upsertAiConfig } from "../db";
+import {
+  getAiConfig,
+  upsertAiConfig,
+  getNotificationSettings,
+  upsertNotificationSettings,
+} from "../db";
+import {
+  resolveNotificationSettings,
+  NOTIF_LIMITS,
+} from "../_core/notifications";
 import { invokeLLM, invokeOpenAIAgent, type ChatMessage } from "../_core/llm";
 import { toOpenAiTools, runAiTool } from "../_core/aiTools";
 import { assertSafeBaseUrl } from "../_core/urlSafety";
@@ -178,4 +187,42 @@ export const settingsRouter = router({
       await upsertAiConfig(ctx.orgId, data);
       return { success: true } as const;
     }),
+
+  // ── Config de NOTIFICAÇÕES (owner-only, como a de IA) ──────────────────────
+  getNotificationSettings: orgOwnerProcedure.query(async ({ ctx }) => {
+    // Sempre devolve settings COMPLETAS (defaults se a org nunca configurou).
+    return resolveNotificationSettings(
+      await getNotificationSettings(ctx.orgId)
+    );
+  }),
+
+  updateNotificationSettings: orgOwnerProcedure
+    .input(
+      z.object({
+        cnhEnabled: z.boolean(),
+        cnhDiasAntes: diasSchema(),
+        crlvEnabled: z.boolean(),
+        crlvDiasAntes: diasSchema(),
+        manutencaoEnabled: z.boolean(),
+        manutencaoDiasAntes: diasSchema(),
+        oleoEnabled: z.boolean(),
+        oleoPercentAntes: z
+          .number()
+          .int()
+          .min(NOTIF_LIMITS.oleoPercentMin)
+          .max(NOTIF_LIMITS.oleoPercentMax),
+        documentosEnabled: z.boolean(),
+        documentosDiasAntes: diasSchema(),
+        urgenciaAltaDiasAntes: diasSchema(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await upsertNotificationSettings(ctx.orgId, input);
+      return { success: true } as const;
+    }),
 });
+
+// Dias antes do vencimento: inteiro dentro dos limites (1..365). Fonte única.
+function diasSchema() {
+  return z.number().int().min(NOTIF_LIMITS.diasMin).max(NOTIF_LIMITS.diasMax);
+}

@@ -45,8 +45,14 @@ import {
   getExpenses,
   getRevenues,
   recordPiiExport,
+  getDocuments,
+  getNotificationSettings,
 } from "../db";
-import { isOilChange, computeOilStatus } from "../_core/oil";
+import { isOilChange } from "../_core/oil";
+import {
+  buildAlerts,
+  resolveNotificationSettings,
+} from "../_core/notifications";
 import {
   computeFinanceSummary,
   computeMonthlySeries,
@@ -697,13 +703,22 @@ export const dashboardRouter = router({
     }),
 
   stats: activeOrgProcedure.query(async ({ ctx }) => {
-    const [vehiclesList, driversList, tripsList, maintenanceList] =
-      await Promise.all([
-        getVehicles(ctx.orgId),
-        getDrivers(ctx.orgId),
-        getTrips(ctx.orgId),
-        getMaintenances(ctx.orgId),
-      ]);
+    const [
+      vehiclesList,
+      driversList,
+      tripsList,
+      maintenanceList,
+      documentsList,
+      notifRow,
+    ] = await Promise.all([
+      getVehicles(ctx.orgId),
+      getDrivers(ctx.orgId),
+      getTrips(ctx.orgId),
+      getMaintenances(ctx.orgId),
+      getDocuments(ctx.orgId),
+      getNotificationSettings(ctx.orgId),
+    ]);
+    const notifSettings = resolveNotificationSettings(notifRow);
 
     const fleetStatus = {
       ativo: vehiclesList.filter(v => v.status === "ativo").length,
@@ -727,62 +742,17 @@ export const dashboardRouter = router({
       })
       .reverse();
 
-    const alerts = [
-      ...maintenanceList
-        .filter(
-          m =>
-            m.status === "pendente" &&
-            new Date(m.dataPrevista) <
-              new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        )
-        .map(m => ({
-          type: "manutencao",
-          title: "Manutenção Próxima",
-          message: `Veículo ${vehiclesList.find(v => v.id === m.veiculoId)?.placa} tem manutenção agendada para ${new Date(m.dataPrevista).toLocaleDateString("pt-BR")}`,
-          urgency: "alta",
-        })),
-      ...vehiclesList
-        .filter(
-          v =>
-            v.crlvVencimento &&
-            new Date(v.crlvVencimento) <
-              new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        )
-        .map(v => ({
-          type: "documento",
-          title: "CRLV Vencendo",
-          message: `O CRLV do veículo ${v.placa} vence em ${new Date(v.crlvVencimento!).toLocaleDateString("pt-BR")}`,
-          urgency: "media",
-        })),
-      ...driversList
-        .filter(
-          d =>
-            d.cnhVencimento &&
-            new Date(d.cnhVencimento) <
-              new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        )
-        .map(d => ({
-          type: "cnh",
-          title: "CNH Vencendo",
-          message: `A CNH do motorista ${d.nome} vence em ${new Date(d.cnhVencimento!).toLocaleDateString("pt-BR")}`,
-          urgency: "media",
-        })),
-      ...vehiclesList
-        .map(v => ({ v, oil: computeOilStatus(v) }))
-        .filter(x => x.oil.status !== "ok")
-        .map(({ v, oil }) => ({
-          type: "oleo",
-          title:
-            oil.status === "vencida"
-              ? "Troca de óleo vencida"
-              : "Troca de óleo próxima",
-          message:
-            oil.status === "vencida"
-              ? `Veículo ${v.placa} passou ${-oil.kmRestante} km do ponto de troca de óleo.`
-              : `Veículo ${v.placa}: faltam ${oil.kmRestante} km para a troca de óleo.`,
-          urgency: oil.status === "vencida" ? "alta" : "media",
-        })),
-    ];
+    // Decisão PURA (limiares por empresa + escalonamento) em _core/notifications.
+    const alerts = buildAlerts(
+      {
+        vehicles: vehiclesList,
+        drivers: driversList,
+        maintenances: maintenanceList,
+        documents: documentsList,
+      },
+      notifSettings,
+      new Date()
+    );
 
     return {
       totalVehicles: vehiclesList.length,
@@ -790,7 +760,7 @@ export const dashboardRouter = router({
       totalTrips: tripsList.length,
       tripsByMonth: last6Months,
       fleetStatus,
-      alerts: alerts.slice(0, 10),
+      alerts,
     };
   }),
 });
