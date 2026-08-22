@@ -8,6 +8,7 @@ import { DriverDialog, DriverActions } from "@/components/DriverForms";
 import { useLocation } from "wouter";
 import { formatCpf, formatPhone } from "@/lib/format";
 import { contemTexto } from "@/lib/searchFilters";
+import { resolverDisponibilidade } from "@/lib/driverAvailability";
 import { Users, Phone, CreditCard, User, Search } from "lucide-react";
 
 export default function Drivers() {
@@ -44,6 +45,12 @@ export default function Drivers() {
         glowClass: "glow-effect",
       },
       inativo: {
+        bg: "bg-rose-500/20",
+        text: "text-rose-300",
+        gradient: "from-rose-500 to-pink-600",
+        glowClass: "glow-effect",
+      },
+      indisponivel: {
         bg: "bg-rose-500/20",
         text: "text-rose-300",
         gradient: "from-rose-500 to-pink-600",
@@ -93,7 +100,9 @@ export default function Drivers() {
       ) : motoristasFiltrados.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {motoristasFiltrados.map((driver: any) => {
-            const statusInfo = getStatusBadge(driver.status);
+            // Disponibilidade EFETIVA (CNH vencida ⇒ Indisponível), não o status cru.
+            const disp = resolverDisponibilidade(driver, new Date());
+            const statusInfo = getStatusBadge(disp.chaveCor);
             return (
               <Card
                 key={driver.id}
@@ -113,9 +122,10 @@ export default function Drivers() {
                     <div className="flex flex-col items-end gap-1.5">
                       <span
                         className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl ${statusInfo.bg} ${statusInfo.text} shadow-sm`}
+                        title={disp.motivo ?? undefined}
                       >
-                        {driver.status.charAt(0).toUpperCase() +
-                          driver.status.slice(1)}
+                        {disp.rotulo}
+                        {disp.motivo ? ` · ${disp.motivo}` : ""}
                       </span>
                       <span
                         className={`text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-xl border shadow-sm ${

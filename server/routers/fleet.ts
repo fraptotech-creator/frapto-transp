@@ -263,6 +263,7 @@ export const driversRouter = router({
         cnhCategoria: z.string().min(1),
         cnhVencimento: z.date(),
         vinculo: z.enum(["contratado", "freelancer"]).optional(),
+        disponibilidade: z.boolean().optional(),
         endereco: z.string().optional(),
         observacoes: z.string().optional(),
         // Login do motorista (usuário; senha inicial é a padrão).
@@ -287,7 +288,7 @@ export const driversRouter = router({
         cnhCategoria: input.cnhCategoria,
         cnhVencimento: input.cnhVencimento,
         status: "disponivel",
-        disponibilidade: true,
+        disponibilidade: input.disponibilidade ?? true,
         vinculo: input.vinculo ?? "contratado",
         dataAdmissao: new Date(),
         endereco: input.endereco || null,
