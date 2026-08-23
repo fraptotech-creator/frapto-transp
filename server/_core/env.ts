@@ -32,7 +32,11 @@ export const ENV = {
   defaultAiProvider: process.env.DEFAULT_AI_PROVIDER ?? "openai_compatible",
   defaultAiBaseUrl:
     process.env.DEFAULT_AI_BASE_URL ?? "https://api.groq.com/openai/v1",
-  defaultAiModel: process.env.DEFAULT_AI_MODEL ?? "llama-3.3-70b-versatile",
+  // Modelo-padrão do fallback. O Groq DESCONTINUOU llama-3.3-70b-versatile e
+  // llama-3.1-8b-instant no tier grátis/dev em 17/06/2026; a migração indicada
+  // p/ o 70b é openai/gpt-oss-120b (suporta tool calling, exigido pelo agente).
+  // Se o Groq aposentar este também, sobrescreva via env DEFAULT_AI_MODEL.
+  defaultAiModel: process.env.DEFAULT_AI_MODEL ?? "openai/gpt-oss-120b",
   // Anthropic Claude — fallback legado (2ª opção de chave-padrão).
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   // Chave (32 bytes base64) para cifrar a apiKey de IA de cada empresa em
