@@ -506,7 +506,9 @@ export default function Financial() {
                 despesaItems.map(item => (
                   <TableRow key={`${item.origem}-${item.refId}`}>
                     <TableCell>
-                      {new Date(item.data).toLocaleDateString("pt-BR")}
+                      {new Date(item.data).toLocaleDateString("pt-BR", {
+                        timeZone: "UTC",
+                      })}
                     </TableCell>
                     <TableCell className="capitalize">
                       {item.categoria}
@@ -752,7 +754,9 @@ export default function Financial() {
                 receitaItems.map(item => (
                   <TableRow key={`${item.origem}-${item.refId}`}>
                     <TableCell>
-                      {new Date(item.data).toLocaleDateString("pt-BR")}
+                      {new Date(item.data).toLocaleDateString("pt-BR", {
+                        timeZone: "UTC",
+                      })}
                     </TableCell>
                     <TableCell className="capitalize">
                       {item.categoria}

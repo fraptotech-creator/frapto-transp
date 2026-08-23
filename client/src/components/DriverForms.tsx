@@ -200,7 +200,9 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
 
   const createMutation = trpc.drivers.create.useMutation({
     onSuccess: r => {
-      queryClient.invalidateQueries({ queryKey: [["drivers", "list"]] });
+      // Invalida TODAS as queries de drivers (list E pii — a tela de gestão usa
+      // pii), senão a lista não reflete o novo motorista sem recarregar.
+      queryClient.invalidateQueries({ queryKey: [["drivers"]] });
       // Só fecha o formulário DEPOIS que o gestor repassar o acesso — antes,
       // a senha ia num toast que sumia. Agora vai o LINK de ativação.
       setAcessoNovo({
@@ -216,7 +218,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
   const updateMutation = trpc.drivers.update.useMutation({
     onSuccess: () => {
       toast.success("Motorista atualizado com sucesso!");
-      queryClient.invalidateQueries({ queryKey: [["drivers", "list"]] });
+      queryClient.invalidateQueries({ queryKey: [["drivers"]] });
       onSuccess();
     },
     onError: (error: any) => {
@@ -471,7 +473,7 @@ const DeleteDriverDialog: React.FC<{ driverId: number }> = ({ driverId }) => {
   const deleteMutation = trpc.drivers.delete.useMutation({
     onSuccess: () => {
       toast.success("Motorista excluído com sucesso!");
-      queryClient.invalidateQueries({ queryKey: [["drivers", "list"]] });
+      queryClient.invalidateQueries({ queryKey: [["drivers"]] });
     },
     onError: (error: any) => {
       showErrorDialog(error.message, "Erro ao excluir motorista");

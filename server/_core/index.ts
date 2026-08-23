@@ -127,6 +127,18 @@ async function startServer() {
       res.redirect(301, `https://www.fraptotransp.com.br${req.originalUrl}`);
       return;
     }
+    // Domínio CRU do Railway (…up.railway.app): o login lá falha por origem
+    // (CORS/cookie ancorados no domínio oficial). Manda as PÁGINAS para o
+    // domínio canônico. NÃO toca em /api/* — o healthcheck do Railway usa
+    // /api/ready e o webhook do Stripe chega por essa rota; redirecioná-los
+    // quebraria deploy/integração.
+    if (
+      req.hostname.endsWith(".up.railway.app") &&
+      !req.path.startsWith("/api/")
+    ) {
+      res.redirect(302, `https://www.fraptotransp.com.br${req.originalUrl}`);
+      return;
+    }
     next();
   });
 
