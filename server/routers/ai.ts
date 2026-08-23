@@ -98,19 +98,23 @@ async function responderChat(
     content: sanitizeChatContent(m.content),
   }));
 
+  // A IA não sabe "hoje" e é ruim em comparar datas — informamos a data atual
+  // para julgar vencimentos (CNH, CRLV, seguro) de forma consistente.
+  const dataHoje = `\n\nData de hoje: ${new Date().toISOString().slice(0, 10)}. Use-a para decidir se documentos (CNH, CRLV, seguro) estão vencidos.`;
+
   // GPT/Groq/compatível: AGENTE com ferramentas (consulta o sistema sob
   // demanda). Claude: contexto rico numa tacada (fora do loop de tools).
   if (cfg.provider === "anthropic") {
     const context = await buildFleetContext(orgId);
     const response = await invokeLLM(cfg, {
-      system: FLEET_ASSISTANT_SYSTEM + context,
+      system: FLEET_ASSISTANT_SYSTEM + context + dataHoje,
       messages,
     });
     return { response };
   }
   try {
     const response = await invokeOpenAIAgent(cfg, {
-      system: AGENT_SYSTEM,
+      system: AGENT_SYSTEM + dataHoje,
       messages,
       tools: toOpenAiTools(),
       runTool: (name, args) => runAiTool(orgId, name, args),

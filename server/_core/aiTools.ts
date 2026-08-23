@@ -11,6 +11,7 @@ import {
 } from "../db";
 import { computeFinanceSummary, computeFinanceLedger } from "./finance";
 import { computeOilStatus } from "./oil";
+import { cnhSituacao } from "./cnh";
 
 type ToolDef = {
   name: string;
@@ -56,18 +57,26 @@ export const AI_TOOLS: ToolDef[] = [
   {
     name: "listar_motoristas",
     description:
-      "Lista os motoristas: nome, CNH, categoria, vencimento da CNH, status e telefone.",
+      "Lista os motoristas: nome, CNH, categoria, vencimento da CNH, se a CNH " +
+      "está VENCIDA (calculado pelo servidor — use este campo, não recalcule " +
+      "por data), dias para vencer, status e telefone.",
     parameters: { type: "object", properties: {} },
     run: async orgId => {
       const ds = await getDrivers(orgId);
-      return ds.map(d => ({
-        nome: d.nome,
-        cnh: d.cnh,
-        categoria: d.cnhCategoria,
-        vencimentoCnh: d.cnhVencimento,
-        status: d.status,
-        telefone: d.telefone,
-      }));
+      const agora = new Date();
+      return ds.map(d => {
+        const cnh = cnhSituacao(d.cnhVencimento, agora);
+        return {
+          nome: d.nome,
+          cnh: d.cnh,
+          categoria: d.cnhCategoria,
+          vencimentoCnh: d.cnhVencimento,
+          cnhVencida: cnh.vencida,
+          diasParaVencerCnh: cnh.diasParaVencer,
+          status: d.status,
+          telefone: d.telefone,
+        };
+      });
     },
   },
   {
