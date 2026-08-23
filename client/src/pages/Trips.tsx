@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,19 @@ export default function Trips() {
   const [manifestoTrip, setManifestoTrip] = useState<any | null>(null);
   const [filtroMes, setFiltroMes] = useState(""); // YYYY-MM
   const [filtroData, setFiltroData] = useState(""); // YYYY-MM-DD
+  const queryClient = useQueryClient();
+
+  // INICIAR: muda o status planejada → em_andamento (a máquina de estados do
+  // servidor valida) e só então abre o rastreamento. Antes, o botão só navegava
+  // sem iniciar de fato — a viagem seguia "planejada".
+  const iniciarViagem = trpc.trips.update.useMutation({
+    onSuccess: (_r, vars) => {
+      queryClient.invalidateQueries({ queryKey: [["trips"]] });
+      setLocation(`/trips/${vars.id}/tracking`);
+    },
+    onError: (e: any) =>
+      toast.error(e?.message ?? "Não foi possível iniciar a viagem."),
+  });
 
   // Data LOCAL da partida como YYYY-MM-DD (bate com o que é exibido).
   const localYMD = (d: any): string => {
@@ -339,9 +354,13 @@ export default function Trips() {
                           size="sm"
                           variant="outline"
                           className="rounded-full px-4 font-bold text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                          disabled={iniciarViagem.isPending}
                           onClick={e => {
                             e.stopPropagation();
-                            setLocation(`/trips/${trip.id}/tracking`);
+                            iniciarViagem.mutate({
+                              id: trip.id,
+                              status: "em_andamento",
+                            });
                           }}
                         >
                           <Play className="w-3 h-3 mr-1 fill-current" />
