@@ -9,7 +9,7 @@ const SEM_DEFAULTS = undefined;
 const DEFAULTS_GROQ = {
   key: "gsk-sistema",
   provider: "openai_compatible",
-  model: "llama-3.3-70b-versatile",
+  model: "openai/gpt-oss-120b",
   baseUrl: "https://api.groq.com/openai/v1",
   anthropicKey: "",
 };
@@ -82,7 +82,7 @@ describe("pickAiConfig — precedência org > padrão > legado", () => {
     expect(r).toEqual({
       provider: "openai_compatible",
       apiKey: "gsk-sistema",
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
       baseUrl: "https://api.groq.com/openai/v1",
     });
   });
