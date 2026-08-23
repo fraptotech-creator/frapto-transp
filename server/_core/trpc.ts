@@ -35,7 +35,23 @@ const t = initTRPC.context<TrpcContext>().create({
 });
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
+
+// Converte violação de chave ÚNICA (duplicado) em 409 CONFLICT com mensagem
+// clara, em vez de 500. Sem isto, um erro corrigível pelo usuário (placa/CPF/CNH
+// repetidos) virava INTERNAL_SERVER_ERROR e poluía o monitoramento. Central: vale
+// para toda mutation (o errorFormatter acima segue como rede p/ o texto).
+const dbErrorMiddleware = t.middleware(async ({ next }) => {
+  const result = await next();
+  if (!result.ok) {
+    const friendly = friendlyDbErrorMessage(result.error);
+    if (friendly) {
+      throw new TRPCError({ code: "CONFLICT", message: friendly });
+    }
+  }
+  return result;
+});
+
+export const publicProcedure = t.procedure.use(dbErrorMiddleware);
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
@@ -52,9 +68,9 @@ const requireUser = t.middleware(async opts => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+export const protectedProcedure = publicProcedure.use(requireUser);
 
-export const adminProcedure = t.procedure.use(
+export const adminProcedure = publicProcedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
