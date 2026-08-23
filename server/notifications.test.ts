@@ -114,6 +114,42 @@ describe("buildAlerts — escalonamento de urgência", () => {
   });
 });
 
+describe("buildAlerts — texto 'Vencida' quando a data já passou", () => {
+  it("CNH no passado → título 'CNH Vencida' e 'venceu em'", () => {
+    const drivers = [{ id: 1, nome: "Ana", cnhVencimento: emDias(-3) }];
+    const a = buildAlerts(dados({ drivers }), settings(), AGORA)[0];
+    expect(a.title).toBe("CNH Vencida");
+    expect(a.message).toContain("venceu em");
+  });
+
+  it("CNH no futuro → título 'CNH Vencendo' e 'vence em'", () => {
+    const drivers = [{ id: 1, nome: "Ana", cnhVencimento: emDias(5) }];
+    const a = buildAlerts(dados({ drivers }), settings(), AGORA)[0];
+    expect(a.title).toBe("CNH Vencendo");
+    expect(a.message).toContain("vence em");
+  });
+
+  it("CRLV/Documento no passado → 'Vencido' e 'venceu em'", () => {
+    const vehicles = [{ id: 1, placa: "ABC1D23", crlvVencimento: emDias(-1) }];
+    const documents = [
+      {
+        tipo: "seguro",
+        descricao: "Apólice",
+        veiculoId: null,
+        motoristId: null,
+        dataVencimento: emDias(-2),
+      },
+    ];
+    const a = buildAlerts(dados({ vehicles, documents }), settings(), AGORA);
+    const crlv = a.find(x => x.title.startsWith("CRLV"));
+    const doc = a.find(x => x.title.startsWith("Documento"));
+    expect(crlv?.title).toBe("CRLV Vencido");
+    expect(crlv?.message).toContain("venceu em");
+    expect(doc?.title).toBe("Documento Vencido");
+    expect(doc?.message).toContain("venceu em");
+  });
+});
+
 describe("buildAlerts — óleo (% configurável)", () => {
   const vehicles = [
     {

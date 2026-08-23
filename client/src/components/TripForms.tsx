@@ -695,34 +695,43 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
             </FormItem>
           )}
         />
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="carga"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Carga</FormLabel>
-                <FormControl>
-                  <Input placeholder="Ex: Eletrônicos, Grãos" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="pesoTotal"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Peso Total (kg)</FormLabel>
-                <FormControl>
-                  <Input type="number" step="0.01" placeholder="0" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+        {/* Carga/Peso — só para veículo de CARGA. Veículo de passageiros usa a
+            Lista de passageiros acima; mostrar carga aqui confundiria. */}
+        {!ehVeiculoPassageiros && (
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="carga"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Carga</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: Eletrônicos, Grãos" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="pesoTotal"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Peso Total (kg)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
         <FormField
           control={form.control}
           name="observacoes"

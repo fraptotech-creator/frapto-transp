@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Truck, Users, MapPin, AlertCircle, Activity } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { resolverDisponibilidade } from "@/lib/driverAvailability";
 import {
   BarChart,
   Bar,
@@ -48,8 +49,12 @@ export default function Dashboard() {
       (t: any) => t.status === "em_andamento" || t.status === "planejada"
     ).length || 0;
 
+  // Disponibilidade EFETIVA (CNH vencida ⇒ indisponível), não o status cru —
+  // coerente com a tela de Motoristas.
+  const agora = new Date();
   const motoristasDisponiveis =
-    drivers?.filter((d: any) => d.status === "disponivel").length || 0;
+    drivers?.filter((d: any) => resolverDisponibilidade(d, agora).disponivel)
+      .length || 0;
 
   const statCards = [
     {

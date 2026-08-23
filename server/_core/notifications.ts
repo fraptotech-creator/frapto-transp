@@ -161,10 +161,11 @@ export function buildAlerts(
     for (const v of data.vehicles) {
       const dv = ts(v.crlvVencimento);
       if (dv === null || dv >= limite) continue;
+      const vencido = dv < agoraMs;
       alerts.push({
         type: "documento",
-        title: "CRLV Vencendo",
-        message: `O CRLV do veículo ${v.placa} vence em ${fmt(v.crlvVencimento!)}`,
+        title: vencido ? "CRLV Vencido" : "CRLV Vencendo",
+        message: `O CRLV do veículo ${v.placa} ${vencido ? "venceu" : "vence"} em ${fmt(v.crlvVencimento!)}`,
         urgency: urgenciaPorData(dv, agoraMs, settings),
       });
     }
@@ -175,10 +176,11 @@ export function buildAlerts(
     for (const d of data.drivers) {
       const dv = ts(d.cnhVencimento);
       if (dv === null || dv >= limite) continue;
+      const vencido = dv < agoraMs;
       alerts.push({
         type: "cnh",
-        title: "CNH Vencendo",
-        message: `A CNH do motorista ${d.nome} vence em ${fmt(d.cnhVencimento!)}`,
+        title: vencido ? "CNH Vencida" : "CNH Vencendo",
+        message: `A CNH do motorista ${d.nome} ${vencido ? "venceu" : "vence"} em ${fmt(d.cnhVencimento!)}`,
         urgency: urgenciaPorData(dv, agoraMs, settings),
       });
     }
@@ -215,10 +217,11 @@ export function buildAlerts(
             ? `motorista ${data.drivers.find(d => d.id === doc.motoristId)?.nome ?? "?"}`
             : null;
       const nome = doc.descricao?.trim() || doc.tipo.toUpperCase();
+      const vencido = dv < agoraMs;
       alerts.push({
         type: "documento",
-        title: "Documento Vencendo",
-        message: `O documento ${nome}${alvo ? ` (${alvo})` : ""} vence em ${fmt(doc.dataVencimento!)}`,
+        title: vencido ? "Documento Vencido" : "Documento Vencendo",
+        message: `O documento ${nome}${alvo ? ` (${alvo})` : ""} ${vencido ? "venceu" : "vence"} em ${fmt(doc.dataVencimento!)}`,
         urgency: urgenciaPorData(dv, agoraMs, settings),
       });
     }
