@@ -8,6 +8,11 @@ export const ENV = {
   // com `!isProduction`, NODE_ENV indefinido cairia no ramo INSEGURO.
   isProduction: process.env.NODE_ENV === "production",
   appBaseUrl: process.env.APP_BASE_URL ?? "",
+  // Login com Google (OAuth). Vazio = recurso DESLIGADO (fail-closed): a rota
+  // responde "indisponível" e o botão nem aparece. Setar ambos no Railway e
+  // registrar o redirect_uri /api/auth/google/callback no Google Cloud Console.
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   // Sinal CONFIÁVEL de que estamos no Railway (injetado pela plataforma em toda
   // réplica). Usado pelo boot-guard: no Railway, NODE_ENV ausente/errado NEGA o
   // boot (senão os gates `=== "production"` cairiam no ramo inseguro).

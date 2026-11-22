@@ -171,6 +171,38 @@ export async function createOrgAndOwner(params: CreateOrgAndOwnerParams) {
   return getUserByOpenId(params.openId);
 }
 
+/**
+ * Cadastro via Google: cria a empresa + o dono SEM senha (loginMethod "google").
+ * Mesma transação atômica do createOrgAndOwner (org + dono nascem juntos ou
+ * nenhum), mas passwordHash fica null — o acesso é só pelo Google.
+ */
+export async function createGoogleOrgOwner(params: {
+  orgName: string;
+  openId: string;
+  email: string;
+  name: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.transaction(async tx => {
+    const [row] = await tx
+      .insert(organizations)
+      .values({ name: params.orgName })
+      .$returningId();
+    await tx.insert(users).values({
+      openId: params.openId,
+      orgId: row.id,
+      email: params.email,
+      passwordHash: null,
+      name: params.name,
+      loginMethod: "google",
+      orgRole: "owner",
+      lastSignedIn: new Date(),
+    });
+  });
+  return getUserByOpenId(params.openId);
+}
+
 // ─── Login de motorista ──────────────────────────────────────────────────────
 
 export async function getUserByUsername(username: string) {
