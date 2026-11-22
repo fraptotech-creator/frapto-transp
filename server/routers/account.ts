@@ -42,8 +42,15 @@ import { isSuperAdmin } from "../_core/superAdmin";
 import { temAcesso } from "../_core/subscription";
 import { SENHA_MIN } from "../_core/passwordPolicy";
 import { ENV } from "../_core/env";
+import { googleLoginConfigurado } from "../_core/googleLogin";
 
 export const authRouter = router({
+  // Config PÚBLICA da tela de login: hoje só se o botão do Google aparece.
+  // Não expõe segredo nenhum — apenas um booleano.
+  authConfig: publicProcedure.query(() => ({
+    googleEnabled: googleLoginConfigurado(),
+  })),
+
   me: publicProcedure.query(({ ctx }) => {
     if (!ctx.user) return null;
     // DTO EXPLÍCITO: expõe só o que a UI precisa. Nunca espalha a linha inteira

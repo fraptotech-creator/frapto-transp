@@ -12,6 +12,7 @@ import {
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
+import { registerGoogleLoginRoutes } from "./googleLogin";
 import { handleWebhookEvent } from "./stripe";
 import {
   securityHeaders,
@@ -228,6 +229,11 @@ async function startServer() {
       res.status(503).json({ ready: false });
     }
   });
+
+  // Login com Google (OAuth): rotas GET nativas (redirect + callback que seta o
+  // cookie de sessão). Montadas ANTES do tRPC e do SPA. Inertes se as credenciais
+  // não estiverem setadas (a rota responde "indisponível").
+  registerGoogleLoginRoutes(app);
 
   // Parsers do /api/trpc: PEQUENO (128 KB) por padrão; GRANDE (15 MB) só no
   // upload de documento — e só quando a barreira concede a CAPACIDADE (POST +
