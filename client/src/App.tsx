@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ErrorDialogHost } from "@/lib/errorDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import { lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -35,6 +35,11 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Dashboard} />
       <Route path={"/dashboard"} component={Dashboard} />
+      {/* Logado em /login (ex.: entrou pela tela aberta por /login?error=…):
+          vai para o painel, não para o 404. */}
+      <Route path={"/login"}>
+        <Redirect to="/dashboard" />
+      </Route>
       <Route path={"/vehicles"} component={Vehicles} />
       <Route path={"/vehicles/:id"} component={VehicleDetail} />
       <Route path={"/drivers"} component={Drivers} />

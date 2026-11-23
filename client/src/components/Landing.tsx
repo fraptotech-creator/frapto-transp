@@ -17,6 +17,7 @@ import {
   Gauge,
 } from "lucide-react";
 import { useState } from "react";
+import { modoInicialAuth } from "@/lib/modoInicialAuth";
 
 type AuthMode = "login" | "signup";
 
@@ -85,7 +86,9 @@ const PLAN_FEATURES = [
 ];
 
 export default function Landing() {
-  const [auth, setAuth] = useState<AuthMode | null>(null);
+  const [auth, setAuth] = useState<AuthMode | null>(() =>
+    modoInicialAuth(window.location.pathname, window.location.search)
+  );
 
   if (auth) {
     return <AuthScreen initialMode={auth} onBack={() => setAuth(null)} />;
