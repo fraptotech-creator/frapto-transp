@@ -14,6 +14,7 @@ import {
 } from "../db";
 import type { InsertExpense, InsertRevenue } from "../../drizzle/schema";
 import { parseRequiredNumericString, assertRefsOwned } from "./_helpers";
+import { texto, TEXTO_LONGO } from "../_core/validacao";
 
 export const expensesRouter = router({
   list: activeOrgProcedure.query(({ ctx }) => getExpenses(ctx.orgId)),
@@ -33,15 +34,15 @@ export const expensesRouter = router({
           "salario",
           "outros",
         ]),
-        descricao: z.string().min(1),
-        valor: z.string().min(1),
+        descricao: texto(TEXTO_LONGO, "Descrição").min(1),
+        valor: texto(20, "Valor").min(1),
         data: z.date(),
         veiculoId: z.number().optional(),
         motoristId: z.number().optional(),
         viagemId: z.number().optional(),
-        categoria: z.string().optional(),
-        formaPagamento: z.string().optional(),
-        observacoes: z.string().optional(),
+        categoria: texto(50, "Categoria").optional(),
+        formaPagamento: texto(50, "Forma de pagamento").optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -78,15 +79,15 @@ export const expensesRouter = router({
             "outros",
           ])
           .optional(),
-        descricao: z.string().optional(),
-        valor: z.string().optional(),
+        descricao: texto(TEXTO_LONGO, "Descrição").optional(),
+        valor: texto(20, "Valor").optional(),
         data: z.date().optional(),
         veiculoId: z.number().optional(),
         motoristId: z.number().optional(),
         viagemId: z.number().optional(),
-        categoria: z.string().optional(),
-        formaPagamento: z.string().optional(),
-        observacoes: z.string().optional(),
+        categoria: texto(50, "Categoria").optional(),
+        formaPagamento: texto(50, "Forma de pagamento").optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -121,15 +122,15 @@ export const revenuesRouter = router({
     .input(
       z.object({
         tipo: z.enum(["viagem", "frete", "servico", "outros"]),
-        descricao: z.string().min(1),
-        valor: z.string().min(1),
+        descricao: texto(TEXTO_LONGO, "Descrição").min(1),
+        valor: texto(20, "Valor").min(1),
         data: z.date(),
         viagemId: z.number().optional(),
-        clienteNome: z.string().optional(),
-        clienteCpfCnpj: z.string().optional(),
-        formaPagamento: z.string().optional(),
+        clienteNome: texto(150, "Cliente").optional(),
+        clienteCpfCnpj: texto(20, "CPF/CNPJ do cliente").optional(),
+        formaPagamento: texto(50, "Forma de pagamento").optional(),
         status: z.enum(["pendente", "recebido", "cancelado"]).optional(),
-        observacoes: z.string().optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -153,15 +154,15 @@ export const revenuesRouter = router({
       z.object({
         id: z.number(),
         tipo: z.enum(["viagem", "frete", "servico", "outros"]).optional(),
-        descricao: z.string().optional(),
-        valor: z.string().optional(),
+        descricao: texto(TEXTO_LONGO, "Descrição").optional(),
+        valor: texto(20, "Valor").optional(),
         data: z.date().optional(),
         viagemId: z.number().optional(),
-        clienteNome: z.string().optional(),
-        clienteCpfCnpj: z.string().optional(),
-        formaPagamento: z.string().optional(),
+        clienteNome: texto(150, "Cliente").optional(),
+        clienteCpfCnpj: texto(20, "CPF/CNPJ do cliente").optional(),
+        formaPagamento: texto(50, "Forma de pagamento").optional(),
         status: z.enum(["pendente", "recebido", "cancelado"]).optional(),
-        observacoes: z.string().optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
