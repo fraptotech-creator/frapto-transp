@@ -75,6 +75,34 @@ describe("candidateQueries", () => {
   it("sem vírgula → só o texto", () => {
     expect(candidateQueries("Guarapari ES")).toEqual(["Guarapari ES"]);
   });
+  // Trava do bug ao vivo (23/11/2026): "Vitória, ES" virava ["Vitória, ES",
+  // "ES"]; o centro saía do ESTADO e a rota Vitória→Cachoeiro dava 1,1 km.
+  it("'Cidade, UF' nunca gera a UF sozinha", () => {
+    expect(candidateQueries("Vitória, ES")).toEqual(["Vitória, ES"]);
+    expect(candidateQueries("Rio de Janeiro, rj")).toEqual([
+      "Rio de Janeiro, rj",
+      "Rio de Janeiro, RJ",
+    ]);
+  });
+  it("endereço completo termina em 'Cidade, UF'", () => {
+    expect(candidateQueries("Rua A, 10, Centro, Vitória, ES")).toEqual([
+      "Rua A, 10, Centro, Vitória, ES",
+      "10, Centro, Vitória, ES",
+      "Centro, Vitória, ES",
+      "Vitória, ES",
+    ]);
+  });
+  it("'…, Brasil' no fim não vira o centro do país", () => {
+    const c = candidateQueries("Cachoeiro de Itapemirim, ES, Brasil");
+    expect(c).toEqual([
+      "Cachoeiro de Itapemirim, ES, Brasil",
+      "Cachoeiro de Itapemirim, ES",
+    ]);
+    expect(c.some(x => /^(brasil|es)$/i.test(x))).toBe(false);
+  });
+  it("trecho de 2 letras que não é UF segue como antes", () => {
+    expect(candidateQueries("Rua X, AB")).toEqual(["Rua X, AB", "AB"]);
+  });
 });
 
 describe("parseNominatim", () => {
