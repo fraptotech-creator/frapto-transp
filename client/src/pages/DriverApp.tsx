@@ -255,7 +255,12 @@ function ChangePassword({ firstAccess }: { firstAccess?: boolean }) {
 // ─── Home: minhas viagens ────────────────────────────────────────────────────
 function DriverHome({ name }: { name: string }) {
   const { logout } = useAuth();
-  const { data: trips, isLoading, refetch } = trpc.driverApp.myTrips.useQuery();
+  const {
+    data: trips,
+    isLoading,
+    error,
+    refetch,
+  } = trpc.driverApp.myTrips.useQuery();
 
   return (
     <div className="mx-auto max-w-md p-4 space-y-4">
@@ -276,6 +281,16 @@ function DriverHome({ name }: { name: string }) {
 
       {isLoading ? (
         <Skeleton className="h-40" />
+      ) : error ? (
+        // Sem isto, acesso negado (ex.: cadastro desativado) aparecia como
+        // "Nenhuma viagem atribuída a você".
+        <Card>
+          <CardContent className="p-8 text-center text-sm text-amber-600">
+            {error.message === "SUBSCRIPTION_REQUIRED"
+              ? "A assinatura da empresa está inativa. Fale com o seu gestor."
+              : error.message}
+          </CardContent>
+        </Card>
       ) : trips && trips.length > 0 ? (
         trips.map(trip => (
           <TripCard key={trip.id} trip={trip} onChange={() => refetch()} />

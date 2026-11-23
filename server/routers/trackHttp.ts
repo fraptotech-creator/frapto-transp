@@ -8,6 +8,10 @@ import {
   type TripRef,
 } from "../_core/tracking";
 import { temAcesso } from "../_core/subscription";
+import {
+  motoristaComAcesso,
+  MOTORISTA_INATIVO_MSG,
+} from "../_core/motoristaAcesso";
 import { toSafeLogError } from "../_core/safeLog";
 import {
   getDriverByTrackingToken,
@@ -58,6 +62,10 @@ export async function handleTrackLogin(req: Request, res: Response) {
       res.status(401).json({ error: "motorista não encontrado" });
       return;
     }
+    if (!motoristaComAcesso(driver)) {
+      res.status(403).json({ error: MOTORISTA_INATIVO_MSG });
+      return;
+    }
     // Gate de assinatura: sem pagamento em dia, nem emite token de rastreio.
     // Sem isto o app nativo era um bypass do paywall (grava GPS de graça).
     const org = await getOrganization(user.orgId);
@@ -95,6 +103,11 @@ export async function handleTrackIngest(req: Request, res: Response) {
     // Token expirado (1 ano) ou revogado (logout/reset) → nega.
     if (trackingTokenBloqueado(driver, new Date())) {
       res.status(401).json({ error: "token expirado ou revogado" });
+      return;
+    }
+    // Motorista desativado pela empresa não grava GPS, mesmo com token válido.
+    if (!motoristaComAcesso(driver)) {
+      res.status(403).json({ error: MOTORISTA_INATIVO_MSG });
       return;
     }
     // Migração LAZY: aparelho legado (achado pelo valor em claro, sem hash)

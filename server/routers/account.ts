@@ -21,7 +21,12 @@ import {
   incrementSessionVersion,
   setUserPassword,
   getOrganization,
+  getDriverById,
 } from "../db";
+import {
+  motoristaComAcesso,
+  MOTORISTA_INATIVO_MSG,
+} from "../_core/motoristaAcesso";
 import {
   createCheckoutSession,
   createPortalSession,
@@ -182,6 +187,17 @@ export const authRouter = router({
         throw invalid;
       const ok = await bcrypt.compare(input.password, user.passwordHash);
       if (!ok) throw invalid;
+      // Só depois da senha correta: dizer "desativado" antes viraria oráculo.
+      const driver =
+        user.orgId && user.driverId
+          ? await getDriverById(user.orgId, user.driverId)
+          : undefined;
+      if (!motoristaComAcesso(driver)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: MOTORISTA_INATIVO_MSG,
+        });
+      }
 
       const token = await sdk.createSessionToken(user.openId, {
         name: user.name ?? "",
