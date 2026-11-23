@@ -6,7 +6,10 @@ import { Loader2, Send, User, Sparkles } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Streamdown, defaultRemarkPlugins } from "streamdown";
 import { safeAiUrl } from "@/lib/aiSafeUrl";
-import { remarkNeutralizeMermaid } from "@/lib/aiSafeMarkdown";
+import {
+  AI_MARKDOWN_COMPONENTS,
+  remarkNeutralizeMermaid,
+} from "@/lib/aiSafeMarkdown";
 
 // remarkPlugins do Streamdown são SUBSTITUÍDOS quando passados (não mesclados),
 // então preservamos os defaults (ex.: remark-gfm p/ tabelas) e ADICIONAMOS o
@@ -294,6 +297,7 @@ export function AIChatBox({
                             remarkPlugins={ASSISTANT_REMARK_PLUGINS}
                             controls={false}
                             urlTransform={safeAiUrl}
+                            components={AI_MARKDOWN_COMPONENTS}
                           >
                             {message.content}
                           </Streamdown>

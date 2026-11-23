@@ -4,7 +4,9 @@
 // urlTransform do Streamdown/react-markdown. Puro — testado.
 export function safeAiUrl(url: string): string {
   if (!url) return "";
-  // Relativo ou âncora interna: seguro.
+  // Relativo ou âncora interna: seguro. MAS "//host" e "/\host" são
+  // protocol-relative: o navegador trata como OUTRO site (vazamento/phishing).
+  if (url.startsWith("//") || url.startsWith("/\\")) return "";
   if (url.startsWith("#") || url.startsWith("/")) return url;
   try {
     const u = new URL(url);
