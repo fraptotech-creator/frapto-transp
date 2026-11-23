@@ -519,3 +519,15 @@ export async function updateMaintenance(
     .where(and(eq(maintenance.orgId, orgId), eq(maintenance.id, id)));
   return getMaintenanceById(orgId, id);
 }
+
+// Exclui UMA manutenção da própria org (escopo orgId+id, como os demais
+// deletes). Não existia: um lançamento errado ficava para sempre e seguia
+// somando custo no financeiro (teste pré-venda 23/11/2026).
+export async function deleteMaintenance(orgId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .delete(maintenance)
+    .where(and(eq(maintenance.orgId, orgId), eq(maintenance.id, id)));
+  return { success: true };
+}

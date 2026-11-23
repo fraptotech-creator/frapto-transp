@@ -162,7 +162,8 @@ function DriverLogin() {
             {login.isPending ? "Entrando..." : "Entrar"}
           </Button>
           <p className="text-xs text-center text-muted-foreground">
-            Primeiro acesso? Use a senha inicial informada pela empresa.
+            Primeiro acesso? Abra o link de ativação que a empresa enviou e crie
+            a sua senha.
           </p>
         </CardContent>
       </Card>

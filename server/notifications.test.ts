@@ -58,6 +58,23 @@ describe("buildAlerts — janelas de dias (default 30/30/7)", () => {
     const a = buildAlerts(dados({ maintenances, vehicles }), settings(), AGORA);
     expect(a.filter(x => x.type === "manutencao")).toHaveLength(1);
   });
+
+  // Trava do teste pré-venda (23/11/2026): manutenção de 4 meses atrás e
+  // ainda pendente aparecia como "Manutenção Próxima".
+  it("manutenção pendente com data PASSADA é 'Atrasada', futura é 'Próxima'", () => {
+    const vehicles = [{ id: 1, placa: "ABC1D23", crlvVencimento: null }];
+    const titulos = (dataPrevista: Date) =>
+      buildAlerts(
+        dados({
+          vehicles,
+          maintenances: [{ veiculoId: 1, status: "pendente", dataPrevista }],
+        }),
+        settings(),
+        AGORA
+      ).map(x => x.title);
+    expect(titulos(emDias(-120))).toEqual(["Manutenção Atrasada"]);
+    expect(titulos(emDias(3))).toEqual(["Manutenção Próxima"]);
+  });
 });
 
 describe("buildAlerts — liga/desliga por tipo", () => {

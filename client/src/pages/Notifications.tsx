@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { AlertCircle, CheckCircle2, Bell, Clock, Info } from "lucide-react";
+import { AlertCircle, Bell, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Notifications() {
@@ -119,33 +119,6 @@ export default function Notifications() {
                 Nenhum alerta de atenção no momento.
               </p>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Notificações Gerais */}
-        <Card className="border-white/10 shadow-2xl gradient-card-strong">
-          <CardHeader>
-            <CardTitle className="text-xl font-bold flex items-center gap-2 text-blue-400">
-              <Info className="w-5 h-5" />
-              Atividades Recentes
-            </CardTitle>
-            <CardDescription className="text-gray-400">
-              Histórico de operações do sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-start gap-4 p-4 rounded-2xl bg-blue-900/20 border border-blue-500/30 backdrop-blur-xl transition-all hover:bg-blue-900/30">
-              <div className="p-2 rounded-xl bg-blue-500/20">
-                <CheckCircle2 className="w-5 h-5 text-blue-400" />
-              </div>
-              <div>
-                <p className="font-bold text-blue-100">Sistema Atualizado</p>
-                <p className="text-sm text-blue-200/70 mt-1">
-                  O design Dark Premium foi aplicado com sucesso em todo o
-                  sistema.
-                </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

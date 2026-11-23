@@ -147,10 +147,15 @@ export function buildAlerts(
       if (m.status !== "pendente" || dv === null || dv >= limite) continue;
       const placa =
         data.vehicles.find(v => v.id === m.veiculoId)?.placa ?? "veículo";
+      // Data já passou e segue pendente = ATRASADA (antes dizia "Próxima"
+      // para uma manutenção de 4 meses atrás — teste pré-venda 23/11/2026).
+      const atrasada = dv < agoraMs;
       alerts.push({
         type: "manutencao",
-        title: "Manutenção Próxima",
-        message: `Veículo ${placa} tem manutenção agendada para ${fmt(m.dataPrevista!)}`,
+        title: atrasada ? "Manutenção Atrasada" : "Manutenção Próxima",
+        message: atrasada
+          ? `Veículo ${placa} tinha manutenção agendada para ${fmt(m.dataPrevista!)} e ainda está pendente`
+          : `Veículo ${placa} tem manutenção agendada para ${fmt(m.dataPrevista!)}`,
         urgency: urgenciaPorData(dv, agoraMs, settings),
       });
     }
