@@ -137,7 +137,7 @@ export const authRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       assertLoginRateLimit(ctx.req);
-      assertAccountLoginRateLimit(ctx.req, input.email);
+      assertAccountLoginRateLimit(input.email);
       const email = input.email.toLowerCase().trim();
       const user = await getUserByEmail(email);
       // Mensagem genérica (não revela se o email existe).
@@ -171,7 +171,7 @@ export const authRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       assertLoginRateLimit(ctx.req);
-      assertAccountLoginRateLimit(ctx.req, input.username);
+      assertAccountLoginRateLimit(input.username);
       const username = input.username.toLowerCase().trim();
       const user = await getUserByUsername(username);
       const invalid = new TRPCError({
