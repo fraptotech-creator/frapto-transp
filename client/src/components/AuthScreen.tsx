@@ -207,7 +207,7 @@ export default function AuthScreen({
               <Button
                 type="button"
                 variant="outline"
-                className="w-full gap-2 bg-white text-slate-800 hover:bg-slate-100"
+                className="w-full gap-2 border-slate-300 bg-white text-slate-800 hover:bg-slate-100 dark:border-slate-300 dark:bg-white dark:text-slate-800 dark:hover:bg-slate-100"
                 onClick={() => {
                   window.location.href = "/api/auth/google";
                 }}
