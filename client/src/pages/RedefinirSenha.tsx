@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Truck, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { caminhoInterno } from "@/lib/caminhoInterno";
 
 // Página PÚBLICA: quem chega aqui não consegue logar, então não pode exigir
 // sessão. O token da URL é a credencial.
@@ -13,9 +14,8 @@ export default function RedefinirSenha() {
   const token = params.get("token") ?? "";
   // Para onde levar após criar a senha. O motorista chega com ?next=/motorista
   // e deve cair no app dele, não na tela de e-mail. Só aceitamos caminho
-  // interno (começa com "/") — nunca uma URL externa vinda da querystring.
-  const nextParam = params.get("next") ?? "";
-  const next = nextParam.startsWith("/") ? nextParam : "/";
+  // interno — nunca uma URL externa vinda da querystring (nem "//host").
+  const next = caminhoInterno(params.get("next"));
   const [senha, setSenha] = useState("");
   const [confirma, setConfirma] = useState("");
   const [pronto, setPronto] = useState(false);
