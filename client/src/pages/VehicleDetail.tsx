@@ -16,6 +16,7 @@ import { ArrowLeft, Calendar, Truck } from "lucide-react";
 import { VehicleDialog } from "@/components/VehicleForms";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { dataPura } from "@/lib/dataPura";
 
 export default function VehicleDetail() {
   const [, params] = useRoute("/vehicles/:id");
@@ -222,7 +223,7 @@ export default function VehicleDetail() {
                 <p className="text-xs text-muted-foreground">
                   {vehicle.crlvVencimento
                     ? format(
-                        new Date(vehicle.crlvVencimento),
+                        dataPura(vehicle.crlvVencimento) as Date,
                         "dd 'de' MMMM 'de' yyyy",
                         { locale: ptBR }
                       )
@@ -244,7 +245,7 @@ export default function VehicleDetail() {
                 <p className="text-xs text-muted-foreground">
                   {vehicle.seguroVencimento
                     ? format(
-                        new Date(vehicle.seguroVencimento),
+                        dataPura(vehicle.seguroVencimento) as Date,
                         "dd 'de' MMMM 'de' yyyy",
                         { locale: ptBR }
                       )
@@ -296,7 +297,7 @@ export default function VehicleDetail() {
                     Prevista:{" "}
                     {maintenance.dataPrevista
                       ? format(
-                          new Date(maintenance.dataPrevista),
+                          dataPura(maintenance.dataPrevista) as Date,
                           "dd/MM/yyyy",
                           { locale: ptBR }
                         )

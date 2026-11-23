@@ -16,6 +16,7 @@ import { ArrowLeft, Calendar, Phone, Mail, AlertCircle } from "lucide-react";
 import { DriverDialog } from "@/components/DriverForms";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { dataPura } from "@/lib/dataPura";
 
 export default function DriverDetail() {
   const [, params] = useRoute("/drivers/:id");
@@ -159,7 +160,7 @@ export default function DriverDetail() {
               <p className="text-sm">
                 {driver.dataAdmissao
                   ? format(
-                      new Date(driver.dataAdmissao),
+                      dataPura(driver.dataAdmissao) as Date,
                       "dd 'de' MMMM 'de' yyyy",
                       { locale: ptBR }
                     )
@@ -202,7 +203,7 @@ export default function DriverDetail() {
               Vencimento:{" "}
               {driver.cnhVencimento
                 ? format(
-                    new Date(driver.cnhVencimento),
+                    dataPura(driver.cnhVencimento) as Date,
                     "dd 'de' MMMM 'de' yyyy",
                     { locale: ptBR }
                   )
