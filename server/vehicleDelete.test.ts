@@ -67,7 +67,9 @@ describe("decidirExclusaoVeiculo", () => {
     });
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.mensagem).toContain("3 viagens, 1 manutenção e 2 documentos");
+    expect(r.mensagem).toContain(
+      "tem histórico: 3 viagens, 1 manutenção e 2 documentos."
+    );
     expect(r.mensagem).not.toContain("despesa");
     expect(r.mensagem).toContain("Inativo");
   });

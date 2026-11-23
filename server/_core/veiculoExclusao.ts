@@ -40,7 +40,7 @@ export function decidirExclusaoVeiculo(
   return {
     ok: false,
     mensagem:
-      `Este veículo não pode ser excluído porque tem ${lista} registrados. ` +
+      `Este veículo não pode ser excluído porque tem histórico: ${lista}. ` +
       `Para tirá-lo de uso sem perder o histórico, edite o veículo e mude o status para Inativo.`,
   };
 }
