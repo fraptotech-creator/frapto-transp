@@ -7,7 +7,7 @@ export default function Privacidade() {
   return (
     <LegalLayout
       titulo="Política de Privacidade"
-      atualizadoEm="21 de julho de 2026"
+      atualizadoEm="23 de novembro de 2026"
     >
       <p>
         Esta política explica como o <strong>Frapto Transp</strong> trata dados
@@ -42,7 +42,8 @@ export default function Privacidade() {
       <ul>
         <li>
           Nome, e-mail e senha (armazenada apenas como hash bcrypt, nunca em
-          texto)
+          texto) — ou, para quem entra com o Google, nome e e-mail da conta
+          Google, sem senha
         </li>
         <li>Nome da empresa</li>
         <li>Dados de assinatura e cobrança, processados pela Stripe</li>
@@ -139,14 +140,28 @@ export default function Privacidade() {
           endereços de origem e destino da viagem.
         </li>
         <li>
-          <strong>Provedor de IA</strong> (Anthropic, OpenAI ou compatível) —
-          apenas se a empresa contratante{" "}
-          <strong>ativar o assistente e configurar a própria chave</strong> do
-          provedor. Sem essa ativação, o assistente fica indisponível e{" "}
-          <strong>nenhum dado é enviado a qualquer provedor de IA</strong> (não
-          há chave padrão do sistema). Quando ativo, os dados da frota
-          consultados durante a conversa são enviados ao provedor escolhido pela
-          contratante.
+          <strong>Google</strong> — somente para quem escolhe &quot;Continuar
+          com Google&quot; no login. Recebemos do Google o nome e o e-mail
+          verificado da conta; nunca recebemos nem guardamos a senha do Google.
+        </li>
+        <li>
+          <strong>Resend</strong> — envio do e-mail de recuperação de senha.
+          Recebe o e-mail do destinatário e o conteúdo da mensagem.
+        </li>
+        <li>
+          <strong>Provedor de IA do assistente</strong> — por padrão a{" "}
+          <strong>Groq</strong>, com uma chave do próprio sistema; ou o provedor
+          que a empresa contratante configurar com a própria chave (Anthropic,
+          OpenAI ou compatível). Os dados só são enviados quando um usuário da
+          empresa <strong>abre o assistente e faz uma pergunta</strong>: vão a
+          pergunta e os registros da frota que o assistente consultar para
+          respondê-la (veículos, viagens, manutenções e resumo financeiro). Dos
+          motoristas, o assistente recebe apenas nome, categoria e validade da
+          CNH e situação —{" "}
+          <strong>
+            nunca CPF, número da CNH, telefone, e-mail ou endereço
+          </strong>
+          . O assistente só lê dados; não altera nada no sistema.
         </li>
       </ul>
 
