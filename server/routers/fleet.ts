@@ -40,6 +40,7 @@ import {
   getMaintenancesByVehicle,
   createMaintenance,
   updateMaintenance,
+  deleteMaintenance,
   accrueTripKm,
   resetOilChange,
   getExpenses,
@@ -699,6 +700,11 @@ export const maintenanceRouter = router({
       await maybeResetOil(ctx.orgId, input.status, prev?.tipo, prev);
       return updated;
     }),
+
+  // Só o DONO exclui (apagar some com custo do financeiro). Escopo orgId+id.
+  delete: activeOrgOwnerProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(({ ctx, input }) => deleteMaintenance(ctx.orgId, input.id)),
 });
 
 // Reset da troca de óleo SÓ na transição para "concluída" de uma manutenção de

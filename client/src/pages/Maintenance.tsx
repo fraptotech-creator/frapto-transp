@@ -2,7 +2,8 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, CheckCircle, Clock, Wrench, Search } from "lucide-react";
+import { Plus, CheckCircle, Clock, Wrench, Search, Trash2 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { formatPlaca } from "@/lib/format";
 import { combinaPlaca } from "@/lib/searchFilters";
 import { computeOilStatus, OIL_LABEL } from "@/lib/oil";
@@ -130,6 +131,28 @@ export default function Maintenance() {
       showErrorDialog(error.message || "Erro ao atualizar status", "Erro");
     },
   });
+
+  // Excluir: só o dono (o servidor também exige — maintenance.delete).
+  const { user } = useAuth();
+  const podeExcluir = user?.orgRole === "owner";
+  const deleteMutation = trpc.maintenance.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Manutenção excluída.");
+      refetch();
+    },
+    onError: (error: any) => {
+      showErrorDialog(error.message || "Erro ao excluir manutenção", "Erro");
+    },
+  });
+  const handleDelete = (id: number) => {
+    if (
+      !confirm(
+        "Excluir esta manutenção? O custo dela também sai do financeiro. Não dá para desfazer."
+      )
+    )
+      return;
+    deleteMutation.mutate({ id });
+  };
 
   const handleSubmit = () => {
     if (
@@ -534,14 +557,27 @@ export default function Maintenance() {
                     </div>
                   </div>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => openStatusDialog(maintenance)}
-                  >
-                    Atualizar Status
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => openStatusDialog(maintenance)}
+                    >
+                      Atualizar Status
+                    </Button>
+                    {podeExcluir && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label="Excluir manutenção"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => handleDelete(maintenance.id)}
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-600" />
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             );
