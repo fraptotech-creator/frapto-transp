@@ -34,6 +34,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
 import { formatPlaca } from "@/lib/format";
+import { rotulo } from "@/lib/rotulos";
 import {
   Table,
   TableBody,
@@ -510,9 +511,7 @@ export default function Financial() {
                         timeZone: "UTC",
                       })}
                     </TableCell>
-                    <TableCell className="capitalize">
-                      {item.categoria}
-                    </TableCell>
+                    <TableCell>{rotulo(item.categoria)}</TableCell>
                     <TableCell className="max-w-[280px]">
                       <span
                         className="block truncate"
@@ -758,9 +757,7 @@ export default function Financial() {
                         timeZone: "UTC",
                       })}
                     </TableCell>
-                    <TableCell className="capitalize">
-                      {item.categoria}
-                    </TableCell>
+                    <TableCell>{rotulo(item.categoria)}</TableCell>
                     <TableCell className="max-w-[280px]">
                       <span
                         className="block truncate"
