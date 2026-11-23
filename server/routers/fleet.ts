@@ -15,6 +15,7 @@ import {
   createVehicle,
   updateVehicle,
   deleteVehicle,
+  contarHistoricoVeiculo,
   getDrivers,
   getDriverById,
   createDriver,
@@ -50,6 +51,7 @@ import {
   getNotificationSettings,
 } from "../db";
 import { isOilChange } from "../_core/oil";
+import { decidirExclusaoVeiculo } from "../_core/veiculoExclusao";
 import {
   buildAlerts,
   resolveNotificationSettings,
@@ -195,9 +197,21 @@ export const vehiclesRouter = router({
       return updateVehicle(ctx.orgId, id, updateData);
     }),
 
+  // Veículo com histórico NÃO se exclui (vira Inativo): senão viagens,
+  // manutenções e despesas ficam órfãs e seguem somando no financeiro.
   delete: activeOrgProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(({ ctx, input }) => deleteVehicle(ctx.orgId, input.id)),
+    .mutation(async ({ ctx, input }) => {
+      const historico = await contarHistoricoVeiculo(ctx.orgId, input.id);
+      const decisao = decidirExclusaoVeiculo(historico);
+      if (!decisao.ok) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: decisao.mensagem,
+        });
+      }
+      return deleteVehicle(ctx.orgId, input.id);
+    }),
 });
 
 // Senha inicial do motorista: ALEATÓRIA por motorista (não mais a constante

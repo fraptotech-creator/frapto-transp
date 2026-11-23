@@ -14,8 +14,11 @@ import {
   InsertMaintenance,
   InsertTripPosition,
   piiExportAudit,
+  expenses,
+  documents,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
+import type { HistoricoVeiculo } from "../_core/veiculoExclusao";
 
 // Registra uma exportação de PII (metadados só — sem PII). Não bloqueia o fluxo
 // se o banco estiver indisponível (best-effort de trilha), mas loga o motivo.
@@ -81,6 +84,36 @@ export async function updateVehicle(
     .set(data)
     .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, id)));
   return getVehicleById(orgId, id);
+}
+
+// Quantos registros apontam para o veículo (base do bloqueio de exclusão).
+// Sempre escopado pela org: um id de outra empresa conta zero.
+export async function contarHistoricoVeiculo(
+  orgId: number,
+  id: number
+): Promise<HistoricoVeiculo> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const contar = async (
+    tabela:
+      | typeof trips
+      | typeof maintenance
+      | typeof expenses
+      | typeof documents
+  ) => {
+    const [r] = await db
+      .select({ n: sql<number>`count(*)` })
+      .from(tabela)
+      .where(and(eq(tabela.orgId, orgId), eq(tabela.veiculoId, id)));
+    return Number(r?.n ?? 0);
+  };
+  const [viagens, manutencoes, despesas, documentos] = await Promise.all([
+    contar(trips),
+    contar(maintenance),
+    contar(expenses),
+    contar(documents),
+  ]);
+  return { viagens, manutencoes, despesas, documentos };
 }
 
 export async function deleteVehicle(orgId: number, id: number) {
