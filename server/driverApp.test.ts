@@ -15,13 +15,15 @@ vi.mock("./db", async importOriginal => {
       { id: 1, orgId: 1, motoristaId: 5, valor: "2000", status: "planejada" },
       { id: 2, orgId: 1, motoristaId: 9, valor: "3000", status: "planejada" },
     ]),
-    getTripById: vi.fn(async (_org: number, id: number) =>
-      id === 1
-        ? { id: 1, motoristaId: 5, valor: "2000", status: "planejada" }
-        : id === 2
-          ? { id: 2, motoristaId: 9, valor: "3000", status: "planejada" }
-          : undefined
-    ),
+    getTripById: vi.fn(async (_org: number, id: number) => {
+      const viagens: Record<number, object> = {
+        1: { id: 1, motoristaId: 5, valor: "2000", status: "planejada" },
+        2: { id: 2, motoristaId: 9, valor: "3000", status: "planejada" },
+        3: { id: 3, motoristaId: 5, valor: "900", status: "cancelada" },
+        4: { id: 4, motoristaId: 5, valor: "700", status: "concluida" },
+      };
+      return viagens[id];
+    }),
     updateTrip: vi.fn().mockResolvedValue({}),
     accrueTripKm: vi.fn().mockResolvedValue(undefined),
   };
@@ -70,6 +72,30 @@ describe("Área do motorista (segurança)", () => {
     await expect(caller.driverApp.startTrip({ id: 2 })).rejects.toThrow(
       /não encontrada/i
     );
+  });
+
+  // Trava da auditoria 23/11/2026: o motorista pulava a máquina de estados.
+  it("não conclui viagem CANCELADA nem reabre CONCLUÍDA", async () => {
+    const db = await import("./db");
+    vi.mocked(db.updateTrip).mockClear();
+    vi.mocked(db.accrueTripKm).mockClear();
+    await expect(
+      caller.driverApp.completeTrip({ id: 3, dataChegada: new Date() })
+    ).rejects.toThrow(/não pode mais ser alterada/i);
+    await expect(caller.driverApp.startTrip({ id: 4 })).rejects.toThrow(
+      /não pode mais ser alterada/i
+    );
+    await expect(caller.driverApp.startTrip({ id: 3 })).rejects.toThrow(
+      /não pode mais ser alterada/i
+    );
+    expect(db.updateTrip).not.toHaveBeenCalled();
+    expect(db.accrueTripKm).not.toHaveBeenCalled();
+  });
+
+  it("fluxo normal continua: iniciar uma viagem planejada", async () => {
+    await expect(caller.driverApp.startTrip({ id: 1 })).resolves.toEqual({
+      success: true,
+    });
   });
 
   it("SANDBOX: motorista é bloqueado nos endpoints de gestão", async () => {
