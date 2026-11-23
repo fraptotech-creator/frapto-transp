@@ -12,7 +12,20 @@ import {
 } from "../db";
 import { canRecordPosition } from "../_core/tracking";
 import { visivelParaMotorista } from "../_core/driverTrips";
+import { transicaoValida, type TripStatus } from "../_core/tripState";
 import type { Trip } from "../../drizzle/schema";
+
+// Mesma máquina de estados do gestor (trips.updateStatus). Sem ela o motorista
+// "concluía" uma viagem CANCELADA (soma km e volta a contar no financeiro) ou
+// reabria uma concluída — auditoria pré-venda 23/11/2026.
+function exigirTransicao(trip: Trip, para: TripStatus) {
+  if (!transicaoValida(trip.status as TripStatus, para)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Esta viagem não pode mais ser alterada pelo motorista.",
+    });
+  }
+}
 
 // Remove o valor/frete ANTES de enviar ao motorista (ele nunca vê o valor).
 function stripValor(t: Trip): Omit<Trip, "valor"> {
@@ -55,6 +68,7 @@ export const driverAppRouter = router({
           message: "Viagem não encontrada.",
         });
       }
+      exigirTransicao(trip, "em_andamento");
       await updateTrip(ctx.orgId, input.id, { status: "em_andamento" });
       return { success: true } as const;
     }),
@@ -70,6 +84,7 @@ export const driverAppRouter = router({
           message: "Viagem não encontrada.",
         });
       }
+      exigirTransicao(trip, "concluida");
       await updateTrip(ctx.orgId, input.id, {
         status: "concluida",
         dataChegada: input.dataChegada,

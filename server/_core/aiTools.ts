@@ -20,6 +20,30 @@ type ToolDef = {
   run: (orgId: number, args: Record<string, unknown>) => Promise<unknown>;
 };
 
+// O que a IA pode saber de um motorista. ALLOWLIST (não blocklist): campo
+// novo no cadastro não vaza por padrão. Sem número de CNH, CPF, telefone,
+// e-mail, endereço — a conversa vai a um provedor externo (inclusive a chave
+// compartilhada do sistema) e `ai.chat` não é restrito ao dono.
+export function motoristaParaIa(
+  d: {
+    nome: string;
+    cnhCategoria: string | null;
+    cnhVencimento: Date | null;
+    status: string | null;
+  },
+  agora: Date
+) {
+  const cnh = cnhSituacao(d.cnhVencimento, agora);
+  return {
+    nome: d.nome,
+    categoria: d.cnhCategoria,
+    vencimentoCnh: d.cnhVencimento,
+    cnhVencida: cnh.vencida,
+    diasParaVencerCnh: cnh.diasParaVencer,
+    status: d.status,
+  };
+}
+
 const oilTxt = (v: {
   quilometragem: number | null;
   kmUltimaTrocaOleo: number | null;
@@ -57,26 +81,15 @@ export const AI_TOOLS: ToolDef[] = [
   {
     name: "listar_motoristas",
     description:
-      "Lista os motoristas: nome, CNH, categoria, vencimento da CNH, se a CNH " +
-      "está VENCIDA (calculado pelo servidor — use este campo, não recalcule " +
-      "por data), dias para vencer, status e telefone.",
+      "Lista os motoristas: nome, categoria da CNH, vencimento da CNH, se a " +
+      "CNH está VENCIDA (calculado pelo servidor — use este campo, não " +
+      "recalcule por data), dias para vencer e status. NÃO inclui número da " +
+      "CNH, CPF nem telefone (dados pessoais ficam só na tela do dono).",
     parameters: { type: "object", properties: {} },
     run: async orgId => {
       const ds = await getDrivers(orgId);
       const agora = new Date();
-      return ds.map(d => {
-        const cnh = cnhSituacao(d.cnhVencimento, agora);
-        return {
-          nome: d.nome,
-          cnh: d.cnh,
-          categoria: d.cnhCategoria,
-          vencimentoCnh: d.cnhVencimento,
-          cnhVencida: cnh.vencida,
-          diasParaVencerCnh: cnh.diasParaVencer,
-          status: d.status,
-          telefone: d.telefone,
-        };
-      });
+      return ds.map(d => motoristaParaIa(d, agora));
     },
   },
   {

