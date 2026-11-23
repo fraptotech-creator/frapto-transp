@@ -85,4 +85,12 @@ describe("texto(max) (trava: texto longo virava erro 500)", () => {
     expect(r.success).toBe(false);
     expect(r.error?.issues[0].message).toBe("Modelo: no máximo 50 caracteres.");
   });
+  it("conta caracteres como a coluna utf8mb4 (emoji = 1), não UTF-16", () => {
+    // VARCHAR(50) utf8mb4 guarda 50 emojis (medido no TiDB: char_length=10
+    // para 10 emojis). Até o zod 4.4, .max contava unidades UTF-16 (emoji = 2)
+    // e recusava entrada que cabia no banco; o zod ≥4.5 conta code points.
+    const s = texto(50, "Modelo");
+    expect(s.safeParse("🚚".repeat(50)).success).toBe(true);
+    expect(s.safeParse("🚚".repeat(51)).success).toBe(false);
+  });
 });
