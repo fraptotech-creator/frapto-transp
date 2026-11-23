@@ -8,6 +8,7 @@ import { VehicleDialog, VehicleActions } from "@/components/VehicleForms";
 import { useLocation } from "wouter";
 import { formatPlaca } from "@/lib/format";
 import { combinaPlaca } from "@/lib/searchFilters";
+import { rotulo } from "@/lib/rotulos";
 import { Truck, Calendar, Gauge, Search } from "lucide-react";
 
 export default function Vehicles() {
@@ -105,8 +106,7 @@ export default function Vehicles() {
                     <span
                       className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl ${statusInfo.bg} ${statusInfo.text} shadow-sm`}
                     >
-                      {vehicle.status.charAt(0).toUpperCase() +
-                        vehicle.status.slice(1)}
+                      {rotulo(vehicle.status)}
                     </span>
                   </div>
 

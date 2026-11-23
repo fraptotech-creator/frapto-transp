@@ -7,6 +7,7 @@ import { useRoute, useLocation } from "wouter";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { wazeUrl, googleMapsDirUrl } from "@/lib/nav";
+import { rotulo } from "@/lib/rotulos";
 
 export default function TripTracking() {
   const [, params] = useRoute("/trips/:id/tracking");
@@ -174,7 +175,7 @@ export default function TripTracking() {
                 <strong>Destino:</strong> {trip.destino}
               </p>
               <p>
-                <strong>Status:</strong> {trip.status}
+                <strong>Status:</strong> {rotulo(trip.status)}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

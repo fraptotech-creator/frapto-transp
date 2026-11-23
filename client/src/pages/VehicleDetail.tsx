@@ -17,6 +17,7 @@ import { VehicleDialog } from "@/components/VehicleForms";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { dataPura } from "@/lib/dataPura";
+import { rotulo } from "@/lib/rotulos";
 
 export default function VehicleDetail() {
   const [, params] = useRoute("/vehicles/:id");
@@ -104,7 +105,7 @@ export default function VehicleDetail() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Informações Gerais</CardTitle>
             <Badge className={getStatusBadge(vehicle.status)}>
-              {vehicle.status.charAt(0).toUpperCase() + vehicle.status.slice(1)}
+              {rotulo(vehicle.status)}
             </Badge>
           </div>
         </CardHeader>
@@ -112,7 +113,7 @@ export default function VehicleDetail() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-muted-foreground mb-1">Tipo</p>
-              <p className="font-medium capitalize">{vehicle.tipo}</p>
+              <p className="font-medium">{rotulo(vehicle.tipo)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-1">
@@ -288,8 +289,7 @@ export default function VehicleDetail() {
                   <Badge
                     className={getMaintenanceStatusBadge(maintenance.status)}
                   >
-                    {maintenance.status.charAt(0).toUpperCase() +
-                      maintenance.status.slice(1)}
+                    {rotulo(maintenance.status)}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -353,7 +353,7 @@ export default function VehicleDetail() {
                     </p>
                   </div>
                   <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                    {trip.status.charAt(0).toUpperCase() + trip.status.slice(1)}
+                    {rotulo(trip.status)}
                   </Badge>
                 </div>
                 {trip.distancia && (

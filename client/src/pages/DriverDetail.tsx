@@ -17,6 +17,7 @@ import { DriverDialog } from "@/components/DriverForms";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { dataPura } from "@/lib/dataPura";
+import { rotulo } from "@/lib/rotulos";
 
 export default function DriverDetail() {
   const [, params] = useRoute("/drivers/:id");
@@ -258,7 +259,7 @@ export default function DriverDetail() {
                     </p>
                   </div>
                   <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                    {trip.status.charAt(0).toUpperCase() + trip.status.slice(1)}
+                    {rotulo(trip.status)}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
