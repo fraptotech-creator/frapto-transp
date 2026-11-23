@@ -4,6 +4,7 @@ import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { getOrganization } from "../db";
 import { friendlyDbErrorMessage } from "./dbErrors";
+import { mensagemDeValidacao } from "./validacao";
 import { isSuperAdmin } from "./superAdmin";
 import { exigeTrocaDeSenha } from "./passwordPolicy";
 import { temAcesso } from "./subscription";
@@ -29,6 +30,12 @@ const t = initTRPC.context<TrpcContext>().create({
           friendly ??
           "Erro interno ao processar a solicitação. Tente novamente.",
       };
+    }
+    // Validação de entrada: a 1ª mensagem do zod (ex.: "CPF inválido: confira
+    // os números."), não a lista de issues em JSON cru.
+    if (error.code === "BAD_REQUEST") {
+      const msg = mensagemDeValidacao(error.cause);
+      if (msg) return { ...shape, message: msg };
     }
     return shape;
   },
