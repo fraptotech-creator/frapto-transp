@@ -32,18 +32,23 @@ export function assertLoginRateLimit(req: { ip?: string }): void {
   }
 }
 
-// Rate-limit ADICIONAL por CONTA (normalizada) + IP: além do teto por IP acima,
-// limita ataque distribuído concentrado numa mesma conta (credential stuffing
-// vindo de vários IPs mira sempre o mesmo login). 10 tentativas / 15 min.
-export function assertAccountLoginRateLimit(
-  req: { ip?: string },
-  conta: string
-): void {
-  const ip = req.ip ?? "unknown";
+// Rate-limit ADICIONAL por CONTA (normalizada), SEM o IP na chave: além do teto
+// por IP acima, limita o ataque distribuído concentrado numa mesma conta
+// (vários IPs mirando o mesmo login). Antes a chave era conta+IP — cada IP novo
+// ganhava 10 tentativas novas, e a trava não segurava justamente esse ataque
+// (auditoria pré-venda 23/11/2026). O teto é mais alto que o por IP (30 vs 15)
+// para que um atacante não tranque a conta de alguém com poucas tentativas; o
+// bloqueio dura no máximo a janela de 15 min.
+export const LIMITE_LOGIN_POR_CONTA = 30;
+export function chaveLoginPorConta(conta: string): string | null {
   const alvo = conta.toLowerCase().trim();
-  if (!alvo) return;
+  return alvo ? `login:acct:${alvo}` : null;
+}
+export function assertAccountLoginRateLimit(conta: string): void {
+  const chave = chaveLoginPorConta(conta);
+  if (!chave) return;
   if (
-    !allowRequest(`login:acct:${alvo}:${ip}`, 10, 15 * 60 * 1000, Date.now())
+    !allowRequest(chave, LIMITE_LOGIN_POR_CONTA, 15 * 60 * 1000, Date.now())
   ) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
