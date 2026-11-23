@@ -9,13 +9,35 @@ import {
   type TrpcErrorKey,
 } from "./trpcErrorBody";
 
-// Headers de segurança (1º middleware). Sem CSP por ora (evita quebrar o bundle
-// e o redirect do Stripe); os demais fecham clickjacking e MIME-sniffing.
+// Content-Security-Policy: só deixa o navegador carregar script do próprio
+// site — um XSS injetado não consegue puxar script de fora nem mandar dados
+// para outro host. Hosts liberados = o que a tela usa de verdade (conferido no
+// código em 23/11/2026): mapas do OpenStreetMap e Google Fonts. style
+// 'unsafe-inline' porque os componentes (Radix, gráficos) usam style inline.
+// Stripe e Google entram por NAVEGAÇÃO (não regida por CSP).
+// Fase 1: Report-Only (só avisa no console, não bloqueia). Depois de
+// conferir as telas sem violação, vira o header que BLOQUEIA.
+export const POLITICA_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https://*.tile.openstreetmap.org",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+// Headers de segurança (1º middleware): CSP (ver acima), clickjacking e
+// MIME-sniffing.
 export function securityHeaders(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
+  res.setHeader("Content-Security-Policy-Report-Only", POLITICA_CSP);
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
