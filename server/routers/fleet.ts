@@ -52,6 +52,7 @@ import {
 } from "../db";
 import { isOilChange } from "../_core/oil";
 import { decidirExclusaoVeiculo } from "../_core/veiculoExclusao";
+import { dataRealizadaAoConcluir } from "../_core/manutencaoConclusao";
 import {
   buildAlerts,
   resolveNotificationSettings,
@@ -693,6 +694,13 @@ export const maintenanceRouter = router({
       const prev = await getMaintenanceById(ctx.orgId, id);
       const updateData: Partial<InsertMaintenance> = { ...rest };
       if (custo !== undefined) updateData.custo = parseNumericString(custo);
+      const dataAuto = dataRealizadaAoConcluir(
+        input.status,
+        input.dataRealizada,
+        prev?.dataRealizada,
+        new Date()
+      );
+      if (dataAuto) updateData.dataRealizada = dataAuto;
       const updated = await updateMaintenance(ctx.orgId, id, updateData);
       await maybeResetOil(
         ctx.orgId,
@@ -717,6 +725,13 @@ export const maintenanceRouter = router({
       const prev = await getMaintenanceById(ctx.orgId, id);
       const updateData: Partial<InsertMaintenance> = { ...rest };
       if (custo !== undefined) updateData.custo = parseNumericString(custo);
+      const dataAuto = dataRealizadaAoConcluir(
+        input.status,
+        input.dataRealizada,
+        prev?.dataRealizada,
+        new Date()
+      );
+      if (dataAuto) updateData.dataRealizada = dataAuto;
       const updated = await updateMaintenance(ctx.orgId, id, updateData);
       await maybeResetOil(ctx.orgId, input.status, prev?.tipo, prev);
       return updated;
