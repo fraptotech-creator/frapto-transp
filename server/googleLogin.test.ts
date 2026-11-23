@@ -4,7 +4,47 @@ import {
   encodeState,
   decodeState,
   nonceConfere,
+  decidirLoginGoogle,
 } from "./_core/googleLogin";
+
+describe("decidirLoginGoogle — quem entra pelo Google", () => {
+  it("sem conta → cria empresa + dono", () => {
+    expect(decidirLoginGoogle(null)).toEqual({ acao: "criar" });
+    expect(decidirLoginGoogle(undefined)).toEqual({ acao: "criar" });
+  });
+
+  // Trava do bug (auditoria 23/11/2026): o token saía sem sver → loop no /login
+  // para quem já tinha feito logout/troca de senha.
+  it("conta criada pelo Google entra levando o sessionVersion ATUAL", () => {
+    expect(
+      decidirLoginGoogle({
+        orgRole: "owner",
+        loginMethod: "google",
+        sessionVersion: 3,
+      })
+    ).toEqual({ acao: "entrar", sessionVersion: 3 });
+  });
+
+  // Trava do sequestro por pré-cadastro: conta de SENHA (e-mail nunca
+  // confirmado) não é vinculada pelo Google.
+  it("conta de senha NÃO é vinculada (anti pré-cadastro)", () => {
+    for (const loginMethod of ["password", null, ""]) {
+      expect(
+        decidirLoginGoogle({ orgRole: "owner", loginMethod, sessionVersion: 0 })
+      ).toEqual({ acao: "negar", erro: "google_conta_senha" });
+    }
+  });
+
+  it("motorista nunca entra pelo Google", () => {
+    expect(
+      decidirLoginGoogle({
+        orgRole: "driver",
+        loginMethod: "google",
+        sessionVersion: 0,
+      })
+    ).toEqual({ acao: "negar", erro: "google_driver" });
+  });
+});
 
 describe("sanitizeReturnPath — só caminho interno (anti open-redirect)", () => {
   it("caminho interno passa", () => {

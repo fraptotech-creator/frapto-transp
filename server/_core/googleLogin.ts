@@ -74,6 +74,39 @@ export function nonceConfere(a: string, b: string): boolean {
   return timingSafeEqual(ba, bb);
 }
 
+export type DecisaoGoogle =
+  | { acao: "criar" }
+  | { acao: "entrar"; sessionVersion: number }
+  | { acao: "negar"; erro: "google_driver" | "google_conta_senha" };
+
+// Quem entra pelo Google, dado o usuário que JÁ tem esse e-mail (ou nenhum).
+// PURA — o callback só executa a decisão.
+//  - sem conta → cria empresa + dono;
+//  - conta criada PELO GOOGLE → entra, com o sessionVersion ATUAL (o token
+//    precisa dele, senão quem já fez logout cai em loop no /login);
+//  - motorista → nega (entra pelo app do motorista);
+//  - conta criada com SENHA → NÃO vincula. O cadastro por senha não confirma o
+//    e-mail: um atacante pode pré-cadastrar o e-mail da vítima com a senha dele
+//    e, no 1º "Continuar com Google", a vítima cairia na empresa do atacante
+//    (que segue entrando pela senha). Fail-closed: a pessoa entra com a senha.
+export function decidirLoginGoogle(
+  existente:
+    | {
+        orgRole: string;
+        loginMethod: string | null;
+        sessionVersion: number;
+      }
+    | null
+    | undefined
+): DecisaoGoogle {
+  if (!existente) return { acao: "criar" };
+  if (existente.orgRole === "driver")
+    return { acao: "negar", erro: "google_driver" };
+  if (existente.loginMethod !== "google")
+    return { acao: "negar", erro: "google_conta_senha" };
+  return { acao: "entrar", sessionVersion: existente.sessionVersion };
+}
+
 // Lê um cookie do header cru (não dependemos de cookie-parser).
 function lerCookie(req: Request, nome: string): string | null {
   const raw = req.headers.cookie;
@@ -200,15 +233,17 @@ export function registerGoogleLoginRoutes(app: Express) {
         return falha("no_email");
       }
 
-      // 3) Resolve o usuário: existente (reusa openId → preserva a empresa) ou
-      // cria uma empresa nova (igual ao cadastro). Motorista NÃO entra por aqui.
+      // 3) Resolve o usuário pela decisão PURA (decidirLoginGoogle).
       const existente = await getUserByEmail(email);
+      const decisao = decidirLoginGoogle(existente);
+      if (decisao.acao === "negar") return falha(decisao.erro);
       let openId: string;
       let nome: string;
-      if (existente) {
-        if (existente.orgRole === "driver") return falha("google_driver");
+      let sessionVersion = 0;
+      if (decisao.acao === "entrar" && existente) {
         openId = existente.openId;
         nome = existente.name ?? info.name ?? "";
+        sessionVersion = decisao.sessionVersion;
         await touchUserLastSignedIn(openId);
       } else {
         openId = `google_${info.sub || email.replace(/[^a-z0-9]/gi, "_")}`;
@@ -218,8 +253,11 @@ export function registerGoogleLoginRoutes(app: Express) {
       }
 
       // 4) Mesma sessão do login por senha.
+      // sver TEM que bater com users.sessionVersion (sdk.validateActiveSession);
+      // sem ele, quem já fez logout/trocou senha caía em loop no /login.
       const sessionToken = await sdk.createSessionToken(openId, {
         name: nome,
+        sessionVersion,
         expiresInMs: ONE_YEAR_MS,
       });
       limparState();
