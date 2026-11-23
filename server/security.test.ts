@@ -9,7 +9,7 @@ vi.mock("./_core/env", () => ({
   },
 }));
 
-import { originCheck, securityHeaders } from "./_core/security";
+import { originCheck, securityHeaders, cabecalhoCsp } from "./_core/security";
 
 type Res = {
   statusCode?: number;
@@ -81,11 +81,21 @@ describe("securityHeaders", () => {
   });
 
   // Auditoria pré-venda 23/11/2026: não havia CSP nenhum.
-  it("seta CSP (Report-Only, fase 1) com script só do próprio site", () => {
+  it("CSP BLOQUEIA fora de development (fail-closed); dev só avisa", () => {
+    expect(cabecalhoCsp("production")).toBe("Content-Security-Policy");
+    expect(cabecalhoCsp(undefined)).toBe("Content-Security-Policy");
+    expect(cabecalhoCsp("test")).toBe("Content-Security-Policy");
+    expect(cabecalhoCsp("development")).toBe(
+      "Content-Security-Policy-Report-Only"
+    );
+  });
+
+  it("seta CSP com script só do próprio site", () => {
     const req = { headers: {}, protocol: "http" } as never;
     const res = mkRes();
     securityHeaders(req, res as never, vi.fn());
-    const csp = res.headers["content-security-policy-report-only"] as string;
+    const csp = (res.headers["content-security-policy"] ??
+      res.headers["content-security-policy-report-only"]) as string;
     expect(csp).toContain("script-src 'self'");
     expect(csp).not.toMatch(/script-src[^;]*unsafe/);
     expect(csp).toContain("object-src 'none'");

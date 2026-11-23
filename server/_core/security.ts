@@ -15,8 +15,18 @@ import {
 // código em 23/11/2026): mapas do OpenStreetMap e Google Fonts. style
 // 'unsafe-inline' porque os componentes (Radix, gráficos) usam style inline.
 // Stripe e Google entram por NAVEGAÇÃO (não regida por CSP).
-// Fase 1: Report-Only (só avisa no console, não bloqueia). Depois de
-// conferir as telas sem violação, vira o header que BLOQUEIA.
+// Fase 1 (PR #28) foi Report-Only; conferido em produção em 23/11/2026 — 15
+// telas logadas + páginas públicas, ouvinte de securitypolicyviolation, 0
+// violações e todos os hosts carregados cobertos. Fase 2: BLOQUEIA.
+// Exceção: em desenvolvimento o Vite injeta script inline (react-refresh), então
+// lá segue só avisando. Fail-closed: qualquer NODE_ENV que não seja
+// "development" (inclusive ausente) BLOQUEIA.
+export function cabecalhoCsp(nodeEnv: string | undefined): string {
+  return nodeEnv === "development"
+    ? "Content-Security-Policy-Report-Only"
+    : "Content-Security-Policy";
+}
+
 export const POLITICA_CSP = [
   "default-src 'self'",
   "script-src 'self'",
@@ -37,7 +47,7 @@ export function securityHeaders(
   res: Response,
   next: NextFunction
 ) {
-  res.setHeader("Content-Security-Policy-Report-Only", POLITICA_CSP);
+  res.setHeader(cabecalhoCsp(process.env.NODE_ENV), POLITICA_CSP);
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
