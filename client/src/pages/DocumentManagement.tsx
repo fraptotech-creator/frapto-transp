@@ -60,6 +60,10 @@ export default function DocumentManagement() {
   const deleteM = trpc.documents.delete.useMutation();
 
   const [file, setFile] = useState<File | null>(null);
+  // Trocar a key recria o <input type=file> vazio após o envio. Sem isto ele
+  // seguia mostrando o arquivo já enviado, e um novo "Enviar" dizia "Escolha
+  // um arquivo" com um nome de arquivo na tela.
+  const [inputArquivoKey, setInputArquivoKey] = useState(0);
   const [tipo, setTipo] = useState<DocType>("crlv");
   const [descricao, setDescricao] = useState("");
   const [busca, setBusca] = useState("");
@@ -84,6 +88,7 @@ export default function DocumentManagement() {
       });
       toast.success("Documento enviado!");
       setFile(null);
+      setInputArquivoKey(k => k + 1);
       setDescricao("");
       refetch();
     } catch (e) {
@@ -196,6 +201,7 @@ export default function DocumentManagement() {
               <div className="space-y-2">
                 <Label>Arquivo</Label>
                 <Input
+                  key={inputArquivoKey}
                   type="file"
                   accept="application/pdf,image/jpeg,image/png,image/webp"
                   onChange={e => setFile(e.target.files?.[0] ?? null)}
