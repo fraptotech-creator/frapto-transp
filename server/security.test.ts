@@ -79,4 +79,17 @@ describe("securityHeaders", () => {
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(next).toHaveBeenCalled();
   });
+
+  // Auditoria pré-venda 23/11/2026: não havia CSP nenhum.
+  it("seta CSP (Report-Only, fase 1) com script só do próprio site", () => {
+    const req = { headers: {}, protocol: "http" } as never;
+    const res = mkRes();
+    securityHeaders(req, res as never, vi.fn());
+    const csp = res.headers["content-security-policy-report-only"] as string;
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).not.toMatch(/script-src[^;]*unsafe/);
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("connect-src 'self'");
+  });
 });
