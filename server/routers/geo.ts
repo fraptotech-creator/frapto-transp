@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { activeOrgProcedure, router } from "../_core/trpc";
 import { ENV } from "../_core/env";
+import { allowRequest } from "../_core/rateLimit";
 import {
   parseNominatim,
   parseOsrm,
@@ -156,8 +158,34 @@ async function traceRoute(coords: LatLng[]): Promise<ParsedRoute | null> {
   return routeOsrm(coords);
 }
 
+// Cota POR EMPRESA de endereços geocodificados (só conta o que NÃO veio do
+// cache). Cada endereço vira até ~9 consultas aos servidores públicos do
+// OpenStreetMap, que pedem no máximo 1/s: sem teto, uma conta abusando (rota
+// com 25 paradas em loop) fazia o servidor ser bloqueado lá — e o cálculo de
+// rota parava para TODOS os clientes (auditoria pré-venda 23/11/2026).
+// 200 endereços / 10 min cobre com folga o uso normal (~100 rotas simples).
+export const COTA_GEO_ENDERECOS = 200;
+const COTA_GEO_JANELA_MS = 10 * 60 * 1000;
+export const COTA_GEO_MSG =
+  "Muitos cálculos de rota em pouco tempo. Aguarde alguns minutos e tente de novo.";
+
+export function assertCotaGeo(orgId: number, enderecos: number): void {
+  if (
+    !allowRequest(
+      `geo:org:${orgId}`,
+      COTA_GEO_ENDERECOS,
+      COTA_GEO_JANELA_MS,
+      Date.now(),
+      enderecos
+    )
+  ) {
+    throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: COTA_GEO_MSG });
+  }
+}
+
 // Rota (origem→destino). Devolve os pontos, a geometria (para o Leaflet) e
-// distância/tempo. Nunca lança — em falha devolve { ok:false } com o motivo.
+// distância/tempo. Em falha de geocode/rota devolve { ok:false } com o motivo;
+// só LANÇA quando a empresa estoura a cota acima.
 export const geoRouter = router({
   route: activeOrgProcedure
     .input(
@@ -169,12 +197,13 @@ export const geoRouter = router({
         paradas: z.array(z.string().min(1).max(120)).max(25).optional(),
       })
     )
-    .query(async ({ input }): Promise<RouteResult> => {
+    .query(async ({ ctx, input }): Promise<RouteResult> => {
       const paradas = input.paradas ?? [];
       const key =
         `${input.origem}||${paradas.join("|")}||${input.destino}`.toLowerCase();
       const hit = cache.get(key);
       if (hit) return hit;
+      assertCotaGeo(ctx.orgId, 2 + paradas.length);
 
       const [o, d, ...stopsGeo] = await Promise.all([
         geocode(input.origem),
@@ -216,10 +245,12 @@ export const geoRouter = router({
     )
     .query(
       async ({
+        ctx,
         input,
       }): Promise<
         { ok: true; paradas: string[] } | { ok: false; reason: "geocode" }
       > => {
+        assertCotaGeo(ctx.orgId, 1 + input.paradas.length);
         const [o, ...stopsGeo] = await Promise.all([
           geocode(input.origem),
           ...input.paradas.map(p => geocode(p)),
