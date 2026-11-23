@@ -197,8 +197,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
       } else {
         toast.error("Não foi possível otimizar. Confira os endereços.");
       }
-    } catch {
-      toast.error("Falha ao otimizar as paradas.");
+    } catch (e) {
+      // Mostra o motivo do servidor (ex.: cota de rotas estourada).
+      toast.error(
+        e instanceof Error && e.message
+          ? e.message
+          : "Falha ao otimizar as paradas."
+      );
     } finally {
       setOtimizando(false);
     }
@@ -228,8 +233,12 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
           "Não foi possível calcular pela rota. Confira os endereços."
         );
       }
-    } catch {
-      toast.error("Falha ao calcular a distância.");
+    } catch (e) {
+      toast.error(
+        e instanceof Error && e.message
+          ? e.message
+          : "Falha ao calcular a distância."
+      );
     } finally {
       setCalculando(false);
     }

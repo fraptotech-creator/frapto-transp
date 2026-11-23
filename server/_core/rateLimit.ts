@@ -22,20 +22,24 @@ function sweep(now: number): void {
 }
 
 // Retorna true se PERMITIDO (e registra o hit); false se estourou o limite.
+// `custo` (padrão 1): quantas unidades a chamada consome — ex.: uma rota com
+// 10 endereços custa 10 da cota de geocodificação. Se não couber INTEIRA,
+// nega e não registra nada.
 export function allowRequest(
   key: string,
   limit: number,
   windowMs: number,
-  now: number
+  now: number,
+  custo = 1
 ): boolean {
   sweep(now);
   const cutoff = now - windowMs;
   const recent = (buckets.get(key) ?? []).filter(t => t > cutoff);
-  if (recent.length >= limit) {
+  if (recent.length + custo > limit) {
     buckets.set(key, recent);
     return false;
   }
-  recent.push(now);
+  for (let i = 0; i < custo; i++) recent.push(now);
   buckets.set(key, recent);
   return true;
 }
