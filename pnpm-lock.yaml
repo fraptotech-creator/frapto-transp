@@ -27,7 +27,7 @@ importers:
     dependencies:
       '@anthropic-ai/sdk':
         specifier: ^0.110.0
-        version: 0.110.0(zod@4.1.12)
+        version: 0.110.0(zod@4.6.7)
       '@aws-sdk/client-s3':
         specifier: ^3.1081.0
         version: 3.1081.0
@@ -189,7 +189,7 @@ importers:
         version: 0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       openai:
         specifier: ^6.45.0
-        version: 6.45.0(@aws-sdk/credential-provider-node@3.972.64)(@smithy/signature-v4@5.6.2)(zod@4.1.12)
+        version: 6.45.0(@aws-sdk/credential-provider-node@3.972.64)(@smithy/signature-v4@5.6.2)(zod@4.6.7)
       react:
         specifier: ^19.2.1
         version: 19.2.1
@@ -233,8 +233,8 @@ importers:
         specifier: ^3.3.5
         version: 3.7.1(patch_hash=4e16e6ff3fde7d6c1024d3e0c8605dc9eb6afb690d0d49958c2f449091813072)(react@19.2.1)
       zod:
-        specifier: ^4.1.12
-        version: 4.1.12
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@tailwindcss/typography':
         specifier: ^0.5.15
@@ -4249,8 +4249,8 @@ packages:
     resolution: {integrity: sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==}
     engines: {node: '>=18'}
 
-  zod@4.1.12:
-    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -4264,12 +4264,12 @@ snapshots:
 
   '@antfu/utils@9.3.0': {}
 
-  '@anthropic-ai/sdk@0.110.0(zod@4.1.12)':
+  '@anthropic-ai/sdk@0.110.0(zod@4.6.7)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.0.0
     optionalDependencies:
-      zod: 4.1.12
+      zod: 4.6.7
 
   '@asamuzakjp/css-color@6.0.5':
     dependencies:
@@ -7650,11 +7650,11 @@ snapshots:
       regex: 6.0.1
       regex-recursion: 6.0.2
 
-  openai@6.45.0(@aws-sdk/credential-provider-node@3.972.64)(@smithy/signature-v4@5.6.2)(zod@4.1.12):
+  openai@6.45.0(@aws-sdk/credential-provider-node@3.972.64)(@smithy/signature-v4@5.6.2)(zod@4.6.7):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.64
       '@smithy/signature-v4': 5.6.2
-      zod: 4.1.12
+      zod: 4.6.7
 
   package-manager-detector@1.5.0: {}
 
@@ -8480,6 +8480,6 @@ snapshots:
 
   yallist@5.0.0: {}
 
-  zod@4.1.12: {}
+  zod@4.6.7: {}
 
   zwitch@2.0.4: {}
