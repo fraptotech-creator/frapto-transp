@@ -24,18 +24,37 @@ export function normalizeAddress(q: string): string {
 // → ["Av. São Paulo, 92, Perocão, Guarapari-ES", "92, Perocão, Guarapari-ES",
 //    "Perocão, Guarapari-ES", "Guarapari-ES"]. Aumenta a chance de o OSM achar
 // ao menos a cidade quando a rua exata não existe na base.
+// Siglas das UFs: um trecho que é SÓ a UF ("ES") não pode virar candidato
+// sozinho — o geocoder devolve o centro do ESTADO e a busca seguinte (raio de
+// 25 km) casa uma rua homônima ali ("Vitória, ES" ia parar perto de Linhares).
+const UFS = new Set(
+  "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(
+    " "
+  )
+);
+const PAIS = /^(brasil|brazil|br)$/i;
+
 export function candidateQueries(q: string): string[] {
   const full = normalizeAddress(q);
   const parts = full
     .split(",")
     .map(s => s.trim())
     .filter(Boolean);
+  // "…, Brasil" no fim: o país sozinho seria o centro do Brasil.
+  while (parts.length > 1 && PAIS.test(parts[parts.length - 1])) parts.pop();
+  // "…, Cidade, UF": a UF fica GRUDADA na cidade ("Cidade, UF") — o trecho mais
+  // geral passa a ser a cidade, nunca o estado.
+  if (parts.length >= 2 && UFS.has(parts[parts.length - 1].toUpperCase())) {
+    const uf = parts.pop() as string;
+    parts[parts.length - 1] = `${parts[parts.length - 1]}, ${uf.toUpperCase()}`;
+  }
   const out: string[] = [];
   const push = (s: string) => {
     const t = s.trim();
     if (t && !out.includes(t)) out.push(t);
   };
   push(full);
+  push(parts.join(", ")); // sem o país (se havia)
   for (let i = 1; i < parts.length; i++) push(parts.slice(i).join(", "));
   return out;
 }

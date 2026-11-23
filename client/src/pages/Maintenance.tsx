@@ -6,6 +6,7 @@ import { Plus, CheckCircle, Clock, Wrench, Search } from "lucide-react";
 import { formatPlaca } from "@/lib/format";
 import { combinaPlaca } from "@/lib/searchFilters";
 import { computeOilStatus, OIL_LABEL } from "@/lib/oil";
+import { anoMesPuro, formatarDataPura } from "@/lib/dataPura";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -78,11 +79,7 @@ export default function Maintenance() {
   const [buscaMes, setBuscaMes] = useState(""); // YYYY-MM
   const placaDoVeiculo = (veiculoId: number): string =>
     vehicles?.find((v: any) => v.id === veiculoId)?.placa ?? "";
-  const localYM = (d: any): string => {
-    if (!d) return "";
-    const dt = new Date(d);
-    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
-  };
+  const localYM = (d: any): string => anoMesPuro(d);
   const maintenancesFiltradas = (maintenances ?? []).filter(
     (m: any) =>
       combinaPlaca(placaDoVeiculo(m.veiculoId), buscaPlaca) &&
@@ -221,10 +218,8 @@ export default function Maintenance() {
       : "Veículo não encontrado";
   };
 
-  const formatDate = (date: Date | string | null) => {
-    if (!date) return "-";
-    return new Date(date).toLocaleDateString("pt-BR");
-  };
+  const formatDate = (date: Date | string | null) =>
+    formatarDataPura(date) || "-";
 
   const formatCurrency = (value: string | null) => {
     if (!value) return "-";

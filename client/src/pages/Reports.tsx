@@ -12,6 +12,7 @@ import { Download, FileText, TrendingUp, DollarSign } from "lucide-react";
 import { formatPlaca, formatCpf, formatPhone } from "@/lib/format";
 import { exportTablePDF } from "@/lib/exportPdf";
 import { sanitizeCsvCell } from "@/lib/csvSafe";
+import { formatarDataPura } from "@/lib/dataPura";
 import {
   filtrarLedgerPorMes,
   resumoAnualPorMes,
@@ -66,7 +67,11 @@ function downloadCSV(filename: string, rows: Record<string, any>[]) {
   toast.success(`Arquivo exportado: ${filename}`);
 }
 
-const formatDateBR = (d: any) =>
+// Datas SEM hora (vencimentos, datas de manutenção/admissão): dia digitado,
+// lido em UTC — ver lib/dataPura.
+const formatDateBR = (d: any) => formatarDataPura(d);
+// Instantes reais (partida de viagem, "hoje"): no fuso LOCAL.
+const formatInstantDateBR = (d: any) =>
   d ? new Date(d).toLocaleDateString("pt-BR") : "";
 
 // Data + HORA (partida/chegada de viagem precisam do horário).
@@ -300,7 +305,7 @@ export default function Reports() {
         )
         .forEach((t: any) =>
           rows.push({
-            Data: formatDateBR(t.dataPartida),
+            Data: formatInstantDateBR(t.dataPartida),
             Tipo: "Receita",
             Categoria: "Viagem",
             Origem: "viagem",
@@ -368,7 +373,10 @@ export default function Reports() {
     if (fmt === "csv") {
       downloadCSV(`${rep.filename}-${today}.csv`, rep.rows);
     } else if (
-      exportTablePDF(`${rep.title} — ${formatDateBR(new Date())}`, rep.rows)
+      exportTablePDF(
+        `${rep.title} — ${formatInstantDateBR(new Date())}`,
+        rep.rows
+      )
     ) {
       toast.success("Abrindo PDF para impressão/salvamento…");
     }
@@ -386,7 +394,10 @@ export default function Reports() {
     if (fmt === "csv") {
       downloadCSV(`${rep.filename}-${today}.csv`, rep.rows);
     } else if (
-      exportTablePDF(`${rep.title} — ${formatDateBR(new Date())}`, rep.rows)
+      exportTablePDF(
+        `${rep.title} — ${formatInstantDateBR(new Date())}`,
+        rep.rows
+      )
     ) {
       toast.success("Abrindo PDF para impressão/salvamento…");
     }
