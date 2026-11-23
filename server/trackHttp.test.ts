@@ -71,6 +71,15 @@ describe("/api/track/login — gate de assinatura", () => {
     expect(db.issueTrackingToken).not.toHaveBeenCalled();
   });
 
+  it("NEGA (403) motorista INATIVO — não emite token", async () => {
+    db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
+    db.getDriverById.mockResolvedValue({ id: 3, orgId: 7, status: "inativo" });
+    const { res, r } = fakeRes();
+    await handleTrackLogin(req({ username: "joao", password: "x" }), res);
+    expect(r.code).toBe(403);
+    expect(db.issueTrackingToken).not.toHaveBeenCalled();
+  });
+
   it("emite token NOVO (rotação) quando a assinatura está ativa", async () => {
     db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
     const { res, r } = fakeRes();
@@ -109,6 +118,19 @@ describe("/api/track — gate de assinatura na ingestão", () => {
     // Um único INSERT em lote (não um por ponto).
     expect(db.addTripPositions).toHaveBeenCalledOnce();
     expect(r.body).toEqual({ recorded: 1 });
+  });
+
+  it("NEGA (403) e NÃO grava GPS de motorista INATIVO", async () => {
+    db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
+    db.getDriverByTrackingToken.mockResolvedValue({
+      id: 3,
+      orgId: 7,
+      status: "inativo",
+    });
+    const { res, r } = fakeRes();
+    await handleTrackIngest(req(ponto), res);
+    expect(r.code).toBe(403);
+    expect(db.addTripPositions).not.toHaveBeenCalled();
   });
 
   it("REJEITA (401) token REVOGADO e NÃO grava (Lote 7.2)", async () => {

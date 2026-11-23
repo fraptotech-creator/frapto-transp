@@ -24,6 +24,9 @@ vi.mock("./db", async importOriginal => {
       };
       return viagens[id];
     }),
+    getDriverById: vi
+      .fn()
+      .mockResolvedValue({ id: 5, orgId: 1, status: "disponivel" }),
     updateTrip: vi.fn().mockResolvedValue({}),
     accrueTripKm: vi.fn().mockResolvedValue(undefined),
   };
@@ -96,6 +99,29 @@ describe("Área do motorista (segurança)", () => {
     await expect(caller.driverApp.startTrip({ id: 1 })).resolves.toEqual({
       success: true,
     });
+  });
+
+  // Trava do teste pré-venda 23/11/2026: inativo seguia usando o app.
+  it("motorista INATIVO (ou apagado) perde o acesso na hora", async () => {
+    const db = await import("./db");
+    vi.mocked(db.getDriverById).mockResolvedValueOnce({
+      id: 5,
+      orgId: 1,
+      status: "inativo",
+    } as never);
+    await expect(caller.driverApp.myTrips()).rejects.toThrow(/desativado/i);
+    vi.mocked(db.getDriverById).mockResolvedValueOnce(undefined);
+    await expect(caller.driverApp.myTrips()).rejects.toThrow(/desativado/i);
+    vi.mocked(db.updateTrip).mockClear();
+    vi.mocked(db.getDriverById).mockResolvedValueOnce({
+      id: 5,
+      orgId: 1,
+      status: "inativo",
+    } as never);
+    await expect(caller.driverApp.startTrip({ id: 1 })).rejects.toThrow(
+      /desativado/i
+    );
+    expect(db.updateTrip).not.toHaveBeenCalled();
   });
 
   it("SANDBOX: motorista é bloqueado nos endpoints de gestão", async () => {

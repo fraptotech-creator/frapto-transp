@@ -2,7 +2,8 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
-import { getOrganization } from "../db";
+import { getOrganization, getDriverById } from "../db";
+import { motoristaComAcesso, MOTORISTA_INATIVO_MSG } from "./motoristaAcesso";
 import { friendlyDbErrorMessage } from "./dbErrors";
 import { mensagemDeValidacao } from "./validacao";
 import { isSuperAdmin } from "./superAdmin";
@@ -157,6 +158,12 @@ export const driverProcedure = protectedProcedure.use(async opts => {
       code: "FORBIDDEN",
       message: SUBSCRIPTION_REQUIRED_MSG,
     });
+  }
+  // Cadastro inativo (ou apagado) corta o acesso na hora, mesmo com sessão
+  // aberta — o gestor não precisa esperar o token expirar.
+  const driver = await getDriverById(ctx.user.orgId, ctx.user.driverId);
+  if (!motoristaComAcesso(driver)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: MOTORISTA_INATIVO_MSG });
   }
   return next({
     ctx: { ...ctx, orgId: ctx.user.orgId, driverId: ctx.user.driverId },
