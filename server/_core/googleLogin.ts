@@ -173,11 +173,10 @@ export function registerGoogleLoginRoutes(app: Express) {
   // Callback: valida state, troca o código, cria sessão.
   app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
     // Sempre limpa o cookie de state (uso único), aconteça o que acontecer.
+    // clearCookie já expira o cookie; passar maxAge é obsoleto no Express
+    // (aviso no log de produção) e é ignorado no Express 5.
     const limparState = () =>
-      res.clearCookie(STATE_COOKIE, {
-        ...getSessionCookieOptions(req),
-        maxAge: -1,
-      });
+      res.clearCookie(STATE_COOKIE, getSessionCookieOptions(req));
 
     const falha = (code: string) => {
       limparState();
