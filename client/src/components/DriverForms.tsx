@@ -278,9 +278,9 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
                   <Input placeholder="ex: joao.silva" {...field} />
                 </FormControl>
                 <p className="text-xs text-muted-foreground">
-                  Uma <strong>senha inicial única</strong> é gerada e mostrada
-                  ao salvar — anote e passe ao motorista. Ele troca no 1º
-                  acesso.
+                  Ao salvar, o sistema gera um <strong>link de ativação</strong>{" "}
+                  (uso único, vale 7 dias) para você enviar ao motorista. Ele
+                  cria a própria senha por esse link.
                 </p>
                 <FormMessage />
               </FormItem>
