@@ -155,7 +155,9 @@ describe("drivers — escalada intraempresa fechada (item 2)", () => {
   });
 
   it("owner: update com PII é permitido e escopado à própria org", async () => {
-    await caller("owner", 1).drivers.update({ id: 10, cpf: "12345678901" });
+    // CPF com dígito verificador VÁLIDO (o servidor passou a conferir; o
+    // "12345678901" antigo é inválido e agora é recusado — ver validacao.ts).
+    await caller("owner", 1).drivers.update({ id: 10, cpf: "52998224725" });
     const [orgId] = db.updateDriver.mock.calls[0];
     expect(orgId).toBe(1);
   });

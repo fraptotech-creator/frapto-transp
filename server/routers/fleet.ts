@@ -76,6 +76,13 @@ import {
 } from "../_core/normalize";
 import { transicaoValida, type TripStatus } from "../_core/tripState";
 import { downsampleEvenly } from "../_core/tracking";
+import { texto, TEXTO_LONGO, anoVeiculo, cpfSchema } from "../_core/validacao";
+
+// A placa é gravada NORMALIZADA (sem hífen/espaço) numa coluna de 10.
+const placaSchema = texto(14, "Placa").refine(p => {
+  const n = normalizePlaca(p);
+  return n.length >= 1 && n.length <= 10;
+}, "Placa inválida.");
 
 // Carrega a viagem e valida a transição de status pedida. Fail-closed:
 // viagem inexistente → NOT_FOUND; transição ilícita (pulo/reversão/terminal)
@@ -114,19 +121,19 @@ export const vehiclesRouter = router({
   create: activeOrgProcedure
     .input(
       z.object({
-        placa: z.string().min(1),
-        marca: z.string().min(1),
-        modelo: z.string().min(1),
-        ano: z.number(),
+        placa: placaSchema,
+        marca: texto(50, "Marca").min(1),
+        modelo: texto(50, "Modelo").min(1),
+        ano: anoVeiculo,
         tipo: z.enum(["caminhao", "van", "onibus", "carro"]),
         capacidadeTipo: z.enum(["peso", "passageiros"]).optional(),
-        capacidadeCarga: z.string().optional(),
-        capacidadePassageiros: z.string().optional(),
+        capacidadeCarga: texto(20, "Capacidade").optional(),
+        capacidadePassageiros: texto(10, "Passageiros").optional(),
         quilometragem: z.number().int().min(0).optional(),
         intervaloTrocaOleoKm: z.number().int().min(0).optional(),
         crlvVencimento: z.date().optional(),
         seguroVencimento: z.date().optional(),
-        observacoes: z.string().optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(({ ctx, input }) =>
@@ -154,20 +161,20 @@ export const vehiclesRouter = router({
     .input(
       z.object({
         id: z.number(),
-        placa: z.string().optional(),
-        marca: z.string().optional(),
-        modelo: z.string().optional(),
-        ano: z.number().optional(),
+        placa: placaSchema.optional(),
+        marca: texto(50, "Marca").optional(),
+        modelo: texto(50, "Modelo").optional(),
+        ano: anoVeiculo.optional(),
         tipo: z.enum(["caminhao", "van", "onibus", "carro"]).optional(),
         status: z.enum(["ativo", "manutencao", "inativo"]).optional(),
         capacidadeTipo: z.enum(["peso", "passageiros"]).optional(),
-        capacidadeCarga: z.string().optional(),
-        capacidadePassageiros: z.string().optional(),
+        capacidadeCarga: texto(20, "Capacidade").optional(),
+        capacidadePassageiros: texto(10, "Passageiros").optional(),
         quilometragem: z.number().int().min(0).optional(),
         intervaloTrocaOleoKm: z.number().int().min(0).optional(),
         crlvVencimento: z.date().optional(),
         seguroVencimento: z.date().optional(),
-        observacoes: z.string().optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(({ ctx, input }) => {
@@ -255,17 +262,17 @@ export const driversRouter = router({
   create: activeOrgOwnerProcedure
     .input(
       z.object({
-        nome: z.string().min(1),
-        cpf: z.string().min(11),
-        email: z.string().email().optional(),
-        telefone: z.string().optional(),
-        cnh: z.string().min(1),
-        cnhCategoria: z.string().min(1),
+        nome: texto(100, "Nome").min(1),
+        cpf: cpfSchema,
+        email: texto(100, "E-mail").email().optional(),
+        telefone: texto(20, "Telefone").optional(),
+        cnh: texto(20, "CNH").min(1),
+        cnhCategoria: texto(5, "Categoria da CNH").min(1),
         cnhVencimento: z.date(),
         vinculo: z.enum(["contratado", "freelancer"]).optional(),
         disponibilidade: z.boolean().optional(),
-        endereco: z.string().optional(),
-        observacoes: z.string().optional(),
+        endereco: texto(TEXTO_LONGO, "Endereço").optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
         // Login do motorista (usuário; senha inicial é a padrão).
         username: z.string().min(3).max(64),
       })
@@ -402,20 +409,20 @@ export const driversRouter = router({
     .input(
       z.object({
         id: z.number(),
-        nome: z.string().optional(),
-        cpf: z.string().optional(),
-        email: z.string().optional(),
-        telefone: z.string().optional(),
-        cnh: z.string().optional(),
-        cnhCategoria: z.string().optional(),
+        nome: texto(100, "Nome").optional(),
+        cpf: cpfSchema.optional(),
+        email: texto(100, "E-mail").optional(),
+        telefone: texto(20, "Telefone").optional(),
+        cnh: texto(20, "CNH").optional(),
+        cnhCategoria: texto(5, "Categoria da CNH").optional(),
         cnhVencimento: z.date().optional(),
         status: z
           .enum(["disponivel", "viagem", "descansando", "inativo"])
           .optional(),
         disponibilidade: z.boolean().optional(),
         vinculo: z.enum(["contratado", "freelancer"]).optional(),
-        endereco: z.string().optional(),
-        observacoes: z.string().optional(),
+        endereco: texto(TEXTO_LONGO, "Endereço").optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -505,21 +512,21 @@ export const tripsRouter = router({
   create: activeOrgProcedure
     .input(
       z.object({
-        numeroViagem: z.string().min(1),
+        numeroViagem: texto(20, "Número da viagem").min(1),
         motoristaId: z.number(),
         veiculoId: z.number(),
-        origem: z.string().min(1),
-        destino: z.string().min(1),
+        origem: texto(150, "Origem").min(1),
+        destino: texto(150, "Destino").min(1),
         paradas: paradasSchema.optional(),
         passageiros: passageirosSchema.optional(),
         dataPartida: z.date(),
         previsaoChegada: z.date().optional(),
-        distancia: z.string().optional(),
-        carga: z.string().optional(),
-        pesoTotal: z.string().optional(),
-        valor: z.string().optional(),
+        distancia: texto(20, "Distância").optional(),
+        carga: texto(TEXTO_LONGO, "Carga").optional(),
+        pesoTotal: texto(20, "Peso").optional(),
+        valor: texto(20, "Valor").optional(),
         pago: z.boolean().optional(),
-        observacoes: z.string().optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -551,11 +558,11 @@ export const tripsRouter = router({
     .input(
       z.object({
         id: z.number(),
-        numeroViagem: z.string().optional(),
+        numeroViagem: texto(20, "Número da viagem").optional(),
         motoristaId: z.number().optional(),
         veiculoId: z.number().optional(),
-        origem: z.string().optional(),
-        destino: z.string().optional(),
+        origem: texto(150, "Origem").optional(),
+        destino: texto(150, "Destino").optional(),
         paradas: paradasSchema.optional(),
         passageiros: passageirosSchema.optional(),
         dataPartida: z.date().optional(),
@@ -564,12 +571,12 @@ export const tripsRouter = router({
         status: z
           .enum(["planejada", "em_andamento", "concluida", "cancelada"])
           .optional(),
-        distancia: z.string().optional(),
-        carga: z.string().optional(),
-        pesoTotal: z.string().optional(),
-        valor: z.string().optional(),
+        distancia: texto(20, "Distância").optional(),
+        carga: texto(TEXTO_LONGO, "Carga").optional(),
+        pesoTotal: texto(20, "Peso").optional(),
+        valor: texto(20, "Valor").optional(),
         pago: z.boolean().optional(),
-        observacoes: z.string().optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -633,11 +640,11 @@ export const maintenanceRouter = router({
     .input(
       z.object({
         veiculoId: z.number(),
-        tipo: z.string().min(1),
-        descricao: z.string().min(1),
+        tipo: texto(50, "Tipo").min(1),
+        descricao: texto(TEXTO_LONGO, "Descrição").min(1),
         dataPrevista: z.date(),
-        custo: z.string().optional(),
-        observacoes: z.string().optional(),
+        custo: texto(20, "Custo").optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -657,13 +664,13 @@ export const maintenanceRouter = router({
     .input(
       z.object({
         id: z.number(),
-        tipo: z.string().optional(),
-        descricao: z.string().optional(),
+        tipo: texto(50, "Tipo").optional(),
+        descricao: texto(TEXTO_LONGO, "Descrição").optional(),
         dataPrevista: z.date().optional(),
         dataRealizada: z.date().optional(),
-        custo: z.string().optional(),
+        custo: texto(20, "Custo").optional(),
         status: z.enum(["pendente", "em_andamento", "concluida"]).optional(),
-        observacoes: z.string().optional(),
+        observacoes: texto(TEXTO_LONGO, "Observações").optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
