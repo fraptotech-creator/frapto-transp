@@ -39,7 +39,9 @@ export default function Landing() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-slate-950 text-slate-100 [scroll-behavior:smooth]">
+    // overflow-x-CLIP (não hidden): hidden vira contêiner de rolagem e o topo
+    // "sticky" rolava junto com a página em vez de ficar preso no alto.
+    <div className="relative min-h-screen overflow-x-clip bg-slate-950 text-slate-100 [scroll-behavior:smooth]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
         <div className="absolute right-0 top-40 h-80 w-80 rounded-full bg-purple-600/20 blur-3xl" />
