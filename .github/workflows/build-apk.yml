@@ -44,7 +44,12 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      # O padrão da action instala o pacote "tools", que o Google removeu do
+      # repositório do SDK (falha com "Failed to find package 'tools'"). O
+      # runner já tem o SDK; só garantimos o platform-tools.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Instala dependências
         working-directory: mobile
