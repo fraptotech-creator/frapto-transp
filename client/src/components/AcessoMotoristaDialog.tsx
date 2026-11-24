@@ -11,10 +11,12 @@ import { Copy, Check, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
+  alvoWhatsApp,
   linkAtivacao,
   linkWhatsApp,
   mensagemAtivacao,
 } from "@/lib/driverAccess";
+import { plataformaDoCelular } from "@/lib/instalarApp";
 
 /**
  * Mostra o ACESSO do motorista de forma PERSISTENTE — agora com link de
@@ -39,6 +41,7 @@ export default function AcessoMotoristaDialog({
   const [copiado, setCopiado] = useState(false);
   const link = linkAtivacao(window.location.origin, token);
   const mensagem = mensagemAtivacao({ usuario, link });
+  const noComputador = plataformaDoCelular(navigator.userAgent) === "outro";
 
   const copiar = async () => {
     try {
@@ -85,9 +88,8 @@ export default function AcessoMotoristaDialog({
         <DialogFooter className="gap-2 sm:justify-between">
           <Button asChild className="bg-emerald-600 hover:bg-emerald-700">
             <a
-              href={linkWhatsApp(telefone, mensagem)}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={linkWhatsApp(telefone, mensagem, noComputador)}
+              {...alvoWhatsApp(noComputador)}
             >
               <MessageCircle className="mr-2 h-4 w-4" />
               Enviar no WhatsApp

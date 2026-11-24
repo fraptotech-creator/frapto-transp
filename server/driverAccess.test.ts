@@ -5,6 +5,7 @@ import {
   mensagemAtivacao,
   linkWhatsApp,
   mensagemApp,
+  alvoWhatsApp,
 } from "../client/src/lib/driverAccess";
 
 describe("urlAppMotorista", () => {
@@ -102,5 +103,28 @@ describe("linkWhatsApp", () => {
 
   it("a mensagem vai codificada (& e espaço não quebram o link)", () => {
     expect(linkWhatsApp(null, m)).not.toContain("& bem");
+  });
+
+  // Pedido do dono (24/11/2026): no computador o wa.me abria o app de
+  // desktop do WhatsApp — agora vai direto para o WhatsApp Web.
+  it("no computador abre o WhatsApp Web na conversa do motorista", () => {
+    expect(linkWhatsApp("(27) 99867-1234", m, true)).toBe(
+      `https://web.whatsapp.com/send?phone=5527998671234&${texto}`
+    );
+    expect(linkWhatsApp(null, m, true)).toBe(
+      `https://web.whatsapp.com/send?${texto}`
+    );
+  });
+});
+
+describe("alvoWhatsApp", () => {
+  it("computador: aba com nome fixo (reaproveita o WhatsApp Web aberto)", () => {
+    expect(alvoWhatsApp(true)).toEqual({ target: "frapto-whatsapp" });
+  });
+  it("celular: _blank isolado", () => {
+    expect(alvoWhatsApp(false)).toEqual({
+      target: "_blank",
+      rel: "noopener noreferrer",
+    });
   });
 });
