@@ -19,6 +19,7 @@ import {
 } from "../../drizzle/schema";
 import { getDb } from "./client";
 import type { HistoricoVeiculo } from "../_core/veiculoExclusao";
+import { linhasAfetadas } from "../_core/exclusao";
 
 // Registra uma exportação de PII (metadados só — sem PII). Não bloqueia o fluxo
 // se o banco estiver indisponível (best-effort de trilha), mas loga o motivo.
@@ -119,10 +120,10 @@ export async function contarHistoricoVeiculo(
 export async function deleteVehicle(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db
+  const res = await db
     .delete(vehicles)
     .where(and(eq(vehicles.orgId, orgId), eq(vehicles.id, id)));
-  return { success: true };
+  return linhasAfetadas(res);
 }
 
 // ─── Motoristas ──────────────────────────────────────────────────────────────
@@ -176,10 +177,10 @@ export async function updateDriver(
 export async function deleteDriver(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db
+  const res = await db
     .delete(drivers)
     .where(and(eq(drivers.orgId, orgId), eq(drivers.id, id)));
-  return { success: true };
+  return linhasAfetadas(res);
 }
 
 // ─── Viagens ─────────────────────────────────────────────────────────────────
@@ -239,13 +240,15 @@ export async function deleteTrip(orgId: number, id: number) {
   // ficavam órfãos para sempre: crescimento ilimitado E retenção da localização
   // (PII) do motorista mesmo depois de a viagem sumir. Transação: ou os dois
   // somem juntos, ou nenhum (não há FK com ON DELETE CASCADE — isso vem no #16).
-  await db.transaction(async tx => {
+  return db.transaction(async tx => {
     await tx
       .delete(tripPositions)
       .where(and(eq(tripPositions.orgId, orgId), eq(tripPositions.tripId, id)));
-    await tx.delete(trips).where(and(eq(trips.orgId, orgId), eq(trips.id, id)));
+    const res = await tx
+      .delete(trips)
+      .where(and(eq(trips.orgId, orgId), eq(trips.id, id)));
+    return linhasAfetadas(res);
   });
-  return { success: true };
 }
 
 // Ao concluir uma viagem, soma a distância ao odômetro do veículo — UMA vez só
@@ -559,8 +562,8 @@ export async function updateMaintenance(
 export async function deleteMaintenance(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db
+  const res = await db
     .delete(maintenance)
     .where(and(eq(maintenance.orgId, orgId), eq(maintenance.id, id)));
-  return { success: true };
+  return linhasAfetadas(res);
 }

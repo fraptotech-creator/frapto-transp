@@ -84,7 +84,7 @@ beforeEach(() => {
   db.incrementSessionVersion.mockResolvedValue(undefined);
   db.revokeTrackingToken.mockResolvedValue(undefined);
   db.setResetToken.mockResolvedValue(undefined);
-  db.deleteDriver.mockResolvedValue(undefined);
+  db.deleteDriver.mockResolvedValue(1);
   db.deleteDriverUser.mockResolvedValue(undefined);
 });
 

@@ -83,7 +83,7 @@ describe("vehicles.delete", () => {
       subscriptionStatus: "active",
       accessOverride: null,
     }));
-    db.deleteVehicle.mockResolvedValue({ success: true });
+    db.deleteVehicle.mockResolvedValue(1);
   });
 
   it("veículo sem histórico é excluído, escopado pela org do contexto", async () => {

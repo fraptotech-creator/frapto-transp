@@ -6,6 +6,7 @@ import {
   InsertRevenue,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
+import { linhasAfetadas } from "../_core/exclusao";
 
 // ─── Despesas ────────────────────────────────────────────────────────────────
 
@@ -67,10 +68,10 @@ export async function updateExpense(
 export async function deleteExpense(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db
+  const res = await db
     .delete(expenses)
     .where(and(eq(expenses.orgId, orgId), eq(expenses.id, id)));
-  return { success: true };
+  return linhasAfetadas(res);
 }
 
 // ─── Receitas ────────────────────────────────────────────────────────────────
@@ -131,8 +132,8 @@ export async function updateRevenue(
 export async function deleteRevenue(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db
+  const res = await db
     .delete(revenues)
     .where(and(eq(revenues.orgId, orgId), eq(revenues.id, id)));
-  return { success: true };
+  return linhasAfetadas(res);
 }

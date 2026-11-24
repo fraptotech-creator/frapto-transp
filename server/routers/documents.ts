@@ -27,6 +27,7 @@ import { detectDocMime } from "../_core/fileType";
 import { toSafeLogError } from "../_core/safeLog";
 import { getUploadSlot } from "../_core/uploadSlot";
 import { assertRefsOwned } from "./_helpers";
+import { confirmarExclusao } from "../_core/exclusao";
 
 // Documentos (upload em R2), isolado por organização.
 export const documentsRouter = router({
@@ -187,6 +188,9 @@ export const documentsRouter = router({
           );
         }
       }
-      return deleteDocument(ctx.orgId, input.id);
+      return confirmarExclusao(
+        await deleteDocument(ctx.orgId, input.id),
+        "Documento não encontrado."
+      );
     }),
 });
