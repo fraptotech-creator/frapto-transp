@@ -1,91 +1,74 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
-import BackgroundGeolocation from "@transistorsoft/capacitor-background-geolocation";
+import { BackgroundGeolocation } from "@capgo/background-geolocation";
 import { FraptoDeviceAdmin } from "frapto-device-admin";
+import {
+  BASE,
+  agoraParaInput,
+  chegadaParaIso,
+  configRastreio,
+  formatarDataHora,
+  mensagemDeErro,
+  rastreioDeveEstarAtivo,
+  wazeUrl,
+} from "./logica.js";
 
-// Servidor de produção do Frapto Transp.
-// Domínio PRÓPRIO, não o *.up.railway.app: assim o app não quebra se o
-// subdomínio interno do Railway mudar. O APK carrega esta URL compilada, então
-// trocar aqui exige gerar um novo APK e reinstalar nos aparelhos.
-const BASE = "https://www.fraptotransp.com.br";
+// App do MOTORISTA (APK): telas próprias + GPS em segundo plano. Conversa só
+// com a API /api/track/* do servidor, autenticado pelo token de rastreio
+// (Authorization: Bearer). As regras (só as viagens dele, sem valores,
+// estados válidos) são do servidor — aqui é só tela.
+
 const TOKEN_KEY = "frapto_track_token";
 const NAME_KEY = "frapto_track_name";
 const CONSENT_KEY = "frapto_track_consent";
 
 const $ = id => document.getElementById(id);
+// Falha não-fatal (ex.: parar um GPS que já estava parado): registra no log do
+// app (Logcat) com contexto, sem derrubar a tela. Nunca engole calado.
+const avisar = e => console.warn("[frapto-motorista]", e?.message ?? e);
 const isNative = Capacitor.isNativePlatform();
 
 // ─── Telas ────────────────────────────────────────────────────────────────
-function hideAll() {
-  $("loginView").classList.add("hidden");
-  $("consentView").classList.add("hidden");
-  $("trackView").classList.add("hidden");
-}
-function showLogin() {
-  hideAll();
-  $("loginView").classList.remove("hidden");
-}
-function showConsent() {
-  hideAll();
-  $("consentView").classList.remove("hidden");
-}
-function showTrack() {
-  hideAll();
-  $("trackView").classList.remove("hidden");
-  $("driverName").textContent = localStorage.getItem(NAME_KEY) || "";
+const VIEWS = ["loginView", "consentView", "homeView"];
+function mostrar(view) {
+  for (const v of VIEWS) $(v).classList.toggle("hidden", v !== view);
 }
 
-// Após logar (ou sessão salva): só vai pro rastreio se já aceitou o termo.
-function proceedAfterLogin() {
+// ─── HTTP (nativo, sem CORS) ───────────────────────────────────────────────
+async function api(method, path, body) {
   const token = localStorage.getItem(TOKEN_KEY);
-  if (localStorage.getItem(CONSENT_KEY) !== "1") {
-    showConsent();
-    return;
-  }
-  showTrack();
-  if (token) configureTracking(token);
-}
-
-function setStatus(on, text) {
-  $("statusDot").classList.toggle("on", on);
-  $("statusText").textContent = text;
-  $("startBtn").classList.toggle("hidden", on);
-  $("stopBtn").classList.toggle("hidden", !on);
-}
-
-// POST em JSON. No app nativo usa CapacitorHttp (rede nativa, sem CORS); no
-// navegador (dev) usa fetch. Retorna { ok, status, data }.
-async function apiPost(path, body) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const url = `${BASE}${path}`;
+  let status;
+  let data;
   if (isNative) {
-    const res = await CapacitorHttp.post({
-      url,
-      headers: { "Content-Type": "application/json" },
-      data: body,
-    });
-    let data = res.data;
+    const r = await CapacitorHttp.request({ method, url, headers, data: body });
+    status = r.status;
+    data = r.data;
     if (typeof data === "string") {
       try {
         data = JSON.parse(data);
       } catch {
-        /* deixa como string */
+        data = { error: data };
       }
     }
-    return {
-      ok: res.status >= 200 && res.status < 300,
-      status: res.status,
-      data,
-    };
+  } else {
+    const r = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    status = r.status;
+    data = await r.json().catch(() => ({}));
   }
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+  if (status === 401 && path !== "/api/track/login") {
+    sair(false);
+  }
+  return { ok: status >= 200 && status < 300, status, data: data ?? {} };
 }
 
-// ─── Login (REST, sem tRPC) ─────────────────────────────────────────────────
-async function doLogin() {
+// ─── Login ─────────────────────────────────────────────────────────────────
+async function entrar() {
   const username = $("username").value.trim();
   const password = $("password").value;
   $("loginErr").textContent = "";
@@ -96,183 +79,262 @@ async function doLogin() {
   $("loginBtn").disabled = true;
   $("loginBtn").textContent = "Entrando...";
   try {
-    const r = await apiPost("/api/track/login", { username, password });
-    const data = r.data || {};
-    if (!r.ok || !data.token) {
-      $("loginErr").textContent =
-        data.error || `Falha ao entrar (HTTP ${r.status}).`;
+    const r = await api("POST", "/api/track/login", { username, password });
+    if (!r.ok || !r.data.token) {
+      $("loginErr").textContent = mensagemDeErro(r.status, r.data.error);
       return;
     }
-    localStorage.setItem(TOKEN_KEY, data.token);
-    localStorage.setItem(NAME_KEY, data.nome || "");
-    proceedAfterLogin();
+    localStorage.setItem(TOKEN_KEY, r.data.token);
+    localStorage.setItem(NAME_KEY, r.data.nome || "");
+    $("password").value = "";
+    seguir();
   } catch (e) {
-    // Mostra o erro REAL pra diagnóstico (rede/CORS/URL/TLS).
-    const msg = e && e.message ? e.message : String(e);
-    $("loginErr").textContent = `Erro: ${msg}`;
+    $("loginErr").textContent =
+      `Sem conexão com o servidor. ${e?.message ?? ""}`;
   } finally {
     $("loginBtn").disabled = false;
     $("loginBtn").textContent = "Entrar";
   }
 }
 
-// ─── Rastreio em segundo plano (nativo) ─────────────────────────────────────
-let configured = false;
+function seguir() {
+  if (!localStorage.getItem(TOKEN_KEY)) return mostrar("loginView");
+  if (localStorage.getItem(CONSENT_KEY) !== "1") return mostrar("consentView");
+  mostrar("homeView");
+  $("driverName").textContent = localStorage.getItem(NAME_KEY) || "";
+  carregarViagens();
+  conferirProtecao();
+}
 
-async function configureTracking(token) {
+async function sair(revogar = true) {
+  await pararRastreio();
+  if (revogar && localStorage.getItem(TOKEN_KEY)) {
+    // Revoga no servidor: aparelho perdido deixa de valer na hora.
+    await api("POST", "/api/track/revoke", {}).catch(avisar);
+  }
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(NAME_KEY);
+  mostrar("loginView");
+}
+
+// ─── Viagens ───────────────────────────────────────────────────────────────
+async function carregarViagens() {
+  $("tripsErr").textContent = "";
+  $("tripsMsg").textContent = "Carregando suas viagens...";
+  try {
+    const r = await api("GET", "/api/track/viagens");
+    if (!r.ok) {
+      $("tripsMsg").textContent = "";
+      $("tripsErr").textContent = mensagemDeErro(r.status, r.data.error);
+      return;
+    }
+    const viagens = r.data.viagens ?? [];
+    desenharViagens(viagens);
+    await sincronizarRastreio(viagens);
+  } catch (e) {
+    $("tripsMsg").textContent = "";
+    $("tripsErr").textContent =
+      `Sem conexão. Toque em Atualizar. ${e?.message ?? ""}`;
+  }
+}
+
+function el(tag, classe, texto) {
+  const n = document.createElement(tag);
+  if (classe) n.className = classe;
+  if (texto != null) n.textContent = texto; // textContent: nunca HTML (XSS)
+  return n;
+}
+
+function botao(texto, classe, onClick) {
+  const b = el("button", classe, texto);
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function desenharViagens(viagens) {
+  const lista = $("tripsList");
+  lista.replaceChildren();
+  $("tripsMsg").textContent =
+    viagens.length === 0 ? "Nenhuma viagem para você agora." : "";
+  for (const v of viagens) lista.appendChild(cartaoViagem(v));
+}
+
+function cartaoViagem(v) {
+  const card = el("div", "card trip");
+  const topo = el("div", "row");
+  topo.appendChild(el("strong", "", v.numeroViagem || `Viagem ${v.id}`));
+  topo.appendChild(
+    el(
+      "span",
+      v.status === "em_andamento" ? "pill on" : "pill",
+      v.status === "em_andamento" ? "Em andamento" : "Planejada"
+    )
+  );
+  card.appendChild(topo);
+  card.appendChild(el("p", "rota", `${v.origem} → ${v.destino}`));
+  card.appendChild(
+    el("p", "muted", `Partida: ${formatarDataHora(v.dataPartida)}`)
+  );
+  if (v.carga) card.appendChild(el("p", "muted", `Carga: ${v.carga}`));
+  if (Array.isArray(v.passageiros) && v.passageiros.length > 0) {
+    card.appendChild(el("p", "muted", `Passageiros: ${v.passageiros.length}`));
+  }
+
+  const nav = el("div", "row gap");
+  nav.appendChild(
+    botao("Waze: origem", "sec", () => abrirExterno(wazeUrl(v.origem)))
+  );
+  nav.appendChild(
+    botao("Waze: destino", "sec", () => abrirExterno(wazeUrl(v.destino)))
+  );
+  card.appendChild(nav);
+
+  if (v.status === "planejada") {
+    card.appendChild(botao("Iniciar viagem", "", e => iniciar(v.id, e)));
+  }
+  if (v.status === "em_andamento") {
+    card.appendChild(el("label", "", "Data e hora de chegada no cliente"));
+    const chegada = el("input");
+    chegada.type = "datetime-local";
+    chegada.value = agoraParaInput();
+    card.appendChild(chegada);
+    card.appendChild(
+      botao("Concluir viagem", "", e => concluir(v.id, chegada.value, e))
+    );
+  }
+  return card;
+}
+
+function abrirExterno(url) {
+  // Endereço externo: o Capacitor não abre dentro do app — entrega ao Android,
+  // que abre o Waze (ou o navegador, se o Waze não estiver instalado).
+  window.location.href = url;
+}
+
+async function iniciar(id, ev) {
+  const b = ev.currentTarget;
+  b.disabled = true;
+  b.textContent = "Iniciando...";
+  try {
+    const r = await api("POST", `/api/track/viagens/${id}/iniciar`, {});
+    if (!r.ok) {
+      $("tripsErr").textContent = mensagemDeErro(r.status, r.data.error);
+    }
+  } finally {
+    await carregarViagens();
+  }
+}
+
+async function concluir(id, valorChegada, ev) {
+  const dataChegada = chegadaParaIso(valorChegada);
+  if (!dataChegada) {
+    $("tripsErr").textContent = "Informe a data e a hora de chegada.";
+    return;
+  }
+  const b = ev.currentTarget;
+  b.disabled = true;
+  b.textContent = "Concluindo...";
+  try {
+    const r = await api("POST", `/api/track/viagens/${id}/concluir`, {
+      dataChegada,
+    });
+    if (!r.ok) {
+      $("tripsErr").textContent = mensagemDeErro(r.status, r.data.error);
+    }
+  } finally {
+    await carregarViagens();
+  }
+}
+
+// ─── GPS em segundo plano (plugin gratuito @capgo/background-geolocation) ──
+async function sincronizarRastreio(viagens) {
+  if (rastreioDeveEstarAtivo(viagens)) await ligarRastreio();
+  else await pararRastreio();
+}
+
+async function ligarRastreio() {
   if (!isNative) {
-    setStatus(false, "Só funciona no app instalado (Android).");
-    $("startBtn").disabled = true;
+    status(false, "O GPS em segundo plano só funciona no app instalado.");
     return;
   }
-  if (configured) {
-    await BackgroundGeolocation.setConfig({ params: { token } });
-    return;
-  }
-  const state = await BackgroundGeolocation.ready({
-    desiredAccuracy: BackgroundGeolocation.DESIRED_ACCURACY_HIGH,
-    distanceFilter: 50, // metros entre pontos (menos requisições)
-    stopOnTerminate: false, // continua se o app for fechado
-    startOnBoot: true, // volta após reiniciar o celular
-    foregroundService: true,
-    // Envia a posição direto ao servidor (nativo), mesmo com o app fechado.
-    url: `${BASE}/api/track`,
-    // Agrupa várias posições num POST só (bem menos requisições). O servidor
-    // lê o campo "location" (objeto único ou array).
-    httpRootProperty: "location",
-    locationTemplate:
-      '{"lat":<%= latitude %>,"lng":<%= longitude %>,"speed":<%= speed %>}',
-    params: { token },
-    autoSync: true,
-    batchSync: true,
-    autoSyncThreshold: 5,
-    maxBatchSize: 50,
-    notification: {
-      title: "Frapto Transp",
-      text: "Rastreamento ativo",
-    },
-    debug: false,
-    logLevel: BackgroundGeolocation.LOG_LEVEL_ERROR,
-  });
-  configured = true;
-
-  BackgroundGeolocation.onLocation(loc => {
-    const t = new Date().toLocaleTimeString("pt-BR");
-    $("lastPing").textContent = `Última posição enviada: ${t}`;
-  });
-  BackgroundGeolocation.onEnabledChange(enabled => {
-    setStatus(enabled, enabled ? "Rastreando" : "Parado");
-  });
-
-  setStatus(state.enabled, state.enabled ? "Rastreando" : "Parado");
-  checkBattery();
-  checkAdmin();
-}
-
-// Otimização de bateria: se o Android estiver otimizando o app, o serviço pode
-// ser morto. Mostra o aviso/botão só quando NÃO está isento.
-async function checkBattery() {
-  if (!isNative) return;
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return;
   try {
-    const ok =
-      await BackgroundGeolocation.deviceSettings.isIgnoringBatteryOptimizations();
-    $("batteryCard").classList.toggle("hidden", ok);
-  } catch {
-    /* API pode não existir no aparelho — ignora */
+    // Reinicia limpo: o serviço pode ter sobrevivido a um fechamento do app.
+    await BackgroundGeolocation.stop().catch(avisar);
+    await BackgroundGeolocation.start(configRastreio(token), (loc, err) => {
+      if (err) {
+        if (err.code === "NOT_AUTHORIZED") {
+          status(false, "Permita a localização para o rastreio funcionar.");
+          $("permBtn").classList.remove("hidden");
+        }
+        return;
+      }
+      if (loc) {
+        const hora = new Date().toLocaleTimeString("pt-BR");
+        $("lastPing").textContent = `Última posição: ${hora}`;
+      }
+    });
+    $("permBtn").classList.add("hidden");
+    status(true, "Rastreando a viagem");
+  } catch (e) {
+    status(false, `Não foi possível ligar o GPS. ${e?.message ?? ""}`);
   }
 }
 
-async function fixBattery() {
-  try {
-    const req =
-      await BackgroundGeolocation.deviceSettings.showIgnoreBatteryOptimizations();
-    await BackgroundGeolocation.deviceSettings.show(req);
-    setTimeout(checkBattery, 1500);
-  } catch {
-    /* usuário pode ter cancelado */
-  }
+async function pararRastreio() {
+  if (isNative) await BackgroundGeolocation.stop().catch(avisar);
+  status(false, "GPS desligado (sem viagem em andamento)");
 }
 
-// Proteção contra desinstalação (Device Admin). Mostra o botão de ativar ou o
-// aviso de "ativa + liberar", conforme o estado atual.
-async function checkAdmin() {
+function status(on, texto) {
+  $("statusDot").classList.toggle("on", on);
+  $("statusText").textContent = texto;
+}
+
+// ─── Proteção contra desinstalação (Device Admin, plugin próprio) ──────────
+async function conferirProtecao() {
   if (!isNative) return;
   try {
     const { active } = await FraptoDeviceAdmin.isAdminActive();
     $("adminBtn").classList.toggle("hidden", active);
     $("adminActive").classList.toggle("hidden", !active);
-  } catch {
-    /* plugin indisponível — ignora */
-  }
-}
-
-async function activateAdmin() {
-  try {
-    await FraptoDeviceAdmin.requestAdmin();
-    // O usuário volta da tela do sistema; reconfere ao focar de novo.
-    setTimeout(checkAdmin, 1000);
-  } catch {
-    /* ignora */
-  }
-}
-
-async function removeAdminProtection() {
-  try {
-    await FraptoDeviceAdmin.removeAdmin();
-    checkAdmin();
-  } catch {
-    /* ignora */
-  }
-}
-
-async function startTracking() {
-  $("trackErr").textContent = "";
-  try {
-    await BackgroundGeolocation.start();
-    setStatus(true, "Rastreando");
   } catch (e) {
-    $("trackErr").textContent = "Não foi possível iniciar o rastreio.";
+    // Plugin indisponível no aparelho: a tela segue sem o botão.
+    avisar(e);
   }
 }
 
-async function stopTracking() {
-  try {
-    await BackgroundGeolocation.stop();
-    setStatus(false, "Parado");
-  } catch (e) {
-    /* ignora */
-  }
-}
-
-function logout() {
-  stopTracking();
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(NAME_KEY);
-  $("username").value = "";
-  $("password").value = "";
-  showLogin();
-}
-
-// ─── Ligações ───────────────────────────────────────────────────────────────
-$("loginBtn").addEventListener("click", doLogin);
+// ─── Ligações ──────────────────────────────────────────────────────────────
+$("loginBtn").addEventListener("click", entrar);
 $("password").addEventListener("keydown", e => {
-  if (e.key === "Enter") doLogin();
+  if (e.key === "Enter") entrar();
 });
-$("startBtn").addEventListener("click", startTracking);
-$("stopBtn").addEventListener("click", stopTracking);
-$("logoutBtn").addEventListener("click", logout);
-$("batteryBtn").addEventListener("click", fixBattery);
-$("adminBtn").addEventListener("click", activateAdmin);
-$("adminRemove").addEventListener("click", removeAdminProtection);
 $("consentBtn").addEventListener("click", () => {
   localStorage.setItem(CONSENT_KEY, "1");
-  proceedAfterLogin();
+  seguir();
 });
-$("consentLogout").addEventListener("click", logout);
+$("consentLogout").addEventListener("click", () => sair());
+$("logoutBtn").addEventListener("click", () => sair());
+$("refreshBtn").addEventListener("click", carregarViagens);
+$("permBtn").addEventListener("click", () =>
+  BackgroundGeolocation.openSettings().catch(avisar)
+);
+$("settingsBtn").addEventListener("click", () =>
+  BackgroundGeolocation.openSettings().catch(avisar)
+);
+$("adminBtn").addEventListener("click", async () => {
+  await FraptoDeviceAdmin.requestAdmin().catch(avisar);
+  setTimeout(conferirProtecao, 1000);
+});
+$("adminRemove").addEventListener("click", async () => {
+  await FraptoDeviceAdmin.removeAdmin().catch(avisar);
+  conferirProtecao();
+});
+// Voltou para o app (ex.: depois do Waze): atualiza viagens e o GPS.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && localStorage.getItem(TOKEN_KEY))
+    carregarViagens();
+});
 
-// Sessão salva → decide entre termo e rastreio.
-if (localStorage.getItem(TOKEN_KEY)) {
-  proceedAfterLogin();
-} else {
-  showLogin();
-}
+seguir();

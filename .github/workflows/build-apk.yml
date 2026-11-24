@@ -1,16 +1,33 @@
-name: Build APK — Rastreio (motorista)
+name: Build APK — App do motorista
 
-# Build do app nativo de rastreio na NUVEM (sem Android Studio local).
-# Rode manualmente em: aba Actions → "Build APK — Rastreio" → Run workflow.
-# Ao terminar, baixe o APK em "Artifacts" e instale no celular do motorista.
+# Gera o APK do APP DO MOTORISTA (viagens + GPS em segundo plano) na NUVEM e o
+# publica como Release do repositório. O site oferece o download em
+# /baixar/app-motorista.apk, que redireciona para a Release mais recente.
+# Roda sozinho quando algo em mobile/ muda na main, ou manualmente em Actions.
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/build-apk.yml"
 
-# Menor privilégio: o build só lê o repo (o artefato sobe via upload-artifact,
-# que não requer contents:write).
+# contents:write só para criar a Release com o APK.
 permissions:
-  contents: read
+  contents: write
+
+# Uma publicação por vez (duas Releases "latest" disputando = link instável).
+concurrency:
+  group: build-apk
+  cancel-in-progress: false
+
+env:
+  # Impressão digital (pública) do certificado de assinatura. Se a chave dos
+  # segredos não for ESTA, o build FALHA em vez de publicar um APK que não
+  # atualiza por cima do app já instalado nos celulares (fail-closed).
+  CERT_SHA256: 1e2425aa223ecce862a8551575cf4dc652b82e15b266511ae9d6c5d1371e847f
+  APK_NAME: frapto-motorista.apk
 
 jobs:
   build:
@@ -31,7 +48,7 @@ jobs:
 
       - name: Instala dependências
         working-directory: mobile
-        run: npm install
+        run: npm install --no-audit --no-fund
 
       - name: Build da web (vite → dist)
         working-directory: mobile
@@ -45,14 +62,19 @@ jobs:
         working-directory: mobile
         run: |
           M=android/app/src/main/AndroidManifest.xml
-          # allowBackup=false: o data-dir (localStorage com o token de rastreio)
-          # não entra no backup do Android → token não sai por `adb backup`.
+          # allowBackup=false: o token de rastreio (localStorage) não sai por backup.
           sed -i 's/android:allowBackup="true"/android:allowBackup="false"/' "$M"
-          # usesCleartextTraffic=false: garante que nenhuma requisição caia em
-          # HTTP puro (o BASE já é https). Idempotente.
           grep -q 'usesCleartextTraffic' "$M" || \
             sed -i 's#android:allowBackup="false"#android:allowBackup="false"\n        android:usesCleartextTraffic="false"#' "$M"
           echo "--- manifesto endurecido ---"; grep -nE 'allowBackup|usesCleartextTraffic' "$M"
+
+      - name: Versão do app (cresce a cada build → atualiza por cima)
+        working-directory: mobile
+        run: |
+          G=android/app/build.gradle
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/" "$G"
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"1.0.${{ github.run_number }}\"/" "$G"
+          grep -nE 'versionCode|versionName' "$G"
 
       - name: Gera ícones do app (caminhão)
         working-directory: mobile
@@ -62,13 +84,47 @@ jobs:
         working-directory: mobile
         run: npx cap sync android
 
-      - name: Compila o APK (debug)
+      - name: Compila o APK (release)
         working-directory: mobile/android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Publica o APK
+      - name: Assina com a chave fixa e confere a assinatura
+        working-directory: mobile/android
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$KS_B64" || { echo "::error::segredo ANDROID_KEYSTORE_B64 ausente"; exit 1; }
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.p12"
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          IN=app/build/outputs/apk/release/app-release-unsigned.apk
+          "$BT/zipalign" -p -f 4 "$IN" "$RUNNER_TEMP/alinhado.apk"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.p12" --ks-type PKCS12 \
+            --ks-key-alias "$KS_ALIAS" --ks-pass env:KS_PASS --key-pass env:KS_PASS \
+            --out "$GITHUB_WORKSPACE/$APK_NAME" "$RUNNER_TEMP/alinhado.apk"
+          rm -f "$RUNNER_TEMP/release.p12"
+          "$BT/apksigner" verify --print-certs "$GITHUB_WORKSPACE/$APK_NAME" | tee "$RUNNER_TEMP/certs.txt"
+          REAL=$(grep -m1 'SHA-256 digest' "$RUNNER_TEMP/certs.txt" | awk '{print $NF}')
+          if [ "$REAL" != "$CERT_SHA256" ]; then
+            echo "::error::assinatura inesperada ($REAL) — não publico"; exit 1
+          fi
+          echo "assinatura conferida: $REAL"
+
+      - name: Guarda o APK no run (cópia de segurança)
         uses: actions/upload-artifact@v4
         with:
-          name: frapto-rastreio-apk
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          name: frapto-motorista-apk
+          path: ${{ env.APK_NAME }}
           if-no-files-found: error
+
+      - name: Publica a Release (o site aponta para a mais recente)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="app-motorista-v1.0.${{ github.run_number }}"
+          gh release create "$TAG" "$APK_NAME" \
+            --title "App do motorista 1.0.${{ github.run_number }}" \
+            --notes "APK do app do motorista (viagens + GPS em segundo plano). Commit ${GITHUB_SHA::7}. Download para o motorista: https://www.fraptotransp.com.br/baixar/app-motorista.apk" \
+            --latest
