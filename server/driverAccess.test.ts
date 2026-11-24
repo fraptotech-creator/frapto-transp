@@ -3,6 +3,8 @@ import {
   urlAppMotorista,
   linkAtivacao,
   mensagemAtivacao,
+  linkWhatsApp,
+  mensagemApp,
 } from "../client/src/lib/driverAccess";
 
 describe("urlAppMotorista", () => {
@@ -54,5 +56,51 @@ describe("mensagemAtivacao", () => {
     expect(msg.toLowerCase()).not.toContain("senha inicial");
     expect(msg.toLowerCase()).toContain("crie sua senha");
     expect(msg.toLowerCase()).toContain("uso único");
+  });
+
+  it("explica que depois é só instalar o app (um link só)", () => {
+    expect(msg).toContain("Instalar o app");
+    expect(msg.match(/https?:\/\//g)).toHaveLength(1);
+  });
+});
+
+describe("mensagemApp (motorista que já tem senha)", () => {
+  it("leva o link do app e o passo de instalar", () => {
+    const msg = mensagemApp("https://x.com/motorista");
+    expect(msg).toContain("https://x.com/motorista");
+    expect(msg).toContain("Instalar o app");
+    expect(msg.toLowerCase()).not.toContain("senha:");
+  });
+});
+
+describe("linkWhatsApp", () => {
+  const m = "Olá & bem-vindo";
+  const texto = `text=${encodeURIComponent(m)}`;
+
+  it("celular com DDD (11 dígitos, com máscara) ganha o 55", () => {
+    expect(linkWhatsApp("(27) 99867-1234", m)).toBe(
+      `https://wa.me/5527998671234?${texto}`
+    );
+  });
+
+  it("fixo com DDD (10 dígitos) também", () => {
+    expect(linkWhatsApp("2733334444", m)).toBe(
+      `https://wa.me/552733334444?${texto}`
+    );
+  });
+
+  it("número que já vem com 55 não duplica", () => {
+    expect(linkWhatsApp("+55 27 99867-1234", m)).toBe(
+      `https://wa.me/5527998671234?${texto}`
+    );
+  });
+
+  it("sem telefone ou inválido → WhatsApp sem número (gestor escolhe)", () => {
+    expect(linkWhatsApp(null, m)).toBe(`https://wa.me/?${texto}`);
+    expect(linkWhatsApp("123", m)).toBe(`https://wa.me/?${texto}`);
+  });
+
+  it("a mensagem vai codificada (& e espaço não quebram o link)", () => {
+    expect(linkWhatsApp(null, m)).not.toContain("& bem");
   });
 });
