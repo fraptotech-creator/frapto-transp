@@ -37,7 +37,13 @@ import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
 import { formatCpf, formatPhone } from "@/lib/format";
 import { Trash2, Edit, MessageCircle } from "lucide-react";
-import { linkWhatsApp, mensagemApp, urlAppMotorista } from "@/lib/driverAccess";
+import {
+  alvoWhatsApp,
+  linkWhatsApp,
+  mensagemApp,
+  urlAppMotorista,
+} from "@/lib/driverAccess";
+import { plataformaDoCelular } from "@/lib/instalarApp";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,6 +86,7 @@ const DriverAccessSection: React.FC<{
   telefone?: string | null;
 }> = ({ driverId, telefone }) => {
   const { data: info, refetch } = trpc.drivers.loginInfo.useQuery({ driverId });
+  const noComputador = plataformaDoCelular(navigator.userAgent) === "outro";
   const [username, setUsername] = React.useState("");
   // Link de ativação recém-gerado: vai para um aviso persistente, não para um
   // toast que some antes do gestor conseguir repassar. Nunca há senha aqui.
@@ -171,10 +178,10 @@ const DriverAccessSection: React.FC<{
             <a
               href={linkWhatsApp(
                 telefone,
-                mensagemApp(urlAppMotorista(window.location.origin))
+                mensagemApp(urlAppMotorista(window.location.origin)),
+                noComputador
               )}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...alvoWhatsApp(noComputador)}
             >
               <MessageCircle className="mr-1.5 h-4 w-4" />
               Enviar app no WhatsApp

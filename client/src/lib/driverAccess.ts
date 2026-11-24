@@ -41,13 +41,17 @@ export function mensagemApp(url: string): string {
   ].join("\n");
 }
 
-// Link do WhatsApp (wa.me) com a mensagem pronta. Com o telefone do motorista,
-// abre a conversa DELE direto; sem telefone (ou inválido), abre o WhatsApp para
-// o gestor escolher o contato. Telefone brasileiro: DDD + número (10 ou 11
+// Link do WhatsApp com a mensagem pronta. Com o telefone do motorista, abre a
+// conversa DELE direto; sem telefone (ou inválido), abre o WhatsApp para o
+// gestor escolher o contato. Telefone brasileiro: DDD + número (10 ou 11
 // dígitos) ganha o 55; quem já vem com 55 fica como está.
+// No COMPUTADOR vai direto para o WhatsApp Web: o wa.me deixava o sistema
+// decidir e abria o app de desktop (pedido do dono, 24/11/2026). No celular
+// segue o wa.me, que abre o app do WhatsApp.
 export function linkWhatsApp(
   telefone: string | null | undefined,
-  mensagem: string
+  mensagem: string,
+  noComputador = false
 ): string {
   const texto = `text=${encodeURIComponent(mensagem)}`;
   const d = (telefone ?? "").replace(/\D/g, "");
@@ -55,7 +59,25 @@ export function linkWhatsApp(
   if (d.length === 10 || d.length === 11) numero = `55${d}`;
   else if ((d.length === 12 || d.length === 13) && d.startsWith("55"))
     numero = d;
+  if (noComputador) {
+    return numero
+      ? `https://web.whatsapp.com/send?phone=${numero}&${texto}`
+      : `https://web.whatsapp.com/send?${texto}`;
+  }
   return numero
     ? `https://wa.me/${numero}?${texto}`
     : `https://wa.me/?${texto}`;
+}
+
+// Atributos do <a> do WhatsApp. No computador: aba com NOME fixo, para o 2º
+// envio reaproveitar o WhatsApp Web já aberto (ele só funciona numa aba por vez
+// e demora a carregar) — sem noopener, que faria abrir aba nova toda vez; o
+// destino é sempre o domínio oficial do WhatsApp. No celular: _blank isolado.
+export function alvoWhatsApp(noComputador: boolean): {
+  target: string;
+  rel?: string;
+} {
+  return noComputador
+    ? { target: "frapto-whatsapp" }
+    : { target: "_blank", rel: "noopener noreferrer" };
 }
