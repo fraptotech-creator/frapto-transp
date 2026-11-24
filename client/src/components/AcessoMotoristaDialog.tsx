@@ -85,7 +85,10 @@ export default function AcessoMotoristaDialog({
           </p>
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
+        {/* sm:flex-wrap: os 3 botões lado a lado passam de sm:max-w-lg; sem
+            quebra, o rodapé alargava a coluna do grid do DialogContent e todo o
+            conteúdo (texto, link, "Já anotei") vazava pela direita. */}
+        <DialogFooter className="gap-2 sm:flex-wrap sm:justify-end">
           <Button asChild className="bg-emerald-600 hover:bg-emerald-700">
             <a
               href={linkWhatsApp(telefone, mensagem, noComputador)}
