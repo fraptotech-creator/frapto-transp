@@ -456,7 +456,7 @@ export const VehicleDialog: React.FC<{ vehicle?: any }> = ({ vehicle }) => {
           <Button>Cadastrar Novo Veículo</Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px]" confirmarDescarte>
         <DialogHeader>
           <DialogTitle>
             {isEdit ? "Editar Veículo" : "Cadastrar Novo Veículo"}

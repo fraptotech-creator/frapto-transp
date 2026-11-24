@@ -824,7 +824,10 @@ export const TripDialog: React.FC<{ trip?: any }> = ({ trip }) => {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto"
+        confirmarDescarte
+      >
         <DialogHeader>
           <DialogTitle>
             {isEdit ? "Editar Viagem" : "Cadastrar Nova Viagem"}

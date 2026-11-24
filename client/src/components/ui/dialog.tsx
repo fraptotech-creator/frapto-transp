@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { PERGUNTA_DESCARTE, precisaConfirmarDescarte } from "@/lib/descarte";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { XIcon } from "lucide-react";
 import * as React from "react";
@@ -93,12 +94,31 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  confirmarDescarte = false,
   onEscapeKeyDown,
+  onInteractOutside,
+  onOpenAutoFocus,
+  onInputCapture,
+  onChangeCapture,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  // Formulário: Esc / clique fora PERGUNTAM antes de descartar o que já foi
+  // preenchido (ver lib/descarte.ts). X e "Cancelar" seguem fechando direto.
+  confirmarDescarte?: boolean;
 }) {
   const { isComposing } = useDialogComposition();
+  // O usuário mexeu em algum campo desde que a janela abriu? (zera a cada
+  // abertura — o DialogContent continua montado entre aberturas.)
+  const alteradoRef = React.useRef(false);
+
+  // true = pode fechar; false = o usuário quis continuar preenchendo.
+  const podeFechar = React.useCallback(
+    () =>
+      !precisaConfirmarDescarte(confirmarDescarte, alteradoRef.current) ||
+      window.confirm(PERGUNTA_DESCARTE),
+    [confirmarDescarte]
+  );
 
   const handleEscapeKeyDown = React.useCallback(
     (e: KeyboardEvent) => {
@@ -112,10 +132,34 @@ function DialogContent({
         return;
       }
 
+      if (!podeFechar()) {
+        e.preventDefault();
+        return;
+      }
+
       // Call user's onEscapeKeyDown if provided
       onEscapeKeyDown?.(e);
     },
-    [isComposing, onEscapeKeyDown]
+    [isComposing, onEscapeKeyDown, podeFechar]
+  );
+
+  const handleInteractOutside = React.useCallback(
+    (
+      e: Parameters<
+        NonNullable<
+          React.ComponentProps<
+            typeof DialogPrimitive.Content
+          >["onInteractOutside"]
+        >
+      >[0]
+    ) => {
+      if (!podeFechar()) {
+        e.preventDefault();
+        return;
+      }
+      onInteractOutside?.(e);
+    },
+    [onInteractOutside, podeFechar]
   );
 
   return (
@@ -135,6 +179,19 @@ function DialogContent({
           className
         )}
         onEscapeKeyDown={handleEscapeKeyDown}
+        onInteractOutside={handleInteractOutside}
+        onOpenAutoFocus={e => {
+          alteradoRef.current = false;
+          onOpenAutoFocus?.(e);
+        }}
+        onInputCapture={e => {
+          alteradoRef.current = true;
+          onInputCapture?.(e);
+        }}
+        onChangeCapture={e => {
+          alteradoRef.current = true;
+          onChangeCapture?.(e);
+        }}
         {...props}
       >
         {children}

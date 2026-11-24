@@ -274,7 +274,10 @@ export default function Maintenance() {
               Nova
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent
+            className="max-h-[90vh] overflow-y-auto"
+            confirmarDescarte
+          >
             <DialogHeader>
               <DialogTitle>Nova Manutenção</DialogTitle>
               <DialogDescription>
@@ -585,7 +588,7 @@ export default function Maintenance() {
 
       {/* Dialog para atualizar status */}
       <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-        <DialogContent>
+        <DialogContent confirmarDescarte>
           <DialogHeader>
             <DialogTitle>Atualizar Status da Manutenção</DialogTitle>
             <DialogDescription>
