@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Truck } from "lucide-react";
+import { ArrowRight, Check, LifeBuoy, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DESTAQUES, DORES, FATOS, PRECO_TEXTO } from "./conteudo";
 import {
@@ -16,6 +16,7 @@ const LINKS = [
   ["Como funciona", "#como-funciona"],
   ["Preço", "#preco"],
   ["Dúvidas", "#duvidas"],
+  ["Suporte", "/ajuda"],
 ] as const;
 
 export function Topo({ assinar, entrar }: Acoes) {
@@ -36,6 +37,14 @@ export function Topo({ assinar, entrar }: Acoes) {
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          {/* No celular o menu acima some: o Suporte fica como ícone. */}
+          <a
+            href="/ajuda"
+            aria-label="Suporte"
+            className="rounded-lg p-2 text-slate-400 hover:text-white md:hidden"
+          >
+            <LifeBuoy className="h-5 w-5" />
+          </a>
           <Button variant="ghost" onClick={entrar}>
             Entrar
           </Button>

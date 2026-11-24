@@ -176,7 +176,11 @@ export function Duvidas() {
         ))}
       </Accordion>
       <p className="mt-6 text-center text-sm text-slate-500">
-        Outra dúvida? Escreva para{" "}
+        Quer ver como funciona? A{" "}
+        <a href="/ajuda" className="text-primary hover:underline">
+          Central de Ajuda
+        </a>{" "}
+        tem vídeos de cada função. Outra dúvida? Escreva para{" "}
         <a
           href={`mailto:${EMPRESA.email}`}
           className="text-primary hover:underline"
@@ -228,6 +232,9 @@ export function Rodape() {
         </a>
         <a href="/privacidade" className="hover:text-slate-300">
           Política de Privacidade
+        </a>
+        <a href="/ajuda" className="hover:text-slate-300">
+          Suporte
         </a>
         <a href={`mailto:${EMPRESA.email}`} className="hover:text-slate-300">
           Contato
