@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { modoInicialAuth } from "@/lib/modoInicialAuth";
+import { IDENTIFICACAO_EMPRESA } from "@/lib/empresa";
 
 type AuthMode = "login" | "signup";
 
@@ -351,6 +352,9 @@ export default function Landing() {
               Política de Privacidade
             </a>
           </div>
+          <p className="mx-auto mt-3 max-w-xl px-4 text-xs">
+            {IDENTIFICACAO_EMPRESA}
+          </p>
         </footer>
       </div>
     </div>

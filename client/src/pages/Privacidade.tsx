@@ -1,4 +1,5 @@
 import LegalLayout from "@/components/LegalLayout";
+import { EMPRESA } from "@/lib/empresa";
 
 // Política de Privacidade — descreve o tratamento REAL de dados do sistema
 // (conferido contra drizzle/schema.ts, _core/storage.ts e routers/geo.ts).
@@ -27,8 +28,12 @@ export default function Privacidade() {
           inserir, para qual finalidade e por quanto tempo mantê-los.
         </li>
         <li>
-          <strong>A Frapto Tech é a OPERADORA</strong>, tratando esses dados em
-          nome da contratante e segundo suas instruções.
+          <strong>
+            A Frapto Tech ({EMPRESA.razaoSocial}, CNPJ {EMPRESA.cnpj}) é a
+            OPERADORA
+          </strong>
+          , tratando esses dados em nome da contratante e segundo suas
+          instruções.
         </li>
       </ul>
       <p>
@@ -225,8 +230,13 @@ export default function Privacidade() {
 
       <h2>9. Contato</h2>
       <p>
+        {EMPRESA.razaoSocial} — CNPJ {EMPRESA.cnpj}
+        <br />
+        {EMPRESA.endereco}
+      </p>
+      <p>
         Dúvidas ou solicitações sobre dados pessoais:{" "}
-        <a href="mailto:fraptotech@gmail.com">fraptotech@gmail.com</a>
+        <a href={`mailto:${EMPRESA.email}`}>{EMPRESA.email}</a>
       </p>
 
       <h2>10. Alterações</h2>
