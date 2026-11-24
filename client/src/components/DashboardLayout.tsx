@@ -39,6 +39,8 @@ import {
   Sparkles,
   Settings,
   ShieldCheck,
+  LifeBuoy,
+  ExternalLink,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -281,6 +283,23 @@ function DashboardLayoutContent({
                   </SidebarMenuItem>
                 );
               })}
+            </SidebarMenu>
+            {/* Central de Ajuda em OUTRA ABA: o cliente assiste ao vídeo e vai
+                configurando no app ao mesmo tempo, sem sair da tela em que está. */}
+            <SidebarMenu className="mt-2 border-t border-border/50 px-2 pt-3">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  tooltip="Ajuda e suporte (abre em outra aba)"
+                  className="h-11 rounded-xl font-medium"
+                >
+                  <a href="/ajuda" target="_blank" rel="noopener noreferrer">
+                    <LifeBuoy className="h-5 w-5" />
+                    <span>Ajuda e suporte</span>
+                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarContent>
 

@@ -106,6 +106,13 @@ describe("link de suporte na página de vendas", () => {
     expect(fim.match(/href="\/ajuda"/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("o menu do app abre a Central em OUTRA aba (o cliente configura enquanto assiste)", () => {
+    const menu = ler("client/src/components/DashboardLayout.tsx");
+    expect(menu).toMatch(
+      /<a href="\/ajuda" target="_blank" rel="noopener noreferrer">/
+    );
+  });
+
   it("a rota /ajuda é pública (fora do painel logado)", () => {
     const app = ler("client/src/App.tsx");
     const rotaAjuda = app.indexOf('path="/ajuda"');
