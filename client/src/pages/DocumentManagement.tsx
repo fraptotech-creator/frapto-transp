@@ -30,6 +30,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
 import { filtrarDocumentos } from "@/lib/docFilter";
+import { vinculoDocumento } from "@/lib/docVinculo";
+import { formatarDataPura } from "@/lib/dataPura";
+import SeletorVeiculo from "@/components/SeletorVeiculo";
 
 type DocType = "crlv" | "seguro" | "cnh" | "rg" | "cpf" | "outro";
 const TIPO_LABEL: Record<DocType, string> = {
@@ -53,6 +56,8 @@ const fileToBase64 = (file: File): Promise<string> =>
 export default function DocumentManagement() {
   const { data: status } = trpc.documents.status.useQuery();
   const { data: docs, isLoading, refetch } = trpc.documents.list.useQuery();
+  const { data: veiculos } = trpc.vehicles.list.useQuery();
+  const { data: motoristas } = trpc.drivers.list.useQuery();
 
   const uploadM = trpc.documents.upload.useMutation();
   const downloadM = trpc.documents.downloadUrl.useMutation();
@@ -66,9 +71,18 @@ export default function DocumentManagement() {
   const [inputArquivoKey, setInputArquivoKey] = useState(0);
   const [tipo, setTipo] = useState<DocType>("crlv");
   const [descricao, setDescricao] = useState("");
+  // Vínculo e vencimento (opcionais). "" = sem vínculo / sem vencimento. Com
+  // vencimento, o documento passa a gerar o alerta "Documento vencendo".
+  const [veiculoId, setVeiculoId] = useState("");
+  const [motoristaId, setMotoristaId] = useState("");
+  const [vencimento, setVencimento] = useState("");
   const [busca, setBusca] = useState("");
 
-  const docsFiltrados = filtrarDocumentos(docs ?? [], busca);
+  const docsComVinculo = (docs ?? []).map(d => ({
+    ...d,
+    vinculo: vinculoDocumento(d, veiculos ?? [], motoristas ?? []),
+  }));
+  const docsFiltrados = filtrarDocumentos(docsComVinculo, busca);
 
   const configured = status?.configured ?? false;
 
@@ -85,11 +99,19 @@ export default function DocumentManagement() {
         dataBase64,
         tipo,
         descricao: descricao || undefined,
+        veiculoId: veiculoId ? Number(veiculoId) : undefined,
+        motoristId: motoristaId ? Number(motoristaId) : undefined,
+        // "AAAA-MM-DD" → meia-noite UTC, igual às outras datas sem hora
+        // (lido de volta com formatarDataPura).
+        dataVencimento: vencimento ? new Date(vencimento) : undefined,
       });
       toast.success("Documento enviado!");
       setFile(null);
       setInputArquivoKey(k => k + 1);
       setDescricao("");
+      setVeiculoId("");
+      setMotoristaId("");
+      setVencimento("");
       refetch();
     } catch (e) {
       showErrorDialog(
@@ -197,6 +219,46 @@ export default function DocumentManagement() {
                     placeholder="Ex: CRLV 2026 - ABC1234"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Veículo (opcional)</Label>
+                  <SeletorVeiculo
+                    veiculos={veiculos}
+                    value={veiculoId}
+                    onChange={setVeiculoId}
+                    rotuloNenhum="Sem veículo"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Motorista (opcional)</Label>
+                  <Select
+                    value={motoristaId || "none"}
+                    onValueChange={v => setMotoristaId(v === "none" ? "" : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem motorista</SelectItem>
+                      {motoristas?.map(m => (
+                        <SelectItem key={m.id} value={String(m.id)}>
+                          {m.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Vencimento (opcional)</Label>
+                  <Input
+                    type="date"
+                    value={vencimento}
+                    onChange={e => setVencimento(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Com vencimento, o sistema avisa em Notificações antes de
+                    vencer.
+                  </p>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Arquivo</Label>
@@ -230,7 +292,7 @@ export default function DocumentManagement() {
                 <Input
                   value={busca}
                   onChange={e => setBusca(e.target.value)}
-                  placeholder="Buscar por tipo ou descrição…"
+                  placeholder="Buscar por tipo, descrição, placa ou motorista…"
                   className="pl-8"
                 />
               </div>
@@ -246,6 +308,8 @@ export default function DocumentManagement() {
                 <TableRow>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Descrição</TableHead>
+                  <TableHead>Vínculo</TableHead>
+                  <TableHead>Vencimento</TableHead>
                   <TableHead>Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -257,6 +321,10 @@ export default function DocumentManagement() {
                         {TIPO_LABEL[d.tipo as DocType] ?? d.tipo}
                       </TableCell>
                       <TableCell>{d.descricao ?? "-"}</TableCell>
+                      <TableCell>{d.vinculo || "-"}</TableCell>
+                      <TableCell>
+                        {formatarDataPura(d.dataVencimento) || "-"}
+                      </TableCell>
                       <TableCell className="flex gap-1">
                         <Button
                           variant="ghost"
@@ -288,7 +356,7 @@ export default function DocumentManagement() {
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={3}
+                      colSpan={5}
                       className="text-center text-muted-foreground py-6"
                     >
                       {docs && docs.length > 0

@@ -22,4 +22,13 @@ describe("filtrarDocumentos", () => {
   it("sem match → vazio", () => {
     expect(filtrarDocumentos(docs, "xyz")).toEqual([]);
   });
+
+  it("acha pelo vínculo (placa do veículo / nome do motorista)", () => {
+    const comVinculo = [
+      { id: 1, tipo: "crlv", descricao: null, vinculo: "RQE-4F21" },
+      { id: 2, tipo: "cnh", descricao: null, vinculo: "Maria Souza" },
+    ];
+    expect(filtrarDocumentos(comVinculo, "rqe").map(d => d.id)).toEqual([1]);
+    expect(filtrarDocumentos(comVinculo, "maria").map(d => d.id)).toEqual([2]);
+  });
 });
