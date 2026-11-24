@@ -50,11 +50,11 @@ export const MODULOS: Modulo[] = [
         resumo: "Cadastre a sua empresa em menos de um minuto.",
         passos: [
           "Na página do Frapto Transp, clique em Assinar.",
-          "Preencha o nome da empresa, o seu nome (opcional), o e-mail e uma senha de pelo menos 8 caracteres.",
-          "Clique em Criar conta.",
+          "Mais rápido: clique em Continuar com Google e escolha a sua conta do Google.",
+          "Ou preencha o nome da empresa, o seu nome (opcional), o e-mail e uma senha de pelo menos 8 caracteres e clique em Criar conta.",
           "Ative a assinatura para liberar o sistema.",
         ],
-        dica: "Esqueceu a senha? Na tela de entrar, clique em “Esqueci minha senha” e receba o link por e-mail.",
+        dica: "Criou com o Google? Para entrar depois, use o mesmo botão Continuar com Google. Esqueceu a senha? Na tela de entrar, clique em “Esqueci minha senha” e receba o link por e-mail.",
         video: {},
       },
       {
