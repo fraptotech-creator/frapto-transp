@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
-import { formatPlaca } from "@/lib/format";
+import SeletorVeiculo from "@/components/SeletorVeiculo";
 import {
   Trash2,
   Edit,
@@ -337,20 +337,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, onSuccess }) => {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Veículo</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o veículo" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {vehicles?.map((v: any) => (
-                      <SelectItem key={v.id} value={v.id.toString()}>
-                        {formatPlaca(v.placa)} - {v.modelo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <SeletorVeiculo
+                    veiculos={vehicles}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

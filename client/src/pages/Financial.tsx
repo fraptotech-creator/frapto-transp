@@ -33,7 +33,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
-import { formatPlaca } from "@/lib/format";
+import SeletorVeiculo from "@/components/SeletorVeiculo";
 import { rotulo } from "@/lib/rotulos";
 import {
   Table,
@@ -370,29 +370,14 @@ export default function Financial() {
                   </div>
                   <div>
                     <Label>Veículo (opcional)</Label>
-                    <Select
-                      value={expenseForm.veiculoId || "none"}
-                      onValueChange={v =>
-                        setExpenseForm({
-                          ...expenseForm,
-                          veiculoId: v === "none" ? "" : v,
-                        })
+                    <SeletorVeiculo
+                      veiculos={vehicles}
+                      value={expenseForm.veiculoId}
+                      onChange={v =>
+                        setExpenseForm({ ...expenseForm, veiculoId: v })
                       }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">
-                          Despesa geral (sem veículo)
-                        </SelectItem>
-                        {vehicles?.map((v: any) => (
-                          <SelectItem key={v.id} value={String(v.id)}>
-                            {formatPlaca(v.placa)} — {v.marca} {v.modelo}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      rotuloNenhum="Despesa geral (sem veículo)"
+                    />
                   </div>
                   <div>
                     <Label>Descrição *</Label>

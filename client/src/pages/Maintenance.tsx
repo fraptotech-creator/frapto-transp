@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, CheckCircle, Clock, Wrench, Search, Trash2 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { formatPlaca } from "@/lib/format";
+import SeletorVeiculo from "@/components/SeletorVeiculo";
 import { combinaPlaca } from "@/lib/searchFilters";
 import { computeOilStatus, OIL_LABEL } from "@/lib/oil";
 import { anoMesPuro, formatarDataPura } from "@/lib/dataPura";
@@ -283,24 +284,15 @@ export default function Maintenance() {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="veiculoId">Veículo *</Label>
-                <Select
+                <SeletorVeiculo
+                  id="veiculoId"
+                  veiculos={vehicles}
                   value={formData.veiculoId}
-                  onValueChange={value =>
+                  onChange={value =>
                     setFormData({ ...formData, veiculoId: value })
                   }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um veículo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicles?.map((vehicle: any) => (
-                      <SelectItem key={vehicle.id} value={String(vehicle.id)}>
-                        {formatPlaca(vehicle.placa)} - {vehicle.marca}{" "}
-                        {vehicle.modelo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Selecione um veículo"
+                />
               </div>
               <div>
                 <Label htmlFor="tipo">Tipo de Manutenção *</Label>
