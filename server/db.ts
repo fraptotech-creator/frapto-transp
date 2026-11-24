@@ -6,3 +6,4 @@ export * from "./db/checkoutIntents";
 export * from "./db/fleet";
 export * from "./db/finance";
 export * from "./db/misc";
+export * from "./db/trajeto";

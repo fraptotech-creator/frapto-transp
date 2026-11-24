@@ -8,6 +8,7 @@ import {
   trips,
   maintenance,
   tripPositions,
+  tripTrajetoResumos,
   InsertVehicle,
   InsertDriver,
   InsertTrip,
@@ -271,6 +272,15 @@ export async function deleteTrip(orgId: number, id: number) {
     await tx
       .delete(tripPositions)
       .where(and(eq(tripPositions.orgId, orgId), eq(tripPositions.tripId, id)));
+    // E o resumo do trajeto (retenção de GPS), senão ficaria órfão.
+    await tx
+      .delete(tripTrajetoResumos)
+      .where(
+        and(
+          eq(tripTrajetoResumos.orgId, orgId),
+          eq(tripTrajetoResumos.tripId, id)
+        )
+      );
     const res = await tx
       .delete(trips)
       .where(and(eq(trips.orgId, orgId), eq(trips.id, id)));
