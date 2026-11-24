@@ -1,5 +1,6 @@
 import { Truck } from "lucide-react";
 import { Link } from "wouter";
+import { IDENTIFICACAO_EMPRESA } from "@/lib/empresa";
 
 // Casca das páginas legais (/termos e /privacidade). São PÚBLICAS: ficam fora
 // do DashboardLayout, sem exigir login — a Stripe e os visitantes precisam
@@ -57,7 +58,7 @@ export default function LegalLayout({
           <Link href="/privacidade" className="hover:text-foreground">
             Política de Privacidade
           </Link>
-          <span className="ml-auto">Frapto Tech</span>
+          <span className="w-full text-xs">{IDENTIFICACAO_EMPRESA}</span>
         </div>
       </footer>
     </div>

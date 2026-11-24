@@ -1,14 +1,22 @@
 import LegalLayout from "@/components/LegalLayout";
+import { EMPRESA } from "@/lib/empresa";
 
 // Termos de Serviço. Preço e regras de cobrança precisam bater com o
-// Landing.tsx / Paywall.tsx e com o preço configurado na Stripe.
+// Landing.tsx / Paywall.tsx e com o preço configurado na Stripe. O
+// cancelamento descrito no item 4 é o do Portal do Cliente da Stripe
+// (AssinaturaCard em Configurações, só para o dono da conta).
 export default function Termos() {
   return (
-    <LegalLayout titulo="Termos de Serviço" atualizadoEm="21 de julho de 2026">
+    <LegalLayout
+      titulo="Termos de Serviço"
+      atualizadoEm="23 de novembro de 2026"
+    >
       <p>
         Estes termos regem o uso do <strong>Frapto Transp</strong>, sistema de
-        gestão de frota fornecido pela Frapto Tech. Ao criar uma conta, você
-        declara que leu e concorda com eles.
+        gestão de frota fornecido pela <strong>{EMPRESA.razaoSocial}</strong>,
+        inscrita no CNPJ sob o nº {EMPRESA.cnpj}, com sede na {EMPRESA.endereco}{" "}
+        (&quot;Frapto Tech&quot;). Ao criar uma conta, você declara que leu e
+        concorda com eles.
       </p>
 
       <h2>1. O que é o serviço</h2>
@@ -27,12 +35,17 @@ export default function Termos() {
           atualizados.
         </li>
         <li>
-          Você é responsável por manter a senha em sigilo e por todas as
-          atividades realizadas na sua conta.
+          Você é responsável por manter a senha em sigilo — ou, se entrar com o
+          Google, pela segurança da sua conta Google — e por todas as atividades
+          realizadas na sua conta.
         </li>
         <li>
           O uso é destinado a pessoas jurídicas ou profissionais autônomos do
           setor de transporte.
+        </li>
+        <li>
+          Quem cria a conta é o <strong>dono</strong> dela: só ele contrata,
+          gerencia e cancela a assinatura.
         </li>
       </ul>
 
@@ -61,12 +74,30 @@ export default function Termos() {
 
       <h2>4. Cancelamento</h2>
       <p>
-        Você pode cancelar quando quiser, sem multa. O acesso permanece até o
-        fim do período já pago, e não há reembolso proporcional de períodos em
-        curso. Para cancelar, entre em contato pelo e-mail no item 11.
+        Você pode cancelar quando quiser, sem multa e sem precisar falar com a
+        gente: em <strong>Configurações → Assinatura</strong>, clique em{" "}
+        <strong>Gerenciar assinatura</strong> e escolha{" "}
+        <strong>Cancelar assinatura</strong> no portal seguro da Stripe. Se
+        preferir, peça o cancelamento pelo e-mail do item 12.
+      </p>
+      <p>
+        Depois de cancelar, o acesso permanece até o fim do período já pago e
+        não há nova cobrança. Fora do caso do item 5, não há reembolso
+        proporcional do período em curso. O que acontece com os seus dados após
+        o encerramento está na{" "}
+        <a href="/privacidade">Política de Privacidade</a>.
       </p>
 
-      <h2>5. Suas responsabilidades sobre os dados</h2>
+      <h2>5. Direito de arrependimento (7 dias)</h2>
+      <p>
+        Como a contratação é feita pela internet, você pode desistir dela em até{" "}
+        <strong>7 dias</strong> contados do primeiro pagamento, conforme o art.
+        49 do Código de Defesa do Consumidor. Basta escrever para o e-mail do
+        item 12 dentro desse prazo: a assinatura é cancelada e o valor pago é{" "}
+        <strong>devolvido integralmente</strong>, pelo mesmo meio de pagamento.
+      </p>
+
+      <h2>6. Suas responsabilidades sobre os dados</h2>
       <p>
         Você é o <strong>controlador</strong> dos dados que insere no sistema —
         inclusive os dados pessoais dos seus motoristas. Isso significa que cabe
@@ -97,7 +128,7 @@ export default function Termos() {
         <a href="/privacidade">Política de Privacidade</a>.
       </p>
 
-      <h2>6. Uso aceitável</h2>
+      <h2>7. Uso aceitável</h2>
       <p>Você concorda em não:</p>
       <ul>
         <li>Usar o sistema para atividade ilícita</li>
@@ -114,16 +145,19 @@ export default function Termos() {
       </ul>
       <p>O descumprimento pode levar à suspensão ou encerramento da conta.</p>
 
-      <h2>7. Assistente de inteligência artificial</h2>
+      <h2>8. Assistente de inteligência artificial</h2>
       <p>
-        Se você ativar o assistente, os dados da sua frota consultados durante a
-        conversa são enviados ao provedor de IA que <strong>você</strong>{" "}
-        configurar. As respostas são geradas automaticamente e{" "}
+        Quando um usuário da sua empresa faz uma pergunta ao assistente, a
+        pergunta e os registros da frota consultados para respondê-la são
+        enviados ao provedor de IA — por padrão a Groq, ou o provedor que você
+        configurar com a sua própria chave. Os detalhes do que é enviado estão
+        na <a href="/privacidade">Política de Privacidade</a>. O assistente só
+        lê dados, não altera nada, e as respostas são geradas automaticamente e{" "}
         <strong>podem conter erros</strong> — confira informações críticas antes
         de tomar decisões com base nelas.
       </p>
 
-      <h2>8. Disponibilidade</h2>
+      <h2>9. Disponibilidade</h2>
       <p>
         Trabalhamos para manter o serviço disponível, mas não garantimos
         funcionamento ininterrupto. Pode haver indisponibilidade por manutenção,
@@ -136,7 +170,7 @@ export default function Termos() {
         fatores podem gerar lacunas no trajeto registrado.
       </p>
 
-      <h2>9. Limitação de responsabilidade</h2>
+      <h2>10. Limitação de responsabilidade</h2>
       <p>
         O serviço é fornecido no estado em que se encontra. Na máxima extensão
         permitida em lei, nossa responsabilidade total fica limitada ao valor
@@ -148,7 +182,7 @@ export default function Termos() {
         imperativa.
       </p>
 
-      <h2>10. Alterações e encerramento</h2>
+      <h2>11. Alterações e encerramento</h2>
       <p>
         Podemos alterar estes termos e avisaremos com antecedência razoável por
         e-mail ou dentro do sistema. Se você não concordar, pode cancelar.
@@ -156,9 +190,13 @@ export default function Termos() {
         cabível.
       </p>
 
-      <h2>11. Contato e foro</h2>
+      <h2>12. Contato e foro</h2>
       <p>
-        Contato: <a href="mailto:fraptotech@gmail.com">fraptotech@gmail.com</a>
+        {EMPRESA.razaoSocial} — CNPJ {EMPRESA.cnpj}
+        <br />
+        {EMPRESA.endereco}
+        <br />
+        E-mail: <a href={`mailto:${EMPRESA.email}`}>{EMPRESA.email}</a>
       </p>
       <p>
         Estes termos são regidos pelas leis brasileiras, eleito o foro do
