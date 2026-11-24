@@ -13,6 +13,7 @@ const db = vi.hoisted(() => ({
   revokeTrackingToken: vi.fn(),
   getDriverByTrackingToken: vi.fn(),
   getTrips: vi.fn(),
+  getViagemEmAndamentoId: vi.fn(),
   getTripById: vi.fn(),
   addTripPositions: vi.fn(),
 }));
@@ -109,6 +110,35 @@ describe("/api/track — gate de assinatura na ingestão", () => {
     await handleTrackIngest(req(ponto), res);
     expect(r.code).toBe(402);
     expect(db.addTripPositions).not.toHaveBeenCalled();
+  });
+
+  // Capacidade (24/11/2026): posição SEM tripId (app novo, plugin capgo) acha a
+  // viagem pela busca direcionada — nunca mais carrega TODAS as viagens da
+  // empresa a cada posição (custo crescia com o histórico).
+  it("posição sem viagem: busca só a em andamento do motorista", async () => {
+    db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
+    db.getViagemEmAndamentoId.mockResolvedValue(1);
+    const { res, r } = fakeRes();
+    await handleTrackIngest(
+      req({ token: "a".repeat(48), lat: -23.5, lng: -46.6 }),
+      res
+    );
+    expect(r.code).toBe(200);
+    expect(r.body).toEqual({ recorded: 1 });
+    expect(db.getViagemEmAndamentoId).toHaveBeenCalledWith(7, 3);
+    expect(db.getTrips).not.toHaveBeenCalled();
+  });
+
+  it("posição sem viagem e sem viagem em andamento: não grava", async () => {
+    db.getOrganization.mockResolvedValue({ subscriptionStatus: "active" });
+    db.getViagemEmAndamentoId.mockResolvedValue(null);
+    const { res, r } = fakeRes();
+    await handleTrackIngest(
+      req({ token: "a".repeat(48), lat: -23.5, lng: -46.6 }),
+      res
+    );
+    expect(r.code).toBe(200);
+    expect(r.body).toEqual({ recorded: 0 });
   });
 
   it("grava posição EM LOTE quando a assinatura está ativa", async () => {

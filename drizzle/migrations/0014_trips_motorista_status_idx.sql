@@ -1,0 +1,1 @@
+CREATE INDEX `trips_motorista_status_idx` ON `trips` (`orgId`,`motoristaId`,`status`);
