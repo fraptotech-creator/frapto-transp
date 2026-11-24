@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
 import { wazeUrl } from "@/lib/nav";
+import InstalarAppMotorista from "@/components/InstalarAppMotorista";
 import { Truck, MapPin, LogOut, Navigation, Clock } from "lucide-react";
 
 // Data/hora atual no formato do input datetime-local (hora local).
@@ -278,6 +279,8 @@ function DriverHome({ name }: { name: string }) {
           <LogOut className="w-4 h-4" />
         </Button>
       </div>
+
+      <InstalarAppMotorista />
 
       {isLoading ? (
         <Skeleton className="h-40" />

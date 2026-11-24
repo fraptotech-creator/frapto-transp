@@ -36,7 +36,8 @@ import {
 import { toast } from "sonner";
 import { showErrorDialog } from "@/lib/errorDialog";
 import { formatCpf, formatPhone } from "@/lib/format";
-import { Trash2, Edit } from "lucide-react";
+import { Trash2, Edit, MessageCircle } from "lucide-react";
+import { linkWhatsApp, mensagemApp, urlAppMotorista } from "@/lib/driverAccess";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,7 +75,10 @@ interface DriverFormProps {
 
 // Seção de ACESSO do motorista (edição): define o usuário (apelido) e cria o
 // login pra motoristas cadastrados antes do recurso; permite renomear e resetar.
-const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
+const DriverAccessSection: React.FC<{
+  driverId: number;
+  telefone?: string | null;
+}> = ({ driverId, telefone }) => {
   const { data: info, refetch } = trpc.drivers.loginInfo.useQuery({ driverId });
   const [username, setUsername] = React.useState("");
   // Link de ativação recém-gerado: vai para um aviso persistente, não para um
@@ -158,6 +162,25 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
             {reset.isPending ? "Resetando..." : "Resetar senha"}
           </Button>
         )}
+        {info?.hasLogin && (
+          <Button
+            asChild
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            <a
+              href={linkWhatsApp(
+                telefone,
+                mensagemApp(urlAppMotorista(window.location.origin))
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <MessageCircle className="mr-1.5 h-4 w-4" />
+              Enviar app no WhatsApp
+            </a>
+          </Button>
+        )}
       </div>
 
       <AcessoMotoristaDialog
@@ -165,6 +188,7 @@ const DriverAccessSection: React.FC<{ driverId: number }> = ({ driverId }) => {
         onFechar={() => setAcesso(null)}
         usuario={acesso?.usuario ?? ""}
         token={acesso?.token ?? ""}
+        telefone={telefone}
       />
     </div>
   );
@@ -288,7 +312,12 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
           />
         )}
 
-        {isEdit && <DriverAccessSection driverId={driver.id} />}
+        {isEdit && (
+          <DriverAccessSection
+            driverId={driver.id}
+            telefone={driver.telefone}
+          />
+        )}
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -462,6 +491,7 @@ const DriverForm: React.FC<DriverFormProps> = ({ driver, onSuccess }) => {
           }}
           usuario={acessoNovo?.usuario ?? ""}
           token={acessoNovo?.token ?? ""}
+          telefone={form.getValues("telefone")}
         />
       </form>
     </Form>

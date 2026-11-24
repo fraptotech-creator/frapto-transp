@@ -7,10 +7,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { linkAtivacao, mensagemAtivacao } from "@/lib/driverAccess";
+import {
+  linkAtivacao,
+  linkWhatsApp,
+  mensagemAtivacao,
+} from "@/lib/driverAccess";
 
 /**
  * Mostra o ACESSO do motorista de forma PERSISTENTE — agora com link de
@@ -23,11 +27,14 @@ export default function AcessoMotoristaDialog({
   onFechar,
   usuario,
   token,
+  telefone,
 }: {
   aberto: boolean;
   onFechar: () => void;
   usuario: string;
   token: string;
+  // Telefone do motorista: o botão do WhatsApp abre a conversa dele direto.
+  telefone?: string | null;
 }) {
   const [copiado, setCopiado] = useState(false);
   const link = linkAtivacao(window.location.origin, token);
@@ -76,6 +83,16 @@ export default function AcessoMotoristaDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">
+          <Button asChild className="bg-emerald-600 hover:bg-emerald-700">
+            <a
+              href={linkWhatsApp(telefone, mensagem)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />
+              Enviar no WhatsApp
+            </a>
+          </Button>
           <Button variant="outline" onClick={copiar}>
             {copiado ? (
               <Check className="mr-2 h-4 w-4" />
