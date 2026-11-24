@@ -301,6 +301,14 @@ export const trips = mysqlTable(
   },
   t => ({
     numeroPorOrg: unique("trips_numero_por_org").on(t.orgId, t.numeroViagem),
+    // Rastreio: o /api/track procura a viagem EM ANDAMENTO do motorista a cada
+    // posição de GPS (getViagemEmAndamentoId). Sem este índice a busca varria
+    // todas as viagens da empresa.
+    motoristaStatus: index("trips_motorista_status_idx").on(
+      t.orgId,
+      t.motoristaId,
+      t.status
+    ),
   })
 );
 

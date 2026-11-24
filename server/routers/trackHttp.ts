@@ -21,7 +21,7 @@ import {
   migrateTrackingTokenToHash,
   revokeTrackingToken,
   getTripById,
-  getTrips,
+  getViagemEmAndamentoId,
   addTripPositions,
   getOrganization,
 } from "../db";
@@ -129,14 +129,13 @@ export async function handleTrackIngest(req: Request, res: Response) {
 
     // Viagem ativa do motorista (fallback quando o ponto não traz tripId).
     // Só busca se ALGUM ponto depender do fallback.
+    // Busca SÓ a viagem em andamento deste motorista (1 linha, por índice) —
+    // não mais todas as viagens da empresa a cada posição.
     const precisaAtiva = points.some(p => p.tripId == null);
     let activeTripId = -1;
     if (precisaAtiva) {
-      const trips = await getTrips(driver.orgId);
-      const active = trips.find(
-        t => t.motoristaId === driver.id && t.status === "em_andamento"
-      );
-      activeTripId = active ? active.id : -1;
+      activeTripId =
+        (await getViagemEmAndamentoId(driver.orgId, driver.id)) ?? -1;
     }
 
     // Carrega cada viagem DISTINTA uma única vez (antes: um getTripById por

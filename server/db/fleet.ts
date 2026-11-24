@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, asc, desc, sql, isNull } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { tripKmToAccrue, accrueOdometerCore } from "../_core/odometer";
 import { hashTrackingToken, TRACKING_TOKEN_TTL_MS } from "../_core/tracking";
@@ -189,6 +189,33 @@ export async function getTrips(orgId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(trips).where(eq(trips.orgId, orgId));
+}
+
+// Viagem EM ANDAMENTO do motorista — usada pelo /api/track a CADA posição de
+// GPS (a cada ~15 s por motorista). Antes o handler carregava TODAS as viagens
+// da empresa (todo o histórico, com passageiros) só para achar esta; o custo
+// crescia com o tempo de uso. Agora é 1 linha, só o id, pelo índice
+// trips_motorista_status_idx. Ordem por id = a mais antiga, igual ao find()
+// anterior (o estado normal é haver no máximo uma).
+export async function getViagemEmAndamentoId(
+  orgId: number,
+  motoristaId: number
+): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select({ id: trips.id })
+    .from(trips)
+    .where(
+      and(
+        eq(trips.orgId, orgId),
+        eq(trips.motoristaId, motoristaId),
+        eq(trips.status, "em_andamento")
+      )
+    )
+    .orderBy(asc(trips.id))
+    .limit(1);
+  return result[0]?.id ?? null;
 }
 
 export async function getTripById(orgId: number, id: number) {
