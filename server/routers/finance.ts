@@ -14,6 +14,7 @@ import {
 } from "../db";
 import type { InsertExpense, InsertRevenue } from "../../drizzle/schema";
 import { parseRequiredNumericString, assertRefsOwned } from "./_helpers";
+import { confirmarExclusao } from "../_core/exclusao";
 import { texto, TEXTO_LONGO } from "../_core/validacao";
 
 export const expensesRouter = router({
@@ -108,7 +109,12 @@ export const expensesRouter = router({
 
   delete: activeOrgProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(({ ctx, input }) => deleteExpense(ctx.orgId, input.id)),
+    .mutation(async ({ ctx, input }) =>
+      confirmarExclusao(
+        await deleteExpense(ctx.orgId, input.id),
+        "Despesa não encontrada."
+      )
+    ),
 });
 
 export const revenuesRouter = router({
@@ -178,5 +184,10 @@ export const revenuesRouter = router({
 
   delete: activeOrgProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(({ ctx, input }) => deleteRevenue(ctx.orgId, input.id)),
+    .mutation(async ({ ctx, input }) =>
+      confirmarExclusao(
+        await deleteRevenue(ctx.orgId, input.id),
+        "Receita não encontrada."
+      )
+    ),
 });

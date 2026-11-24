@@ -51,7 +51,7 @@ beforeEach(() => {
     subscriptionStatus: "active",
     accessOverride: null,
   }));
-  db.deleteMaintenance.mockResolvedValue({ success: true });
+  db.deleteMaintenance.mockResolvedValue(1);
 });
 
 describe("maintenance.delete", () => {
@@ -73,5 +73,16 @@ describe("maintenance.delete", () => {
       orgId: 999,
     } as never);
     expect(db.deleteMaintenance).toHaveBeenCalledWith(7, 42);
+  });
+
+  // Teste pré-venda: id inexistente (ou já excluído) respondia "sucesso".
+  it("id que não apagou nada → NOT_FOUND, não sucesso", async () => {
+    db.deleteMaintenance.mockResolvedValue(0);
+    await expect(
+      caller("owner", 7).maintenance.delete({ id: 999999 })
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: expect.stringContaining("Manutenção não encontrada."),
+    });
   });
 });

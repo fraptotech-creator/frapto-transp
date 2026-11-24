@@ -8,6 +8,7 @@ import {
   InsertNotificationSettings,
 } from "../../drizzle/schema";
 import { getDb } from "./client";
+import { linhasAfetadas } from "../_core/exclusao";
 import { encryptAiKey, decryptAiKey } from "../_core/aiKeyCrypto";
 
 // ─── Documentos ──────────────────────────────────────────────────────────────
@@ -70,10 +71,10 @@ export async function getOrgDocumentsBytes(orgId: number): Promise<number> {
 export async function deleteDocument(orgId: number, id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db
+  const res = await db
     .delete(documents)
     .where(and(eq(documents.orgId, orgId), eq(documents.id, id)));
-  return { success: true };
+  return linhasAfetadas(res);
 }
 
 // ─── Config de IA (por organização) ──────────────────────────────────────────

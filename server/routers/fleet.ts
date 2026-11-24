@@ -52,6 +52,7 @@ import {
 } from "../db";
 import { isOilChange } from "../_core/oil";
 import { decidirExclusaoVeiculo } from "../_core/veiculoExclusao";
+import { confirmarExclusao } from "../_core/exclusao";
 import { dataRealizadaAoConcluir } from "../_core/manutencaoConclusao";
 import {
   buildAlerts,
@@ -211,7 +212,10 @@ export const vehiclesRouter = router({
           message: decisao.mensagem,
         });
       }
-      return deleteVehicle(ctx.orgId, input.id);
+      return confirmarExclusao(
+        await deleteVehicle(ctx.orgId, input.id),
+        "Veículo não encontrado."
+      );
     }),
 });
 
@@ -486,7 +490,10 @@ export const driversRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Apaga também o login vinculado (se houver).
       await deleteDriverUser(ctx.orgId, input.id);
-      return deleteDriver(ctx.orgId, input.id);
+      return confirmarExclusao(
+        await deleteDriver(ctx.orgId, input.id),
+        "Motorista não encontrado."
+      );
     }),
 });
 
@@ -617,7 +624,12 @@ export const tripsRouter = router({
 
   delete: activeOrgProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(({ ctx, input }) => deleteTrip(ctx.orgId, input.id)),
+    .mutation(async ({ ctx, input }) =>
+      confirmarExclusao(
+        await deleteTrip(ctx.orgId, input.id),
+        "Viagem não encontrada."
+      )
+    ),
 
   updateStatus: activeOrgProcedure
     .input(
@@ -740,7 +752,12 @@ export const maintenanceRouter = router({
   // Só o DONO exclui (apagar some com custo do financeiro). Escopo orgId+id.
   delete: activeOrgOwnerProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(({ ctx, input }) => deleteMaintenance(ctx.orgId, input.id)),
+    .mutation(async ({ ctx, input }) =>
+      confirmarExclusao(
+        await deleteMaintenance(ctx.orgId, input.id),
+        "Manutenção não encontrada."
+      )
+    ),
 });
 
 // Reset da troca de óleo SÓ na transição para "concluída" de uma manutenção de
