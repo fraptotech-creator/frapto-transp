@@ -13,7 +13,10 @@ export type VeiculoOpcao = {
 };
 
 const normalizar = (s: string): string =>
-  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 
 const soAlfanumerico = (s: string): string => s.replace(/[^a-z0-9]/g, "");
 
