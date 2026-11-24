@@ -1,16 +1,16 @@
 {
-  "name": "frapto-transp-tracker",
-  "version": "0.1.0",
+  "name": "frapto-motorista",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "App nativo de rastreio em segundo plano do Frapto Transp (motorista).",
+  "description": "App do motorista do Frapto Transp: viagens + GPS em segundo plano (Android).",
   "scripts": {
     "build": "vite build"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",
     "@capacitor/core": "8.4.1",
-    "@transistorsoft/capacitor-background-geolocation": "9.2.0",
+    "@capgo/background-geolocation": "8.6.5",
     "frapto-device-admin": "file:./plugins/device-admin"
   },
   "devDependencies": {

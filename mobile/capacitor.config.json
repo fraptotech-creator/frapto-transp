@@ -1,9 +1,12 @@
 {
-  "appId": "app.fraptotransp.rastreio",
-  "appName": "Frapto Transp Rastreio",
+  "appId": "app.fraptotransp.motorista",
+  "appName": "Frapto Motorista",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"
+  },
+  "android": {
+    "useLegacyBridge": true
   },
   "plugins": {
     "CapacitorHttp": {

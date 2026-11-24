@@ -1,27 +1,55 @@
-# Frapto Transp — App de Rastreio (motorista)
+# Frapto Motorista — app do motorista (Android)
 
-App nativo **isolado** (não faz parte do sistema web) cujo único objetivo é
-**rastrear a posição do motorista em segundo plano**, mesmo com o app fechado,
-tela apagada ou o Waze aberto. Ele conversa só com dois endpoints do servidor:
+App nativo (Capacitor) que junta, num APK só, o que o motorista precisa:
 
-- `POST /api/track/login` — login do motorista (usuário+senha) → devolve o token.
-- `POST /api/track` — recebe a posição (autenticada pelo token).
+- **Viagens**: lista as viagens dele (planejadas e em andamento), iniciar,
+  concluir (com a hora de chegada) e abrir origem/destino no **Waze**.
+- **GPS em segundo plano**: liga sozinho quando há viagem **em andamento** e
+  desliga quando não há. Continua com a tela apagada, com o Waze aberto e
+  mesmo se o motorista fechar o app (serviço em primeiro plano do Android).
 
-O servidor só **grava** a posição quando o motorista tem uma viagem
-**em andamento** (mesma regra do resto do sistema). Então o motorista pode
-deixar o rastreio ligado o tempo todo — fora de viagem, nada é registrado.
+As telas são **do próprio app** (não abre o site dentro dele). Ele conversa só
+com a API do servidor, autenticado pelo token de rastreio no cabeçalho
+`Authorization: Bearer`:
 
-## Como gerar o APK (na nuvem, sem Android Studio)
+- `POST /api/track/login` — usuário + senha → token.
+- `GET /api/track/viagens`, `POST /api/track/viagens/:id/iniciar`,
+  `POST /api/track/viagens/:id/concluir` — mesmas regras do app web
+  (`driverApp.*` no tRPC).
+- `POST /api/track` — posição, enviada **direto do código nativo** pelo plugin.
+- `POST /api/track/revoke` — ao sair.
 
-1. No GitHub, vá em **Actions** → **"Build APK — Rastreio (motorista)"** →
-   **Run workflow**.
-2. Quando terminar (verde), abra a execução e baixe o APK em **Artifacts**
-   (`frapto-rastreio-apk`).
-3. Envie o `app-debug.apk` para o celular do motorista e instale
-   (é preciso permitir "instalar de fontes desconhecidas").
-4. Ao abrir: o motorista entra com o mesmo **usuário e senha** do app do
-   motorista, toca **Iniciar rastreamento** e concede a permissão de
-   localização **"Permitir o tempo todo"**.
+## GPS: plugin gratuito
+
+`@capgo/background-geolocation` (licença MPL-2.0, grátis). Substituiu o
+Transistorsoft, que exige licença paga em build de release. Limitações
+conhecidas:
+
+- **Sem sinal, a posição daquele trecho se perde** (o envio nativo não tem
+  fila). Com GPS mudo por 20+ s, usa a posição da rede do celular
+  (`networkFallback`).
+- Se o celular **reiniciar**, o motorista precisa abrir o app de novo.
+- Xiaomi/Samsung podem matar o serviço: o app orienta a deixar a bateria em
+  "Sem restrições" (e a inicialização automática, na Xiaomi).
+
+## Como o motorista instala
+
+O gestor manda o link pelo WhatsApp (botão no cadastro do motorista). O
+download é `https://www.fraptotransp.com.br/baixar/app-motorista.apk`, que
+redireciona para a Release mais recente deste repositório. No Android: tocar
+em **Instalar** (na 1ª vez, permitir instalar a partir do navegador/WhatsApp).
+
+## Como sai uma versão nova
+
+O workflow **"Build APK — App do motorista"** roda sozinho quando algo em
+`mobile/` muda na `main` (ou manualmente em Actions). Ele compila em
+**release**, assina com a **chave fixa** (segredos `ANDROID_KEYSTORE_*`),
+**confere a impressão digital** do certificado (falha se não for a nossa) e
+publica a Release `app-motorista-v1.0.N`. O `versionCode` cresce a cada build,
+então a versão nova instala **por cima** da antiga.
+
+> A chave de assinatura fica FORA do repositório (que é público). Sem ela, as
+> próximas versões não atualizam por cima — guarde o backup.
 
 ## Rodar/depurar localmente (opcional, precisa de Android Studio)
 
@@ -31,41 +59,5 @@ npm install
 npm run build
 npx cap add android
 npx cap sync android
-npx cap open android   # abre no Android Studio
+npx cap open android
 ```
-
-## Observações
-
-- APK é **debug** (autoassinado) — serve para uso interno/sideload. Para
-  publicar na Play Store depois, gera-se um build **release** assinado.
-- Plugin de GPS: `@transistorsoft/capacitor-background-geolocation` (Android
-  gratuito). Ele roda um serviço de primeiro plano com notificação persistente
-  ("Rastreamento ativo") — isso é exigência do Android para GPS em background.
-
-## Segurança
-
-- O diretório `android/` é **gerado** (está no `.gitignore`); o manifesto é
-  recriado a cada build. Por isso o endurecimento é aplicado **no workflow**
-  (`.github/workflows/build-apk.yml`, passo "Endurece o manifesto"), não por
-  edição manual — uma edição local se perde no próximo `cap add android`.
-- Endurecimentos no APK: `allowBackup=false` (o token de rastreio, guardado no
-  `localStorage` do WebView, não sai por `adb backup`) e `usesCleartextTraffic
-=false` (nenhuma requisição em HTTP puro; o servidor é sempre https).
-- **Backlog de robustez:** migrar o token de rastreio de `localStorage` para
-  armazenamento seguro nativo (Android Keystore). Fecha o vetor de leitura em
-  aparelho com root; o `allowBackup=false` já fecha o vetor de backup. O
-  servidor já suporta revogação: o app deve chamar `POST /api/track/revoke` no
-  logout (Lote 7.2) — falta implementar no cliente nativo.
-
-## Supply chain (backlog do APK — sessão dedicada)
-
-Itens que exigem decisão/segredo do usuário e um ciclo próprio, com teste em
-aparelho antes de distribuir:
-
-- **APK de RELEASE assinado** (hoje é `app-debug.apk` autoassinado): gerar um
-  build release com **keystore protegida** (segredo do usuário, guardado como
-  secret do GitHub Actions), desabilitar debug/WebView remoto no release.
-- **Lockfile do mobile**: hoje `package-lock.json` está no `.gitignore`. Versionar
-  o lockfile e usar `npm ci` no workflow (build reprodutível).
-- **Pin por SHA** das actions do workflow e da imagem base do build (reprodutível
-  - à prova de tag movida).
