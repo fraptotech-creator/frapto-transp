@@ -330,11 +330,38 @@ export const tripPositions = mysqlTable(
   },
   t => ({
     tripIdx: index("trip_positions_trip_idx").on(t.orgId, t.tripId),
+    // Retenção (24/11/2026): a limpeza diária acha as posições com mais de 90
+    // dias por data — sem este índice varreria a tabela que mais cresce.
+    capturedIdx: index("trip_positions_captured_idx").on(t.capturedAt),
   })
 );
 
 export type TripPosition = typeof tripPositions.$inferSelect;
 export type InsertTripPosition = typeof tripPositions.$inferInsert;
+
+// RESUMO do trajeto de uma viagem (até ~100 pontos), gravado pela retenção de
+// GPS ANTES de apagar as posições detalhadas antigas (> 90 dias). Mantém o
+// desenho do trajeto no mapa para sempre, ocupando quase nada. Tabela própria
+// (não coluna em trips) para não engordar as listas de viagens. pontos =
+// [[lat, lng, epochMs], ...] em ordem de tempo.
+export const tripTrajetoResumos = mysqlTable(
+  "trip_trajeto_resumos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    orgId: int("orgId").notNull(),
+    tripId: int("tripId").notNull(),
+    pontos: json("pontos").$type<[number, number, number][]>().notNull(),
+    atualizadoEm: timestamp("atualizadoEm")
+      .defaultNow()
+      .onUpdateNow()
+      .notNull(),
+  },
+  t => ({
+    viagemUnica: unique("trip_trajeto_resumos_viagem").on(t.orgId, t.tripId),
+  })
+);
+
+export type TripTrajetoResumo = typeof tripTrajetoResumos.$inferSelect;
 
 // Tabela de manutenção de veículos
 export const maintenance = mysqlTable(

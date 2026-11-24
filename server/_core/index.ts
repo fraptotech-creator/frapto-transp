@@ -15,6 +15,7 @@ import {
   handleListarViagens,
 } from "../routers/trackMotorista";
 import { ROTA_DOWNLOAD_APP, URL_APK_MOTORISTA } from "./appMotorista";
+import { agendarRetencaoGps } from "./retencaoGps";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
@@ -328,6 +329,11 @@ async function startServer() {
   // conexões novas, drena as em andamento e sai limpo. O deadline (SHUTDOWN_DRAIN_MS)
   // é alinhado ao drainingSeconds do railway.json (força a saída antes do SIGKILL).
   installGracefulShutdown(server, { timeoutMs: SHUTDOWN_DRAIN_MS });
+
+  // Retenção de GPS (diária): resume o trajeto e apaga posições > 90 dias.
+  // Fora do ambiente de desenvolvimento local, que costuma apontar para o
+  // mesmo banco — lá não agenda nada.
+  if (process.env.NODE_ENV !== "development") agendarRetencaoGps();
 }
 
 // Falha fatal no boot (ex.: guard de config negou) → encerra com status != 0,

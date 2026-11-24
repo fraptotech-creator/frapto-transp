@@ -33,6 +33,7 @@ import {
   getTrips,
   getTripById,
   getTripPositions,
+  getTrajetoResumo,
   createTrip,
   updateTrip,
   deleteTrip,
@@ -81,6 +82,7 @@ import {
 } from "../_core/normalize";
 import { transicaoValida, type TripStatus } from "../_core/tripState";
 import { downsampleEvenly } from "../_core/tracking";
+import { trajetoParaMapa } from "../_core/trajeto";
 import { texto, TEXTO_LONGO, anoVeiculo, cpfSchema } from "../_core/validacao";
 
 // A placa é gravada NORMALIZADA (sem hífen/espaço) numa coluna de 10.
@@ -524,12 +526,23 @@ export const tripsRouter = router({
   // Trajeto rastreado (posições GPS enviadas pelo celular do motorista).
   // Reamostra para no máximo WIRE_MAX pontos: o traçado no mapa fica idêntico
   // e o payload não explode em viagens longas (o banco já capa em 20k linhas).
+  // Posições com mais de 90 dias viram RESUMO (retenção de GPS): o trecho
+  // resumido vem antes das posições detalhadas que ainda existem.
   positions: activeOrgProcedure
     .input(z.object({ tripId: z.number() }))
     .query(async ({ ctx, input }) => {
       const WIRE_MAX = 2000;
-      const rows = await getTripPositions(ctx.orgId, input.tripId);
-      return downsampleEvenly(rows, WIRE_MAX);
+      const [rows, resumo] = await Promise.all([
+        getTripPositions(ctx.orgId, input.tripId),
+        getTrajetoResumo(ctx.orgId, input.tripId),
+      ]);
+      const detalhadas = rows.map(p => ({
+        lat: p.lat,
+        lng: p.lng,
+        velocidade: p.velocidade,
+        capturedAt: p.capturedAt,
+      }));
+      return downsampleEvenly(trajetoParaMapa(resumo, detalhadas), WIRE_MAX);
     }),
 
   create: activeOrgProcedure
