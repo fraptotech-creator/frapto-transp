@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { createHash } from "crypto";
 import { ENV } from "./env";
-import { TRACK_TOKEN_RE } from "./trackIngest";
+import { TRACK_TOKEN_RE, tokenDaRequisicao } from "./trackIngest";
 import {
   trpcErrorBody,
   isTrpcRequest,
@@ -119,8 +119,8 @@ export const trackLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
-    const raw =
-      req.body && typeof req.body.token === "string" ? req.body.token : "";
+    // Token no corpo (app antigo) ou no "Authorization: Bearer" (app novo).
+    const raw = tokenDaRequisicao(req.body, req.headers.authorization) ?? "";
     return trackTokenKey(raw) ?? ipKeyGenerator(req.ip ?? "0.0.0.0");
   },
   message: { error: "Muitas requisições de rastreio. Aguarde um instante." },

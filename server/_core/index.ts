@@ -9,6 +9,12 @@ import {
   handleTrackLogin,
   handleTrackRevoke,
 } from "../routers/trackHttp";
+import {
+  handleConcluirViagem,
+  handleIniciarViagem,
+  handleListarViagens,
+} from "../routers/trackMotorista";
+import { ROTA_DOWNLOAD_APP, URL_APK_MOTORISTA } from "./appMotorista";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
@@ -207,6 +213,33 @@ async function startServer() {
     trackLimiter,
     handleTrackRevoke
   );
+  // Telas do APP NATIVO do motorista (token no "Authorization: Bearer").
+  // Mesmas defesas do rastreio: teto por IP → parser 64 KB → limite por token.
+  app.get(
+    "/api/track/viagens",
+    trackIpBackstop,
+    trackLimiter,
+    handleListarViagens
+  );
+  app.post(
+    "/api/track/viagens/:id/iniciar",
+    trackIpBackstop,
+    trackJson,
+    trackLimiter,
+    handleIniciarViagem
+  );
+  app.post(
+    "/api/track/viagens/:id/concluir",
+    trackIpBackstop,
+    trackJson,
+    trackLimiter,
+    handleConcluirViagem
+  );
+  // Download do APK do app do motorista: endereço nosso e estável, que
+  // redireciona para o arquivo publicado na Release mais recente do GitHub.
+  app.get(ROTA_DOWNLOAD_APP, (_req, res) => {
+    res.redirect(302, URL_APK_MOTORISTA);
+  });
 
   // Sem parser de corpo GLOBAL: nenhuma rota consome form-urlencoded (os <form>
   // do cliente usam onSubmit→tRPC, não POST nativo; não há callback OAuth). Cada

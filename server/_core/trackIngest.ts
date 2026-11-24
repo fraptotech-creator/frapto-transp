@@ -35,19 +35,43 @@ function optInt(v: unknown): number | null {
   return n == null ? null : Math.trunc(n);
 }
 
-function parsePoint(raw: unknown): TrackPoint | null {
+// speedEmMs: o plugin nativo do app do motorista (@capgo/background-geolocation,
+// corpo com source:"native") manda a velocidade do Android em METROS POR
+// SEGUNDO; o resto do sistema grava km/h (igual ao app web, que já converte).
+function parsePoint(raw: unknown, speedEmMs: boolean): TrackPoint | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   const lat = num(o.lat ?? o.latitude);
   const lng = num(o.lng ?? o.longitude ?? o.lon);
   if (lat == null || lng == null) return null;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  const speed = num(o.speed ?? o.velocidade);
   return {
     tripId: optInt(o.tripId ?? o.trip_id),
     lat,
     lng,
-    speed: num(o.speed ?? o.velocidade),
+    speed:
+      speed != null && speedEmMs ? Math.round(speed * 3.6 * 100) / 100 : speed,
   };
+}
+
+// Token de rastreio da requisição: no corpo ({token}, app antigo) ou no
+// cabeçalho "Authorization: Bearer <token>" (app novo — o plugin nativo manda
+// o token em headers). Os dois passam pelo MESMO formato (48 hex): qualquer
+// outra coisa vira null (fail-closed, nunca string gigante adiante).
+export function tokenDaRequisicao(
+  body: unknown,
+  authorization: string | undefined
+): string | null {
+  const doCorpo =
+    body && typeof body === "object"
+      ? (body as Record<string, unknown>).token
+      : undefined;
+  if (typeof doCorpo === "string" && TRACK_TOKEN_RE.test(doCorpo)) {
+    return doCorpo;
+  }
+  const m = /^Bearer ([0-9a-f]{48})$/.exec((authorization ?? "").trim());
+  return m ? m[1] : null;
 }
 
 // Teto de pontos por requisição: um POST não pode disparar um loop ilimitado
@@ -55,15 +79,16 @@ function parsePoint(raw: unknown): TrackPoint | null {
 // 50); 500 é folga com sobra.
 const MAX_POINTS = 500;
 
-export function normalizeTrackPayload(body: unknown): TrackPayload {
+export function normalizeTrackPayload(
+  body: unknown,
+  authorization?: string
+): TrackPayload {
   if (!body || typeof body !== "object") return { token: null, points: [] };
   const o = body as Record<string, unknown>;
   // Só aceita token no formato real (48 hex). Qualquer outra coisa → null, que
   // o handler trata como 401/400 — nunca deixa string gigante seguir adiante.
-  const token =
-    typeof o.token === "string" && TRACK_TOKEN_RE.test(o.token)
-      ? o.token
-      : null;
+  const token = tokenDaRequisicao(o, authorization);
+  const speedEmMs = o.source === "native";
 
   // Formatos aceitos: lote em locations[]/points[]; o campo `location` do
   // transistorsoft (objeto único OU array quando batchSync); ou ponto único no
@@ -80,7 +105,7 @@ export function normalizeTrackPayload(body: unknown): TrackPayload {
 
   const points: TrackPoint[] = [];
   for (const rp of rawPoints.slice(0, MAX_POINTS)) {
-    const p = parsePoint(rp);
+    const p = parsePoint(rp, speedEmMs);
     if (p) points.push(p);
   }
   return { token, points };
