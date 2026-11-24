@@ -39,7 +39,8 @@ function fakeRes() {
   return { res, r };
 }
 
-const req = (body: unknown) => ({ body }) as Request;
+// headers vazio: no Express real sempre existe (o token pode vir no Bearer).
+const req = (body: unknown) => ({ body, headers: {} }) as Request;
 
 const driverUser = {
   orgId: 7,

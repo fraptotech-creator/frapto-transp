@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeTrackPayload } from "./_core/trackIngest";
+import { normalizeTrackPayload, tokenDaRequisicao } from "./_core/trackIngest";
 
 // Token no formato real (48 hex): a normalização passou a exigi-lo.
 const TOKEN = "a".repeat(48);
@@ -92,5 +92,51 @@ describe("normalizeTrackPayload", () => {
   it("corpo inválido → vazio", () => {
     expect(normalizeTrackPayload(null)).toEqual({ token: null, points: [] });
     expect(normalizeTrackPayload("x")).toEqual({ token: null, points: [] });
+  });
+
+  // App novo do motorista (24/11/2026): plugin @capgo/background-geolocation
+  // posta um Location solto, token no cabeçalho e velocidade em m/s.
+  it("formato do plugin novo: token no Bearer, velocidade m/s → km/h", () => {
+    const tk = "a".repeat(48);
+    const r = normalizeTrackPayload(
+      { latitude: -20.3, longitude: -40.3, speed: 10, source: "native" },
+      `Bearer ${tk}`
+    );
+    expect(r.token).toBe(tk);
+    expect(r.points).toEqual([
+      { tripId: null, lat: -20.3, lng: -40.3, speed: 36 },
+    ]);
+  });
+
+  it("app antigo (sem source:native) NÃO tem a velocidade convertida", () => {
+    const r = normalizeTrackPayload({
+      token: "b".repeat(48),
+      location: { lat: -20, lng: -40, speed: 10 },
+    });
+    expect(r.points[0].speed).toBe(10);
+  });
+});
+
+describe("tokenDaRequisicao", () => {
+  const tk = "c".repeat(48);
+
+  it("aceita o token do corpo (app antigo) ou do Bearer (app novo)", () => {
+    expect(tokenDaRequisicao({ token: tk }, undefined)).toBe(tk);
+    expect(tokenDaRequisicao(undefined, `Bearer ${tk}`)).toBe(tk);
+  });
+
+  it("corpo vence o cabeçalho quando os dois vêm", () => {
+    const outro = "d".repeat(48);
+    expect(tokenDaRequisicao({ token: tk }, `Bearer ${outro}`)).toBe(tk);
+  });
+
+  it("fail-closed: formato errado em qualquer lugar → null", () => {
+    expect(tokenDaRequisicao({ token: "curto" }, undefined)).toBeNull();
+    expect(tokenDaRequisicao(undefined, `Bearer ${"x".repeat(48)}`)).toBeNull();
+    expect(tokenDaRequisicao(undefined, tk)).toBeNull(); // sem "Bearer "
+    expect(
+      tokenDaRequisicao(undefined, `Bearer ${tk}${"0".repeat(1000)}`)
+    ).toBeNull();
+    expect(tokenDaRequisicao(undefined, undefined)).toBeNull();
   });
 });

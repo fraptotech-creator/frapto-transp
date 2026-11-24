@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import { normalizeTrackPayload } from "../_core/trackIngest";
+import { normalizeTrackPayload, tokenDaRequisicao } from "../_core/trackIngest";
 import {
   planTrackInserts,
   distinctTripIds,
@@ -90,7 +90,10 @@ export async function handleTrackLogin(req: Request, res: Response) {
 // (canRecordPosition), igual ao caminho do tRPC. Fail-closed em tudo.
 export async function handleTrackIngest(req: Request, res: Response) {
   try {
-    const { token, points } = normalizeTrackPayload(req.body);
+    const { token, points } = normalizeTrackPayload(
+      req.body,
+      req.headers.authorization
+    );
     if (!token || points.length === 0) {
       res.status(400).json({ error: "payload inválido" });
       return;
@@ -163,8 +166,7 @@ export async function handleTrackIngest(req: Request, res: Response) {
 // desconhecido também responde 200 (não vira oráculo de tokens válidos).
 export async function handleTrackRevoke(req: Request, res: Response) {
   try {
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    const token = typeof body.token === "string" ? body.token : "";
+    const token = tokenDaRequisicao(req.body, req.headers.authorization);
     if (token) {
       const driver = await getDriverByTrackingToken(token);
       if (driver) await revokeTrackingToken(driver.orgId, driver.id);

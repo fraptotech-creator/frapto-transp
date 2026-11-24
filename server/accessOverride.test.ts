@@ -133,7 +133,7 @@ describe("override de acesso — gate /api/track (REST nativo)", () => {
       accessOverride: "blocked",
     } as never);
     const res = fakeRes();
-    await handleTrackIngest({ body: {} } as Request, res);
+    await handleTrackIngest({ body: {}, headers: {} } as Request, res);
     expect(res.statusCode).toBe(402);
   });
 });
