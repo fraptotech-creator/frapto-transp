@@ -342,7 +342,10 @@ export default function Financial() {
                   <Plus className="w-4 h-4 mr-1" /> Nova Despesa
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogContent
+                className="max-h-[90vh] overflow-y-auto"
+                confirmarDescarte
+              >
                 <DialogHeader>
                   <DialogTitle>Cadastrar Despesa</DialogTitle>
                 </DialogHeader>
@@ -567,7 +570,10 @@ export default function Financial() {
                   <Plus className="w-4 h-4 mr-1" /> Nova Receita
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogContent
+                className="max-h-[90vh] overflow-y-auto"
+                confirmarDescarte
+              >
                 <DialogHeader>
                   <DialogTitle>Cadastrar Receita</DialogTitle>
                 </DialogHeader>

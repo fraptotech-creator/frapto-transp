@@ -528,7 +528,7 @@ export const DriverDialog: React.FC<{ driver?: any }> = ({ driver }) => {
           <Button>Cadastrar Novo Motorista</Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px]" confirmarDescarte>
         <DialogHeader>
           <DialogTitle>
             {isEdit ? "Editar Motorista" : "Cadastrar Novo Motorista"}
