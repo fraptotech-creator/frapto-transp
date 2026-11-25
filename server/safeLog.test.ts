@@ -55,6 +55,58 @@ describe("toSafeLogError — nunca vaza PII/SQL/segredo", () => {
     expect(contemSentinela(safe)).toBe(false);
   });
 
+  // 25/11/2026: o erro do SDK OpenAI (Groq) saía só { name: "Error" } — sem o
+  // status nem o código minúsculo (tool_use_failed), o diagnóstico exigiu
+  // reproduzir o bug. Agora status HTTP + código/tipo simbólico do provedor vão
+  // pro log; a MENSAGEM (que pode citar dados) continua fora.
+  it("erro do provedor de IA: status + código + tipo, sem a mensagem", () => {
+    const e = Object.assign(
+      new Error(`400 Tool call validation failed: ${CPF} ${EMAIL} ${APIKEY}`),
+      {
+        status: 400,
+        code: "tool_use_failed",
+        type: "invalid_request_error",
+      }
+    );
+    const safe = toSafeLogError(e);
+    expect(safe).toEqual({
+      name: "Error",
+      status: 400,
+      code: "tool_use_failed",
+      type: "invalid_request_error",
+    });
+    expect(contemSentinela(safe)).toBe(false);
+  });
+
+  it("wrapper (TRPCError) herda status/código/tipo do cause", () => {
+    const provedor = Object.assign(new Error("429 Rate limit"), {
+      status: 429,
+      code: "rate_limit_exceeded",
+      type: "tokens_per_minute",
+    });
+    const wrapper = Object.assign(new Error("wrap"), {
+      name: "TRPCError",
+      cause: provedor,
+    });
+    expect(toSafeLogError(wrapper)).toEqual({
+      name: "TRPCError",
+      status: 429,
+      code: "rate_limit_exceeded",
+      type: "tokens_per_minute",
+    });
+  });
+
+  it("descarta minúsculo sem formato de identificador e status fora de HTTP", () => {
+    const e = Object.assign(new Error("x"), {
+      code: "joao", // palavra solta (poderia ser um nome) — sem "_"
+      type: "vitima@exemplo.com",
+      status: 12345678900, // número que não é status HTTP (poderia ser CPF)
+    });
+    const safe = toSafeLogError(e);
+    expect(safe).toEqual({ name: "Error" });
+    expect(contemSentinela(safe)).toBe(false);
+  });
+
   it("lida com null/undefined/primitivos", () => {
     expect(toSafeLogError(null)).toEqual({ name: "null" });
     expect(toSafeLogError(undefined)).toEqual({ name: "null" });
