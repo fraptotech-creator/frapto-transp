@@ -12,6 +12,9 @@ export default defineConfig({
       "@assets": path.resolve(templateRoot, "attached_assets"),
     },
   },
+  // JSX automático (igual ao @vitejs/plugin-react do build): permite renderizar
+  // componentes .tsx do client nos testes jsdom sem `import React`.
+  esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
     include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
