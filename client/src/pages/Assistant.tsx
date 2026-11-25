@@ -37,7 +37,7 @@ export default function Assistant() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-4">
+    <div className="p-3 sm:p-6 max-w-3xl mx-auto space-y-4">
       <div className="flex items-center gap-3">
         <div className="p-3 rounded-2xl bg-gradient-to-br from-primary to-purple-600 shadow-lg">
           <Sparkles className="w-6 h-6 text-white" />
