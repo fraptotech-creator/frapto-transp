@@ -237,7 +237,12 @@ export function AIChatBox({
             </div>
           </div>
         ) : (
-          <ScrollArea className="h-full">
+          // O Radix envolve o conteúdo do Viewport num div com display:table
+          // (cresce até a largura do conteúdo). Com uma tabela larga na resposta,
+          // a bolha inteira passava da tela no celular e o texto era cortado sem
+          // rolagem lateral. display:block prende a largura à da caixa; aí a
+          // tabela rola sozinha no contêiner overflow-x-auto do Streamdown.
+          <ScrollArea className="h-full [&_[data-radix-scroll-area-viewport]>div]:!block">
             <div className="flex flex-col space-y-4 p-4">
               {displayMessages.map((message, index) => {
                 // Apply min-height to last message only if NOT loading (when loading, the loading indicator gets it)
@@ -268,10 +273,12 @@ export function AIChatBox({
 
                     <div
                       className={cn(
-                        "max-w-[80%] rounded-lg px-4 py-2.5",
+                        "min-w-0 rounded-lg px-4 py-2.5",
                         message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-foreground"
+                          ? "max-w-[80%] bg-primary text-primary-foreground"
+                          : // Celular: a resposta usa toda a largura ao lado do
+                            // ícone (2rem + gap 0.75rem) — tabela tem mais espaço.
+                            "max-w-[calc(100%-2.75rem)] sm:max-w-[80%] bg-muted text-foreground"
                       )}
                     >
                       {message.role === "assistant" ? (
