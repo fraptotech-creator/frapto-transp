@@ -57,6 +57,16 @@ const oilTxt = (v: {
 
 const str = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
+
+// Filtro OPCIONAL de texto. O modelo (gpt-oss no Groq) às vezes manda o filtro
+// como `null` em vez de omiti-lo; o Groq valida os argumentos contra o schema e,
+// com type "string" puro, REJEITA a chamada inteira (400 tool_use_failed) — o
+// usuário via "Erro interno" (medido 25/11/2026: 3 de 8 perguntas sobre
+// viagens). Aceitar null no schema é o correto; str() já trata null = sem filtro.
+const filtroOpcional = (description: string) => ({
+  type: ["string", "null"],
+  description,
+});
 const clampLimit = (v: unknown, def: number, max: number): number =>
   Math.min(Math.max(1, Number(v) || def), max);
 
@@ -99,11 +109,9 @@ export const AI_TOOLS: ToolDef[] = [
     parameters: {
       type: "object",
       properties: {
-        status: {
-          type: "string",
-          description:
-            "filtra por status (opcional): planejada, em_andamento, concluida ou cancelada",
-        },
+        status: filtroOpcional(
+          "filtra por status (opcional): planejada, em_andamento, concluida ou cancelada"
+        ),
       },
     },
     run: async (orgId, args) => {
@@ -136,11 +144,9 @@ export const AI_TOOLS: ToolDef[] = [
     parameters: {
       type: "object",
       properties: {
-        status: {
-          type: "string",
-          description:
-            "filtra por status (opcional): pendente, em_andamento ou concluida",
-        },
+        status: filtroOpcional(
+          "filtra por status (opcional): pendente, em_andamento ou concluida"
+        ),
       },
     },
     run: async (orgId, args) => {
@@ -182,10 +188,7 @@ export const AI_TOOLS: ToolDef[] = [
     parameters: {
       type: "object",
       properties: {
-        tipo: {
-          type: "string",
-          description: "filtra (opcional): 'receita' ou 'despesa'",
-        },
+        tipo: filtroOpcional("filtra (opcional): 'receita' ou 'despesa'"),
       },
     },
     run: async (orgId, args) => {

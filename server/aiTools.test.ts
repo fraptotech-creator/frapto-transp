@@ -85,6 +85,32 @@ describe("aiTools", () => {
     expect(out.erro).toMatch(/desconhecida/i);
   });
 
+  // Trava do bug de 25/11/2026: o modelo manda filtro opcional como `null`
+  // ({"status":null}); o Groq valida contra o schema e, com type "string" puro,
+  // rejeitava a chamada inteira (400 tool_use_failed) → "Erro interno" na tela.
+  it("todo parâmetro opcional aceita null no schema", () => {
+    for (const t of toOpenAiTools()) {
+      const params = t.function.parameters as {
+        properties: Record<string, { type: unknown }>;
+        required?: string[];
+      };
+      for (const [nome, p] of Object.entries(params.properties)) {
+        if (params.required?.includes(nome)) continue;
+        expect(
+          Array.isArray(p.type) && p.type.includes("null"),
+          `${t.function.name}.${nome} precisa aceitar null`
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('filtro null ({"status":null}) = sem filtro, não erro', async () => {
+    const out = JSON.parse(
+      await runAiTool(1, "listar_viagens", '{"status":null}')
+    );
+    expect(Array.isArray(out)).toBe(true);
+  });
+
   it("args em JSON inválido não quebram", async () => {
     const data = JSON.parse(await runAiTool(1, "listar_veiculos", "{quebrado"));
     expect(data[0].placa).toBe("AAA1111");
